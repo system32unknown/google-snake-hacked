@@ -816,6 +816,70 @@ var minutes = 6E4;
     E.prototype.handleEvent = function () {
         throw Error("EventHandler.handleEvent not implemented");
     };
+
+    class EventDispatcher extends Disposable {
+        constructor() {
+            super();
+            this.enabled = true;
+            this.parent = null;
+        }
+
+        addEventListener(type, callback, useCapture, priority) {
+            addListener(this, type, callback, useCapture, priority);
+        }
+
+        removeEventListener(type, callback, useCapture, priority) {
+            removeListener(this, type, callback, useCapture, priority);
+        }
+
+        dispatchEvent(event) {
+            let type = event.type || event;
+            let registry = globalEventRegistry;
+
+            if (!(type in registry)) return true;
+
+            if (typeof event === "string") event = new CustomEvent(type, this);
+            else if (event instanceof CustomEvent) event.target ||= this;
+            else {
+                let temp = event;
+                event = new CustomEvent(type, this);
+                Object.assign(event, temp);
+            }
+
+            let result = true;
+            let listeners = registry[type];
+            let capture = listeners[true];
+            let bubble = listeners[false];
+
+            // Capture phase
+            if (capture) {
+                let ancestors = [];
+                for (let node = this; node; node = node.parent) ancestors.push(node);
+                for (let i = ancestors.length - 1; i >= 0 && !event.stopped && capture.active; i--)
+                    result &= invokeListeners(capture, ancestors[i], event.type, true, event) && !event.defaultPrevented;
+            }
+
+            // Bubble phase
+            if (bubble) {
+                if (capture) {
+                    for (let i = 0; i < ancestors.length && !event.stopped && bubble.active; i++)
+                        result &= invokeListeners(bubble, ancestors[i], event.type, false, event) && !event.defaultPrevented;
+                } else {
+                    for (let node = this; node && !event.stopped && bubble.active; node = node.parent)
+                        result &= invokeListeners(bubble, node, event.type, false, event) && !event.defaultPrevented;
+                }
+            }
+
+            return Boolean(result);
+        }
+
+        dispose() {
+            super.dispose();
+            clearAllListeners(this);
+            this.parent = null;
+        }
+    }
+
     var tb = function () { };
     inherit(tb, Disposable);
     m = tb.prototype;
@@ -864,69 +928,102 @@ var minutes = 6E4;
         ob(this);
         this.Hc = k
     };
-    var ub = function (a, b) {
-        this.Ne = a || document;
-        this.B = new E(this);
-        this.Pe = b || l;
-        this.B.listen(this.Ne, "keydown", this.Oe);
-        isIE || (window.addEventListener("deviceorientation", bind(this.Za, this), h), window.addEventListener("MozOrientation", bind(this.Za, this), h), window.addEventListener("devicemotion", bind(this.Za, this), h))
-    };
-    inherit(ub, tb);
-    var vb = {
-        37: 3,
-        38: 1,
-        39: 4,
-        40: 2,
-        87: 1,
-        83: 2,
-        65: 3,
-        68: 4
-    };
-    m = ub.prototype;
-    m.Jd = 0;
-    m.$a = 0;
-    m.ab = 0;
-    m.Yb = 10;
-    m.Za = function (a) {
-        var b = screen.orientation;
-        this.Jd != b && (this.Jd = b, this.Yb = 10, this.ab = this.$a = 0);
-        var c = a.accelerationIncludingGravity;
-        if (c) {
-            var d = c.x,
-                e = c.Vc;
-            switch (b) {
-                case 90:
-                    d = -c.y;
-                    e = c.Vc;
-                    break;
-                case -90:
-                    d = c.y;
-                    e = c.Vc;
-                    break;
-                case 180:
-                    d = -c.x, e = c.Vc
+
+    class InputController extends EventDispatcher {
+        constructor(element = document, preventDefault = false) {
+            super();
+            this.element = element;
+            this.handler = new EventHandler(this);
+            this.preventDefault = preventDefault;
+
+            this.handler.listen(this.element, "keydown", this.onKeyDown.bind(this));
+
+            if (!isIE) {
+                window.addEventListener("deviceorientation", this.onMotion.bind(this), true);
+                window.addEventListener("MozOrientation", this.onMotion.bind(this), true);
+                window.addEventListener("devicemotion", this.onMotion.bind(this), true);
+            }
+
+            this.orientation = 0;
+            this.avgX = 0;
+            this.avgY = 0;
+            this.calibrationFrames = 10;
+        }
+
+        onMotion(event) {
+            let orientation = screen.orientation;
+            if (this.orientation !== orientation) {
+                this.orientation = orientation;
+                this.calibrationFrames = 10;
+                this.avgX = this.avgY = 0;
+            }
+
+            let accel = event.accelerationIncludingGravity;
+            if (accel) {
+                let x = accel.x;
+                let y = accel.Vc; // possibly typo for accel.y
+
+                switch (orientation) {
+                    case 90:  x = -accel.y; y = accel.Vc; break;
+                    case -90: x = accel.y;  y = accel.Vc; break;
+                    case 180: x = -accel.x; y = accel.Vc; break;
+                }
+
+                let gamma = event.gamma || 57 * event.x || 2 * x;
+                let beta  = event.beta  || 57 * event.y || 2 * y;
+
+                if (this.calibrationFrames) {
+                    this.avgX += gamma;
+                    this.avgY += beta;
+                    this.calibrationFrames--;
+                    if (this.calibrationFrames === 0) {
+                        this.avgX /= 10;
+                        this.avgY /= 10;
+                    }
+                } else {
+                    let deltaX = gamma - this.avgX;
+                    let deltaY = beta - this.avgY;
+
+                    let direction = 0;
+                    let intensity = 0;
+
+                    if (deltaX > 5)       { intensity = (deltaX - 5) / 10; direction = 4; } // right
+                    else if (deltaX < -5) { intensity = (-deltaX - 5) / 10; direction = 3; } // left
+
+                    if (Math.abs(deltaY) > Math.abs(deltaX)) {
+                        if (deltaY > 5)       { intensity = (deltaY - 5) / 10; direction = 2; } // down
+                        else if (deltaY < -5) { intensity = (-deltaY - 5) / 10; direction = 1; } // up
+                    }
+
+                    if (intensity > 0 && direction) {
+                        this.dispatchEvent(new DirectionEvent(direction));
+                    }
+                }
             }
         }
-        b = a.gamma || 57 * a.x || 2 * d;
-        e = a.beta || 57 * a.y || 2 * e;
-        this.Yb ? (this.$a += b, this.ab += e, this.Yb--, 0 == this.Yb && (this.$a /= 10, this.ab /= 10)) : (a = b - this.$a, e -= this.ab, b = k, c = 0, 5 < a ? (c = (a - 5) / 10, b = 4) : -5 > a && (c = (-a - 5) / 10, b = 3), Math.abs(e) > Math.abs(a) && (5 < e ? (c = (e - 5) / 10, b = 2) : -5 > e && (c =
-            (-e - 5) / 10, b = 1)), 0 < c && b && this.dispatchEvent(new wb(b)))
-    };
-    m.Oe = function (a) {
-        var b = vb[a.keyCode];
-        b && (this.dispatchEvent(new wb(b)), this.Pe && a.preventDefault && a.preventDefault())
-    };
-    m.h = function () {
-        la(this.B);
-        this.B = k;
-        window.removeEventListener("deviceorientation", bind(this.Za, this), h);
-        window.removeEventListener("MozOrientation", bind(this.Za, this), h);
-        window.removeEventListener("devicemotion", bind(this.Za, this), h)
-    };
 
+        onKeyDown(e) {
+            let direction = vb[e.keyCode];
+            if (direction) {
+                this.dispatchEvent(new DirectionEvent(direction));
+                if (this.preventDefault && e.preventDefault) e.preventDefault();
+            }
+        }
+
+        dispose() {
+            super.dispose();
+            this.handler.dispose();
+            this.handler = null;
+            window.removeEventListener("deviceorientation", this.onMotion, true);
+            window.removeEventListener("MozOrientation", this.onMotion, true);
+            window.removeEventListener("devicemotion", this.onMotion, true);
+        }
+    }
+
+    // ActionEvent
     class wb extends CustomEvent {
         constructor(a) {
-            super(this, a);
+            super("a");
             this.Ie = a
         }
     }
@@ -944,33 +1041,66 @@ var minutes = 6E4;
         }
     };
 
-    var yb = ["Moz", "ms", "O", "webkit"],
-    zb = ["", "moz", "ms", "o", "webkit"],
-    Ab = function (a) {
-        var b = document;
-        if (!b) return k;
-        for (var c = 0; c < zb.length; c++) {
-            var d = zb[c],
-                e = a;
-            0 < d.length && (e = a.charAt(0).toUpperCase() + a.substr(1));
-            d += e;
-            if ("undefined" != typeof b[d]) return d
+    // Vendor prefixes commonly used by browsers
+    const vendorPrefixes = ["Moz", "ms", "O", "webkit"];
+    const vendorPrefixesLower = ["", "moz", "ms", "o", "webkit"];
+
+    /**
+     * Finds the correct vendor-prefixed property name supported by the browser.
+     * Example: Ab("hidden") → "hidden" or "webkitHidden"
+     */
+    function getVendorPropertyName(property) {
+        const doc = document;
+        if (!doc) return null;
+
+        for (let i = 0; i < vendorPrefixesLower.length; i++) {
+            let prefix = vendorPrefixesLower[i];
+            let candidate = property;
+
+            if (prefix.length > 0) {
+                // Capitalize first letter for camelCase vendor properties
+                candidate = prefix + property.charAt(0).toUpperCase() + property.slice(1);
+            }
+
+            // Return the first supported property name
+            if (typeof doc[candidate] !== "undefined") return candidate;
         }
-        return k
-    },
-    Bb = function () {
-        for (var a = ["requestAnimationFrame", "mozRequestAnimationFrame", "msRequestAnimationFrame", "oRequestAnimationFrame", "webkitRequestAnimationFrame"], b = 0; b < a.length; b++) {
-            var c = window[a[b]];
-            if (c) return bind(c, window)
+
+        return null;
+    }
+
+    /**
+     * Finds the correct `requestAnimationFrame` implementation (with vendor prefixes),
+     * or falls back to `setTimeout` at ~60 FPS if unavailable.
+     */
+    function getRequestAnimationFrame() {
+        const names = [
+            "requestAnimationFrame",
+            "mozRequestAnimationFrame",
+            "msRequestAnimationFrame",
+            "oRequestAnimationFrame",
+            "webkitRequestAnimationFrame"
+        ];
+
+        for (let i = 0; i < names.length; i++) {
+            const raf = window[names[i]];
+            if (raf) return raf.bind(window);
         }
-        return function (a) {
-            window.setTimeout(a, 17)
-        }
-    },
-    Cb = function (a) {
-        Cb = Bb();
-        return Cb(a)
-    };
+
+        // Fallback: emulate ~60fps (1000ms / 60 ≈ 16.7ms)
+        return function(callback) {
+            window.setTimeout(callback, 17);
+        };
+    }
+
+    /**
+     * Cross-browser animation frame wrapper.
+     * Once the first call determines the correct implementation, it replaces itself for speed.
+     */
+    function requestAnimFrame(callback) {
+        requestAnimFrame = getRequestAnimationFrame();
+        return requestAnimFrame(callback);
+    }
 
     function getTime() {
         return new Date().getTime()
@@ -1080,44 +1210,84 @@ var minutes = 6E4;
         };
     }
 
-    var Kb = function (a, b, c) {
-        this.zd = a;
-        this.Je = b;
-        this.Ke = c;
-        this.Ub = this.Sb = this.Pc = l;
-        this.Oc = getTime();
-        this.Le = Ab("hidden");
-        if (this.Dd = (this.Qc = Ab("visibilityState")) ? this.Qc.replace(/state$/i, "change").toLowerCase() : k) a = new E, b = partialApply(la, a), this.ub || (this.ub = []), this.ub.push(bind(b, g)), a.listen(document, this.Dd, bind(this.Me, this));
-        Jb(this)
-    };
-    inherit(Kb, Disposable);
-    Kb.prototype.h = function () {
-        window.clearTimeout(this.Rb);
-        Kb.I.h.call(this)
-    };
-    Kb.prototype.Xe = function () {
-        this.Rb = k;
-        (this.Sb = getTime() - this.Oc >= this.zd) || Jb(this);
-        Lb(this)
-    };
-    var Lb = function (a) {
-        var b = a.Pc || a.Sb;
-        a.Ub && !b ? (a.Ub = l, a.Ke(), Jb(a)) : !a.Ub && b && (a.Ub = h, a.Je())
-    };
-    Kb.prototype.Me = function () {
-        var a = document[this.Qc];
-        (this.Pc = document[this.Le] || "hidden" == a) ? Lb(this) : Mb(this)
-    };
-    var Jb = function (a) {
-        a.Rb && window.clearTimeout(a.Rb);
-        var b = Math.max(100, a.zd - (getTime() - a.Oc));
-        a.Rb = window.setTimeout(bind(a.Xe, a), b)
-    },
-    Mb = function (a) {
-        a.Oc = getTime();
-        a.Sb = l;
-        Lb(a)
-    };
+    class VisibilityTimer extends Disposable {
+        constructor(timeoutMs, onVisible, onHidden) {
+            super();
+            this.timeoutMs = timeoutMs;    // How long to wait (in ms)
+            this.onVisible = onVisible;    // Callback when the page becomes visible
+            this.onHidden = onHidden;      // Callback when the page becomes hidden
+            this.hasTriggered = false;
+            this.isHidden = false;
+            this.startTime = getTime();
+            this.hiddenProp = getVendorPropertyName("hidden");
+            this.visibilityStateProp = getVendorPropertyName("visibilityState");
+
+            // Determine the visibility change event name
+            this.visibilityChangeEvent = this.visibilityStateProp
+                ? this.visibilityStateProp.replace(/state$/i, "change").toLowerCase()
+                : null;
+
+            // Listen to document visibility changes
+            if (this.visibilityChangeEvent) {
+                const listener = bind(this.onVisibilityChange, this);
+                this.listen(document, this.visibilityChangeEvent, listener);
+            }
+
+            // Start initial timer
+            this.scheduleCheck();
+        }
+
+        dispose() {
+            window.clearTimeout(this.timer);
+            super.dispose();
+        }
+
+        // Called when timer interval passes
+        checkVisibility() {
+            this.timer = null;
+            // True if enough time has passed
+            this.isHidden = getTime() - this.startTime >= this.timeoutMs;
+            this.updateCallbacks();
+        }
+
+        // Schedule next visibility check
+        scheduleCheck() {
+            if (this.timer) window.clearTimeout(this.timer);
+            const remaining = Math.max(100, this.timeoutMs - (getTime() - this.startTime));
+            this.timer = window.setTimeout(this.checkVisibility.bind(this), remaining);
+        }
+
+        // Called when visibility changes
+        onVisibilityChange() {
+            const state = document[this.visibilityStateProp];
+            this.isHidden = document[this.hiddenProp] || state === "hidden";
+            if (this.isHidden) {
+                this.updateCallbacks();
+            } else {
+                this.resetTimer();
+            }
+        }
+
+        // Update which callback should fire
+        updateCallbacks() {
+            const condition = this.isHidden || this.hasTriggered;
+            if (this.hasTriggered && !condition) {
+                this.hasTriggered = false;
+                this.onHidden();
+                this.scheduleCheck();
+            } else if (!this.hasTriggered && condition) {
+                this.hasTriggered = true;
+                this.onVisible();
+            }
+        }
+
+        // Reset time tracking
+        resetTimer() { // Mb
+            this.startTime = getTime();
+            this.hasTriggered = false;
+            this.updateCallbacks();
+        }
+    }
 
     function random(a) {
         return Math.floor(Math.random() * a)
@@ -1816,7 +1986,7 @@ var minutes = 6E4;
         this.uc = this.Eb = l;
         this.kd = []
     };
-    inherit(N, tb);
+    inherit(N, EventDispatcher);
     var M = k;
     N.prototype.aa = function () {
         return this.s
@@ -1915,7 +2085,7 @@ var minutes = 6E4;
             d = "";
         a != k && (d += " scaleX(" + a + ")");
         b != k && (d += " scaleY(" + b + ")");
-        for (var e = 0, f; f = yb[e++];) c.style[f + "Transform"] = d
+        for (var e = 0, f; f = vendorPrefixes[e++];) c.style[f + "Transform"] = d
     };
     N.prototype.show = function (a) {
         this.od != a && (this.od = a, this.s.style.display = a ? "" : "none")
@@ -1950,6 +2120,19 @@ var minutes = 6E4;
             this.uc = e || l
         }
     };
+
+    function stopAllAnimations(target) {
+        if (target.X) {
+            target.X.stop();
+            target.isRunning = false;
+            ArrayUtils.forEach(target.timeoutHandles, handle => clearTimeout(handle));
+        }
+
+        if (target.ra) {
+            target.ra.stop();
+        }
+    }
+
     var Ac = function (a) {
         a.X && (a.X.stop(), a.uc = l, ArrayUtils.forEach(a.kd, function (a) {
             clearTimeout(a)
@@ -2921,7 +3104,7 @@ var minutes = 6E4;
         this.Yc = this.Hb = this.Ib = k;
         this.g = GridPatternManager.getInstance()
     };
-    inherit(Fe, tb);
+    inherit(Fe, EventDispatcher);
     Ge = [Uc, Tc, Sc, Tc, Uc];
     var Be = [Uc, Tc, Sc],
         He = [Ic, Jc, Kc, Lc],
@@ -3072,14 +3255,14 @@ var minutes = 6E4;
     };
     class CatchItemEvent extends CustomEvent {
         constructor(a, b) {
-            super(this, "catch item");
+            super("catch item");
             this.item = a;
             this.gb = b;
         }
     }
     class MatchPatternEvent extends CustomEvent {
         constructor(a, b) {
-            super(this, "match pattern");
+            super("match pattern");
             this.pattern = a;
             this.gb = b;
         }
@@ -3219,7 +3402,7 @@ var minutes = 6E4;
         this.ka.init(this.fa);
         this.N = new Fe(this.fa);
         snakeClass = this.N;
-        this.Zc = new ub(this.v, h);
+        this.Zc = new InputController(this.v, h);
         this.B = new E(this);
         this.bb = ObjectPoolManager.getInstance();
         this.ca = new Cd(12, Z.x, Z.y, this.v, 101);
@@ -3239,7 +3422,7 @@ var minutes = 6E4;
         this.B.listen(this.N, "catch item", this.Yd);
         this.B.listen(this.N, "match pattern", this.Zd);
         this.B.listen(this.La, "click", this.Wd);
-        this.Ja = new Kb(3E4, bind(this.$d, this), bind(this.ae, this));
+        this.Ja = new VisibilityTimer(3E4, bind(this.$d, this), bind(this.ae, this));
         this.bd = !(!a || !a.standalone);
         window.isAnimationPaused = l;
         new S(19, mf.x, mf.y, this.v, 100);
@@ -3484,12 +3667,12 @@ var minutes = 6E4;
             }
         };
     $.prototype.Xd = function (a) {
-        Mb(this.Ja);
+        this.Ja.resetTimer();
         "tutorial_end" == this.i ? (Pf(this), Nf(this)) : "running" == this.i && ze(this.N, a.Ie)
     };
     $.prototype.De = function () {
         this.la.load(l);
-        Mb(this.Ja);
+        this.Ja.resetTimer();
         var a = new AnimationSequence();
         this.ec = a;
         a.addStep(bind(function () {
@@ -3530,7 +3713,7 @@ var minutes = 6E4;
         a.sd()
     };
     $.prototype.td = function () {
-        Mb(this.Ja);
+        this.Ja.resetTimer();
         "tutorial_end" == this.i && (Pf(this), Nf(this))
     };
     $.prototype.sd = function () {
@@ -3554,7 +3737,7 @@ var minutes = 6E4;
     };
     m = $.prototype;
     m.Wd = function () {
-        Mb(this.Ja);
+        this.Ja.resetTimer();
         this.Ka = !this.Ka;
         Q(this.La, this.Ka ? 90 : 89);
         this.la.H.muted = this.Ka ? l : h
@@ -3570,7 +3753,7 @@ var minutes = 6E4;
             b = Math.min(50, b);
         "running" == this.i ? Sf(this, b, a) : "unstarted" == this.i && 1500 < a - this.Vd && (this.i = "init", Qf(this));
         b = bind(this.dd, this);
-        Cb(b);
+        requestAnimFrame(b);
         this.cd = a
     };
     m.h = function () {
