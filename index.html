@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <link rel="stylesheet" href="./snake.css">
+        <title>CNY2013 Hacked</title>
+    </head>
+    <body>
+        <center>
+            <div id="hplogo" dir="ltr" tabindex="0">
+                <div class="grids" style="position: absolute; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); left: 110px; top: 20px;">
+                </div>
+            </div>
+        </center>
+
+        <label for="item_type">Item Type:</label>
+        <select name="item_type" id="item_type">
+           <option value="firecraker">firecraker</option>
+           <option value="dumpling">dumpling</option>
+           <option value="steamer">steamer</option>
+           <option value="coin">coin</option>
+           <option value="ingot">ingot</option>
+           <option value="tea">tea</option>
+           <option value="medicine">medicine</option>
+           <option value="mushroom">mushroom</option>
+           <option value="papercut">papercut</option>
+           <option value="envelope">envelope</option>
+           <option value="lantern">lantern</option>
+           <option value="random">random</option>
+        </select>
+
+        <label for="item_amount">Amount:</label>
+        <input type="number" name="Amount" id="item_amount" min="1" max="30" value="10">
+        <button type="submit" onclick="spawn()">Spawn!</button>
+        <br>
+        <label for="min_time">Minutes:</label>
+        <input type="number" name="Minutes" id="min_time" min="1" max="15" value="6">
+        <button type="submit" onclick="changeTime()">Change</button>
+        
+        <script src="./snakeyear13.js" async=""></script>
+        <script src="./hack.js"></script>
+    </body>
+</html>

@@ -1,0 +1,17 @@
+body {font-family: "Arial";}
+
+#hplogo {
+    height: 220px;
+    outline: none;
+    overflow: hidden;
+    position: relative;
+    width: 680px;
+    user-select: none;
+}
+
+.grids {
+    width: 460px;
+    height: 180px;
+    overflow: hidden;
+    position: absolute
+}
