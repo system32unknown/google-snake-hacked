@@ -15,10 +15,6 @@ var minutes = 6E4;
         l = !1,
         m, p = this
 
-    /**
-     * Utility helpers used for type checks, unique IDs, and function binding.
-     */
-
     /** Checks if the value is an Array. */
     function isArray(value) {
         return typeOf(value) === "array";
@@ -73,7 +69,6 @@ var minutes = 6E4;
 
         return bind.apply(null, [fn, context, ...args]);
     }
-
 
     /**
      * Adds a static singleton getter to a class.
@@ -192,82 +187,130 @@ var minutes = 6E4;
     var la = function (a) {
         a && "function" == typeof a.C && a.C()
     };
-    var x = function (a, b) {
-        this.type = a;
-        this.currentTarget = this.target = b
-    };
-    m = x.prototype;
-    m.h = function () { };
-    m.C = function () { };
-    m.Ya = l;
-    m.defaultPrevented = l;
-    m.Vb = h;
-    m.preventDefault = function () {
-        this.defaultPrevented = h;
-        this.Vb = l
-    };
-    var ma = function (a) {
-        Error.captureStackTrace ? Error.captureStackTrace(this, ma) : this.stack = Error().stack || "";
-        a && (this.message = String(a))
-    };
-    inherit(ma, Error);
-    ma.prototype.name = "CustomError";
-    var na = function (a, b) {
-        for (var c = 1; c < arguments.length; c++) {
-            var d = String(arguments[c]).replace(/\$/g, "$$$$");
-            a = a.replace(/\%s/, d)
+
+    /** ---------------------------
+     * Event Class
+     * --------------------------- */
+    class CustomEvent {
+        constructor(type, target) {
+            this.type = type;
+            this.target = target;
+            this.currentTarget = target;
+
+            this.handled = false;
+            this.defaultPrevented = false;
+            this.cancelable = true;
         }
-        return a
-    };
-    var oa = function (a, b) {
-        b.unshift(a);
-        ma.call(this, na.apply(k, b));
-        b.shift()
-    };
-    inherit(oa, ma);
-    oa.prototype.name = "AssertionError";
-    var pa = function (a, b, c) {
-        if (!a) {
-            var d = Array.prototype.slice.call(arguments, 2),
-                e = "Assertion failed";
-            if (b) var e = e + (": " + b),
-                f = d;
-            throw new oa("" + e, f || []);
+
+        // Placeholder for subclasses or handlers
+        init() { }
+
+        // Cleanup or release resources
+        destroy() { }
+
+        preventDefault() {
+            this.defaultPrevented = true;
+            this.cancelable = false;
+        }
+    }
+
+    /** ---------------------------
+     * Error Classes
+     * --------------------------- */
+    class CustomError extends Error {
+        constructor(message) {
+            super(message ? String(message) : "");
+            this.name = "CustomError";
+
+            if (Error.captureStackTrace) {
+                Error.captureStackTrace(this, CustomError);
+            }
+        }
+    }
+
+    class AssertionError extends CustomError {
+        constructor(message, args = []) {
+            const formatted = AssertionError.formatMessage(message, args);
+            super(formatted);
+            this.name = "AssertionError";
+        }
+
+        static formatMessage(message, args) {
+            let formatted = message;
+            args.forEach(arg => {
+                const safeArg = String(arg).replace(/\$/g, "$$$$");
+                formatted = formatted.replace(/%s/, safeArg);
+            });
+            return formatted;
+        }
+    }
+
+    /** ---------------------------
+     * Assert Utility
+     * --------------------------- */
+    function assert(condition, message, ...args) {
+        if (!condition) {
+            const errorMessage = message
+                ? `Assertion failed: ${AssertionError.formatMessage(message, args)}`
+                : "Assertion failed";
+            throw new AssertionError(errorMessage);
+        }
+    }
+
+    /** ---------------------------
+     * Array Utilities
+     * --------------------------- */
+    const ArrayUtils = {
+        indexOf(array, value, start = 0) {
+            assert(array != null);
+            if (Array.prototype.indexOf) {
+                return Array.prototype.indexOf.call(array, value, start);
+            }
+            if (typeof array === "string") {
+                return array.indexOf(value, start);
+            }
+            for (let i = start; i < array.length; i++) {
+                if (i in array && array[i] === value) return i;
+            }
+            return -1;
+        },
+
+        forEach(array, callback, thisArg) {
+            assert(array != null);
+            if (Array.prototype.forEach) {
+                Array.prototype.forEach.call(array, callback, thisArg);
+            } else {
+                for (let i = 0; i < array.length; i++) {
+                    if (i in array) callback.call(thisArg, array[i], i, array);
+                }
+            }
+        },
+
+        forEachReverse(array, callback) {
+            const copy = typeof array === "string" ? array.split("") : array;
+            for (let i = copy.length - 1; i >= 0; i--) {
+                if (i in copy) callback(copy[i], i, array);
+            }
+        },
+
+        every(array, callback, thisArg) {
+            assert(array != null);
+            if (Array.prototype.every) {
+                return Array.prototype.every.call(array, callback, thisArg);
+            }
+            for (let i = 0; i < array.length; i++) {
+                if (i in array && !callback.call(thisArg, array[i], i, array)) {
+                    return false;
+                }
+            }
+            return true;
+        },
+
+        slice(array, start, end) {
+            assert(array != null);
+            return Array.prototype.slice.call(array, start, end);
         }
     };
-    var y = Array.prototype,
-        qa = y.indexOf ? function (a, b, c) {
-            pa(a.length != k);
-            return y.indexOf.call(a, b, c)
-        } : function (a, b, c) {
-            c = c == k ? 0 : 0 > c ? Math.max(0, a.length + c) : c;
-            if (isString(a)) return !isString(b) || 1 != b.length ? -1 : a.indexOf(b, c);
-            for (; c < a.length; c++)
-                if (c in a && a[c] === b) return c;
-            return -1
-        },
-        z = y.forEach ? function (a, b, c) {
-            pa(a.length != k);
-            y.forEach.call(a, b, c)
-        } : function (a, b, c) {
-            for (var d = a.length, e = isString(a) ? a.split("") : a, f = 0; f < d; f++) f in e && b.call(c, e[f], f, a)
-        },
-        ra = function (a, b) {
-            for (var c = isString(a) ? a.split("") : a, d = a.length - 1; 0 <= d; --d) d in c && b.call(g,
-                c[d], d, a)
-        },
-        sa = y.every ? function (a, b, c) {
-            pa(a.length != k);
-            return y.every.call(a, b, c)
-        } : function (a, b, c) {
-            for (var d = a.length, e = isString(a) ? a.split("") : a, f = 0; f < d; f++)
-                if (f in e && !b.call(c, e[f], f, a)) return l;
-            return h
-        },
-        ta = function (a, b, c) {
-            pa(a.length != k);
-            return 2 >= arguments.length ? y.slice.call(a, b) : y.slice.call(a, b, c)
-        };
 
     /**
      * Returns an array of all values in an object.
@@ -337,90 +380,110 @@ var minutes = 6E4;
         for (var d in a) b.call(c, a[d], d, a)
     }
 
-    var za, Aa, Ba, Ca, Da, Ea = function () {
-        return p.navigator ? p.navigator.userAgent : k
-    },
-        Fa = function () {
-            return p.navigator
-        };
-    Ca = Ba = Aa = za = l;
-    var Ga;
-    if (Ga = Ea()) {
-        var Ha = Fa();
-        za = 0 == Ga.indexOf("Opera");
-        Aa = !za && -1 != Ga.indexOf("MSIE");
-        Ba = !za && -1 != Ga.indexOf("WebKit");
-        Ca = !za && !Ba && "Gecko" == Ha.product
+    // Detect navigator info
+    const getUserAgent = () => window.navigator ? window.navigator.userAgent : null;
+    const getNavigator = () => window.navigator || {};
+
+    // Browser flags
+    let isOpera = false;
+    let isIE = false;
+    let isWebKit = false;
+    let isGecko = false;
+
+    const userAgent = getUserAgent();
+    const nav = getNavigator();
+
+    if (userAgent) {
+        isOpera  = userAgent.startsWith("Opera");
+        isIE = !isOpera && userAgent.includes("MSIE");
+        isWebKit = !isOpera && userAgent.includes("WebKit");
+        isGecko  = !isOpera && !isWebKit && nav.product === "Gecko";
     }
-    var Ia = za,
-        B = Aa,
-        Ja = Ca,
-        Ka = Ba,
-        La = Fa();
-    Da = -1 != (La && La.platform || "").indexOf("Mac");
-    var Ma = !!Fa() && -1 != (Fa().appVersion || "").indexOf("X11"),
-        Na = function () {
-            var a = p.document;
-            return a ? a.documentMode : g
-        },
-        Oa;
-    a: {
-        var Pa = "", Qa;
-        if (Ia && p.opera) var Ra = p.opera.version,
-            Pa = "function" == typeof Ra ? Ra() : Ra;
-        else if (Ja ? Qa = /rv\:([^\);]+)(\)|;)/ : B ? Qa = /MSIE\s+([^\);]+)(\)|;)/ : Ka && (Qa = /WebKit\/(\S+)/), Qa) var Sa = Qa.exec(Ea()),
-            Pa = Sa ? Sa[1] : "";
-        if (B) {
-            var Ta = Na();
-            if (Ta > parseFloat(Pa)) {
-                Oa = String(Ta);
-                break a
+
+    const platform = nav.platform || "";
+    const isMac = platform.includes("Mac");
+    const isUnix = (nav.appVersion || "").includes("X11");
+
+    // IE Document Mode (for compatibility)
+    const getDocumentMode = () => {
+        const doc = window.document;
+        return doc ? doc.documentMode : undefined;
+    };
+
+    // --- Browser version extraction ---
+    let browserVersion = "";
+    (function detectVersion() {
+        let match;
+
+        if (isOpera && window.opera) {
+            const version = window.opera.version;
+            browserVersion = typeof version === "function" ? version() : version;
+        } else if (isGecko) {
+            match = /rv\:([^\);]+)(\)|;)/.exec(userAgent);
+        } else if (isIE) {
+            match = /MSIE\s+([^\);]+)(\)|;)/.exec(userAgent);
+        } else if (isWebKit) {
+            match = /WebKit\/(\S+)/.exec(userAgent);
+        }
+
+        if (match) browserVersion = match[1] || "";
+
+        // IE may override version if documentMode is higher
+        if (isIE) {
+            const docMode = getDocumentMode();
+            if (docMode > parseFloat(browserVersion)) {
+                browserVersion = String(docMode);
             }
         }
-        Oa = Pa
-    }
-    var Ua = Oa,
-        Va = {},
-        C = function (a) {
-            var b;
-            if (!(b = Va[a])) {
-                b = 0;
-                for (var c = String(Ua).replace(/^[\s\xa0]+|[\s\xa0]+$/g, "").split("."), d = String(a).replace(/^[\s\xa0]+|[\s\xa0]+$/g, "").split("."), e = Math.max(c.length, d.length), f = 0; 0 == b && f < e; f++) {
-                    var n = c[f] || "",
-                        q = d[f] || "",
-                        r = RegExp("(\\d*)(\\D*)", "g"),
-                        A = RegExp("(\\d*)(\\D*)", "g");
-                    do {
-                        var v = r.exec(n) || ["", "", ""],
-                            I = A.exec(q) || ["", "", ""];
-                        if (0 == v[0].length && 0 == I[0].length) break;
-                        b = ((0 == v[1].length ? 0 : parseInt(v[1], 10)) < (0 == I[1].length ? 0 : parseInt(I[1], 10)) ? -1 : (0 == v[1].length ?
-                            0 : parseInt(v[1], 10)) > (0 == I[1].length ? 0 : parseInt(I[1], 10)) ? 1 : 0) || ((0 == v[2].length) < (0 == I[2].length) ? -1 : (0 == v[2].length) > (0 == I[2].length) ? 1 : 0) || (v[2] < I[2] ? -1 : v[2] > I[2] ? 1 : 0)
-                    } while (0 == b)
-                }
-                b = Va[a] = 0 <= b
-            }
-            return b
-        },
-        Wa = p.document,
-        Xa = !Wa || !B ? g : Na() || ("CSS1Compat" == Wa.compatMode ? parseInt(Ua, 10) : 5);
-    var Ya = function (a) {
-        Ya[" "](a);
-        return a
+    })();
+
+    // --- Version comparison cache ---
+    const versionCache = {};
+
+    // Compares the current browser version to a target version.
+    const versionAtLeast = (targetVersion) => {
+        if (versionCache[targetVersion] !== undefined)
+            return versionCache[targetVersion];
+
+        const normalize = str =>
+            String(str).trim().split(".").map(x => x || "0");
+
+        const aParts = normalize(browserVersion);
+        const bParts = normalize(targetVersion);
+        const len = Math.max(aParts.length, bParts.length);
+
+        let result = 0;
+        for (let i = 0; i < len && result === 0; i++) {
+            const [a, b] = [aParts[i] || "", bParts[i] || ""];
+            const numA = parseInt(a, 10) || 0;
+            const numB = parseInt(b, 10) || 0;
+
+            result = numA < numB ? -1 : numA > numB ? 1 : a.localeCompare(b);
+        }
+
+        return (versionCache[targetVersion] = result >= 0);
     };
-    Ya[" "] = function () { };
-    var Za = !B || B && 9 <= Xa,
-        $a = B && !C("9");
-    !Ka || C("528");
-    Ja && C("1.9b") || B && C("8") || Ia && C("9.5") || Ka && C("528");
-    Ja && !C("8") || B && C("9");
+
+    // --- Feature flags ---
+    const doc = window.document;
+    var docMode = (!doc || !isIE)
+        ? undefined
+        : getDocumentMode() || (doc.compatMode === "CSS1Compat" ? parseInt(browserVersion, 10) : 5);
+
+    const supportsDOM9 = !isIE || (isIE && docMode >= 9);
+    const isOldIE = isIE && !versionAtLeast("9");
+
+    !isWebKit || versionAtLeast("528");
+    isGecko && versionAtLeast("1.9b");
+    isIE && versionAtLeast("8");
+
     var ab = function (a, b) {
         a && this.init(a, b)
     };
-    inherit(ab, x);
+    inherit(ab, CustomEvent);
     m = ab.prototype;
-    m.target = k;
-    m.relatedTarget = k;
+    m.target = null;
+    m.relatedTarget = null;
     m.offsetX = 0;
     m.offsetY = 0;
     m.clientX = 0;
@@ -430,10 +493,10 @@ var minutes = 6E4;
     m.button = 0;
     m.keyCode = 0;
     m.charCode = 0;
-    m.ctrlKey = l;
-    m.altKey = l;
-    m.shiftKey = l;
-    m.metaKey = l;
+    m.ctrlKey = false;
+    m.altKey = false;
+    m.shiftKey = false;
+    m.metaKey = false;
     m.Id = k;
     m.init = function (a, b) {
         var c = this.type = a.type;
@@ -561,7 +624,7 @@ var minutes = 6E4;
         },
         ib = function () {
             var a = jb,
-                b = Za ? function (c) {
+                b = supportsDOM9 ? function (c) {
                     return a.call(b.src, b.xa, c)
                 } : function (c) {
                     c = a.call(b.src, b.xa, c);
@@ -612,8 +675,8 @@ var minutes = 6E4;
             c = getUniqueId(c);
             if (eb[c]) {
                 var e = eb[c],
-                    n = qa(e, b);
-                0 <= n && (pa(e.length != k), y.splice.call(e, n, 1));
+                    n = ArrayUtils.indexOf(e, b);
+                0 <= n && (assert(e.length != k), Array.prototype.splice.call(e, n, 1));
                 0 == e.length && delete eb[c]
             }
             b.Ha =
@@ -672,7 +735,7 @@ var minutes = 6E4;
             if (!(c in d)) return h;
             var d = d[c],
                 e, f;
-            if (!Za) {
+            if (!supportsDOM9) {
                 var n;
                 if (!(n = b)) a: {
                     n = ["window", "event"];
@@ -743,7 +806,7 @@ var minutes = 6E4;
         else b = kb(b, c, d || a, e, f || a.Hd || a), a.w.push(b)
     };
     E.prototype.Ad = function () {
-        z(this.w, mb);
+        ArrayUtils.forEach(this.w, mb);
         this.w.length = 0
     };
     E.prototype.h = function () {
@@ -768,11 +831,11 @@ var minutes = 6E4;
         var b = a.type || a,
             c = D;
         if (b in c) {
-            if (isString(a)) a = new x(a, this);
-            else if (a instanceof x) a.target = a.target || this;
+            if (isString(a)) a = new CustomEvent(a, this);
+            else if (a instanceof CustomEvent) a.target = a.target || this;
             else {
                 var d = a;
-                a = new x(b, this);
+                a = new CustomEvent(b, this);
                 deepAssign(a, d)
             }
             var d = 1,
@@ -806,7 +869,7 @@ var minutes = 6E4;
         this.B = new E(this);
         this.Pe = b || l;
         this.B.listen(this.Ne, "keydown", this.Oe);
-        B || (window.addEventListener("deviceorientation", bind(this.Za, this), h), window.addEventListener("MozOrientation", bind(this.Za, this), h), window.addEventListener("devicemotion", bind(this.Za, this), h))
+        isIE || (window.addEventListener("deviceorientation", bind(this.Za, this), h), window.addEventListener("MozOrientation", bind(this.Za, this), h), window.addEventListener("devicemotion", bind(this.Za, this), h))
     };
     inherit(ub, tb);
     var vb = {
@@ -860,11 +923,14 @@ var minutes = 6E4;
         window.removeEventListener("MozOrientation", bind(this.Za, this), h);
         window.removeEventListener("devicemotion", bind(this.Za, this), h)
     };
-    var wb = function (a) {
-        x.call(this, "a");
-        this.Ie = a
-    };
-    inherit(wb, x);
+
+    class wb extends CustomEvent {
+        constructor(a) {
+            super(this, a);
+            this.Ie = a
+        }
+    }
+
     var xb = function (a) {
         switch (a) {
             case 1:
@@ -877,36 +943,39 @@ var minutes = 6E4;
                 return 3
         }
     };
-    var F = function () {
-        return (new Date).getTime()
+
+    var yb = ["Moz", "ms", "O", "webkit"],
+    zb = ["", "moz", "ms", "o", "webkit"],
+    Ab = function (a) {
+        var b = document;
+        if (!b) return k;
+        for (var c = 0; c < zb.length; c++) {
+            var d = zb[c],
+                e = a;
+            0 < d.length && (e = a.charAt(0).toUpperCase() + a.substr(1));
+            d += e;
+            if ("undefined" != typeof b[d]) return d
+        }
+        return k
     },
-        yb = ["Moz", "ms", "O", "webkit"],
-        zb = ["", "moz", "ms", "o", "webkit"],
-        Ab = function (a) {
-            var b = document;
-            if (!b) return k;
-            for (var c = 0; c < zb.length; c++) {
-                var d = zb[c],
-                    e = a;
-                0 < d.length && (e = a.charAt(0).toUpperCase() + a.substr(1));
-                d += e;
-                if ("undefined" != typeof b[d]) return d
-            }
-            return k
-        },
-        Bb = function () {
-            for (var a = ["requestAnimationFrame", "mozRequestAnimationFrame", "msRequestAnimationFrame", "oRequestAnimationFrame", "webkitRequestAnimationFrame"], b = 0; b < a.length; b++) {
-                var c = window[a[b]];
-                if (c) return bind(c, window)
-            }
-            return function (a) {
-                window.setTimeout(a, 17)
-            }
-        },
-        Cb = function (a) {
-            Cb = Bb();
-            return Cb(a)
-        };
+    Bb = function () {
+        for (var a = ["requestAnimationFrame", "mozRequestAnimationFrame", "msRequestAnimationFrame", "oRequestAnimationFrame", "webkitRequestAnimationFrame"], b = 0; b < a.length; b++) {
+            var c = window[a[b]];
+            if (c) return bind(c, window)
+        }
+        return function (a) {
+            window.setTimeout(a, 17)
+        }
+    },
+    Cb = function (a) {
+        Cb = Bb();
+        return Cb(a)
+    };
+
+    function getTime() {
+        return new Date().getTime()
+    }
+
     var Db = function (a, b, c, d) {
         this.Re = a;
         this.Se = b;
@@ -916,70 +985,107 @@ var minutes = 6E4;
         this.Kd = 0
     };
     Db.prototype.jb = function () {
-        var a = F();
+        var a = getTime();
         if (!(this.Ld && this.Md || !this.Ld && a - this.Kd <= this.Te) && this.Re()) this.Se(), this.Md = h, this.Kd = a
     };
-    var Eb = l,
-        G = function () {
-            this.Xb = this.Wb = this.wb = 0;
-            this.Sc = []
-        };
-    G.prototype.tc = function () {
-        return !!this.wb
-    };
-    G.prototype.play = function () {
-        Eb || (this.stop(), this.Wb = 0, this.Xb = F(), this.wb = window.setInterval(bind(this.Od, this), 16), this.Od())
-    };
-    var H = function (a, b, c) {
-        a.Sc.push({
-            duration: c || 0,
-            Tc: b
-        })
-    },
-        Gb = function (a, b, c) {
-            var d = Fb;
-            a.style.opacity = b + "";
-            var e = 1 < Math.abs(c - b);
-            return function (f) {
-                f = b + d(f) * (c - b);
-                e && (f = Math.ceil(f));
-                a.style.opacity = f + "";
-                return f
-            }
-        };
-    G.prototype.stop = function () {
-        if (this.wb) {
-            for (var a; a = this.Sc[this.Wb++];) a.Tc(1);
-            window.clearInterval(this.wb);
-            this.wb = 0
+
+    class AnimationSequence {
+        constructor() {
+            this.startTime = 0;
+            this.currentIndex = 0;
+            this.intervalId = 0;
+            this.steps = [];
         }
-    };
-    var Hb = function (a, b) {
-        H(a, function () { }, b)
-    };
-    G.prototype.Od = function () {
-        var a = F();
-        if (!Eb)
-            for (var b; b = this.Sc[this.Wb]; this.Wb++) {
-                var c = a - this.Xb;
-                if (c < b.duration) {
-                    b.Tc(c / b.duration);
-                    return
+
+        // Checks if animation is currently running
+        isPlaying() {
+            return !!this.intervalId;
+        }
+
+        // Starts playback of all animation steps in sequence
+        play() {
+            if (window.isAnimationPaused) return;
+
+            this.stop();
+            this.currentIndex = 0;
+            this.startTime = getTime();
+            this.intervalId = window.setInterval(this.update.bind(this), 16); // ~60fps
+            this.update();
+        }
+
+        // Stops the animation and finalizes all remaining steps
+        stop() {
+            if (this.intervalId) {
+                let step;
+                while ((step = this.steps[this.currentIndex++])) {
+                    step.update(1);
                 }
-                b.Tc(1);
-                0 < b.duration && (this.Xb += b.duration)
+                window.clearInterval(this.intervalId);
+                this.intervalId = 0;
             }
-        this.stop()
-    };
-    var Fb = function (a) {
-        return a
-    };
+        }
+
+        // Called every frame
+        update() {
+            const now = getTime();
+
+            if (window.isAnimationPaused) return;
+
+            let step;
+            while ((step = this.steps[this.currentIndex])) {
+                const elapsed = now - this.startTime;
+
+                if (elapsed < step.duration) {
+                    step.update(elapsed / step.duration);
+                    return; // wait until next frame
+                }
+
+                step.update(1); // complete this step
+                if (step.duration > 0) this.startTime += step.duration;
+
+                this.currentIndex++;
+            }
+
+            this.stop(); // all done
+        }
+
+        // Add a step (duration in ms, update callback)
+        addStep(callback, duration = 0) {
+            this.steps.push({ duration, update: callback });
+        }
+    }
+
+    // Helper
+    function addPauseStep(sequence, duration) {
+        sequence.addStep(() => {}, duration);
+    }
+
+    /**
+     * Creates an opacity animator function.
+     * @param {HTMLElement} element - Target element.
+     * @param {number} start - Starting opacity (0–1).
+     * @param {number} end - Ending opacity (0–1).
+     * @returns {Function} - Function(progress) that updates opacity.
+     */
+    function createOpacityAnimator(element, start, end) {
+        const ease = (progress) => progress;
+        element.style.opacity = String(start);
+
+        const shouldRound = Math.abs(end - start) > 1;
+        return function updateOpacity(progress) {
+            let value = start + ease(progress) * (end - start);
+            if (shouldRound) value = Math.ceil(value);
+            element.style.opacity = String(value);
+            return value;
+        };
+    }
+
     var Kb = function (a, b, c) {
         this.zd = a;
         this.Je = b;
         this.Ke = c;
         this.Ub = this.Sb = this.Pc = l;
-        this.Oc = F();
+        this.Oc = getTime();
         this.Le = Ab("hidden");
         if (this.Dd = (this.Qc = Ab("visibilityState")) ? this.Qc.replace(/state$/i, "change").toLowerCase() : k) a = new E, b = partialApply(la, a), this.ub || (this.ub = []), this.ub.push(bind(b, g)), a.listen(document, this.Dd, bind(this.Me, this));
         Jb(this)
@@ -991,7 +1097,7 @@ var minutes = 6E4;
     };
     Kb.prototype.Xe = function () {
         this.Rb = k;
-        (this.Sb = F() - this.Oc >= this.zd) || Jb(this);
+        (this.Sb = getTime() - this.Oc >= this.zd) || Jb(this);
         Lb(this)
     };
     var Lb = function (a) {
@@ -1004,15 +1110,16 @@ var minutes = 6E4;
     };
     var Jb = function (a) {
         a.Rb && window.clearTimeout(a.Rb);
-        var b = Math.max(100, a.zd - (F() - a.Oc));
+        var b = Math.max(100, a.zd - (getTime() - a.Oc));
         a.Rb = window.setTimeout(bind(a.Xe, a), b)
     },
-        Mb = function (a) {
-            a.Oc = F();
-            a.Sb = l;
-            Lb(a)
-        };
-    var J = function (a) {
+    Mb = function (a) {
+        a.Oc = getTime();
+        a.Sb = l;
+        Lb(a)
+    };
+
+    function random(a) {
         return Math.floor(Math.random() * a)
     };
 
@@ -1068,29 +1175,30 @@ var minutes = 6E4;
         }
     }
 
-    !Ja && !B || B && B && 9 <= Xa || Ja && C("1.9.1");
-    B && C("9");
+    (!isGecko && !isIE) ||(isIE && getDocumentMode() >= 9) || (isGecko && versionAtLeast("1.9.1"));
+    isIE && versionAtLeast("9");
+
     var Pb = function (a, b) {
         var c;
         c = a.className;
         c = isString(c) && c.match(/\S+/g) || [];
-        for (var d = ta(arguments, 1), e = c, f = 0; f < d.length; f++) 0 <= qa(e, d[f]) || e.push(d[f]);
+        for (var d = ArrayUtils.slice(arguments, 1), e = c, f = 0; f < d.length; f++) 0 <= ArrayUtils.indexOf(e, d[f]) || e.push(d[f]);
         a.className = c.join(" ")
     };
     var Rb = function (a, b, c) {
-        var d, e = Ja && (Da || Ma) && C("1.9");
+        var d, e = isGecko && (isMac || isUnix) && versionAtLeast("1.9");
         b instanceof Point ? (d = b.x, b = b.y) : (d = b, b = c);
         a.style.left = Qb(d, e);
         a.style.top = Qb(b, e)
     },
-        Qb = function (a, b) {
-            "number" == typeof a && (a = (b ? Math.round(a) : a) + "px");
-            return a
-        },
-        Sb = function (a, b) {
-            var c = a.style;
-            "opacity" in c ? c.opacity = b : "MozOpacity" in c ? c.MozOpacity = b : "filter" in c && (c.filter = "" === b ? "" : "alpha(opacity=" + 100 * b + ")")
-        };
+    Qb = function (a, b) {
+        "number" == typeof a && (a = (b ? Math.round(a) : a) + "px");
+        return a
+    },
+    Sb = function (a, b) {
+        var c = a.style;
+        "opacity" in c ? c.opacity = b : "MozOpacity" in c ? c.MozOpacity = b : "filter" in c && (c.filter = "" === b ? "" : "alpha(opacity=" + 100 * b + ")")
+    };
     var Tb = function () {
         this.pb = [];
         this.ua = 0;
@@ -1284,62 +1392,18 @@ var minutes = 6E4;
         return cells;
     }
     const blockedCells = [0, 22, 184, 206];
-    var bc = "StopIteration" in p ? p.StopIteration : Error("StopIteration");
-    class cc {
-        constructor() { }
-        next() {
-            throw bc;
-        }
-        Rc() {
-            return this;
+
+    function forEachItem(collection, callback, context) {
+        if (collection == null) return;
+        if (typeof collection.forEach === "function") {
+            collection.forEach(callback, context);
+        } else if (typeof collection === "string" || Array.isArray(collection)) {
+            Array.from(collection).forEach(callback, context);
+        } else if (typeof collection === "object") {
+            Object.entries(collection).forEach(([key, value]) => callback.call(context, value, key, collection));
         }
     }
-    var dc = function (a) {
-        if ("function" == typeof a.va) a = a.va();
-        else if (isArrayLike(a) || isString(a)) a = a.length;
-        else {
-            var b = 0,
-                c;
-            for (c in a) b++;
-            a = b
-        }
-        return a
-    },
-        ec = function (a) {
-            if ("function" == typeof a.ja) return a.ja();
-            if (isString(a)) return a.split("");
-            if (isArrayLike(a)) {
-                for (var b = [], c = a.length, d = 0; d < c; d++) b.push(a[d]);
-                return b
-            }
-            return getObjectValues(a)
-        },
-        fc = function (a) {
-            if ("function" == typeof a.Xc) return a.Xc();
-            if ("function" != typeof a.ja) {
-                if (isArrayLike(a) || isString(a)) {
-                    var b = [];
-                    a = a.length;
-                    for (var c = 0; c < a; c++) b.push(c);
-                    return b
-                }
-                return getObjectKeys(a)
-            }
-        },
-        gc = function (a, b, c) {
-            if ("function" ==
-                typeof a.forEach) a.forEach(b, c);
-            else if (isArrayLike(a) || isString(a)) z(a, b, c);
-            else
-                for (var d = fc(a), e = ec(a), f = e.length, n = 0; n < f; n++) b.call(c, e[n], d && d[n], a)
-        },
-        hc = function (a, b) {
-            if ("function" == typeof a.every) return a.every(b, g);
-            if (isArrayLike(a) || isString(a)) return sa(a, b, g);
-            for (var c = fc(a), d = ec(a), e = d.length, f = 0; f < e; f++)
-                if (!b.call(g, d[f], c && c[f], a)) return l;
-            return h
-        };
+
     class MapEx {
         constructor(...args) {
             this._map = {};
@@ -1746,7 +1810,9 @@ var minutes = 6E4;
         this.od = h;
         this.xc = M.getHeight(mc(this));
         this.yc = M.getWidth(mc(this));
-        this.ra = this.X = k;
+        this.ra = null;
+
+        this.X = null;
         this.uc = this.Eb = l;
         this.kd = []
     };
@@ -1856,36 +1922,36 @@ var minutes = 6E4;
     };
     var yc = function (a, b, c, d) {
         a.ra && a.ra.stop && a.ra.stop();
-        a.ra = new G;
-        H(a.ra, Gb(a.s, c, d), b);
+        a.ra = new AnimationSequence();
+        a.ra.addStep(createOpacityAnimator(a.s, c, d), b);
         a.ra.play()
     },
-        zc = function (a) {
-            yc(a, 300, 1, 0)
-        };
+    zc = function (a) {
+        yc(a, 300, 1, 0)
+    };
     N.prototype.K = function (a, b, c, d, e) {
         if (c) this.kd.push(setTimeout(bind(function () {
             this.K(a, b, 0, d, e)
         }, this), c));
         else {
-            if (this.X && this.X.tc()) {
+            if (this.X && this.X.isPlaying()) {
                 if (this.uc) return;
                 this.X.stop()
             }
-            this.X = new G;
+            this.X = new AnimationSequence();
             c = d || 1;
-            for (var f = 0; f < c; f++) z(a, function (a) {
-                H(this.X, bind(function () {
+            for (var f = 0; f < c; f++) ArrayUtils.forEach(a, function (a) {
+                this.X.addStep(bind(function () {
                     Q(this, a)
                 }, this));
-                Hb(this.X, b)
+                addPauseStep(this.X, b)
             }, this);
             this.X.play();
             this.uc = e || l
         }
     };
     var Ac = function (a) {
-        a.X && (a.X.stop(), a.uc = l, z(a.kd, function (a) {
+        a.X && (a.X.stop(), a.uc = l, ArrayUtils.forEach(a.kd, function (a) {
             clearTimeout(a)
         }));
         a.ra && a.ra.stop()
@@ -2191,17 +2257,17 @@ var minutes = 6E4;
     var Ad = function (a, b, c, d) {
         var e = a.A;
         a.Ga && a.Ga.stop();
-        a.Ga = new G;
+        a.Ga = new AnimationSequence();
         e.show(h);
         Q(e, d);
         O(e, b.x, b.y - 25);
-        H(a.Ga, function (a) {
+        a.Ga.addStep(function (a) {
             1 == a ? (O(c, b.x, b.y), Q(c, d), e.show(l)) : (O(e, b.x, b.y - 25 * (1 - a)), O(c, b.x, b.y + 25 * a))
-        }, 400);
+        }, 400)
         a.Ga.play()
     };
     xd.prototype.h = function () {
-        z(this.M, function (a) {
+        ArrayUtils.forEach(this.M, function (a) {
             a.C()
         });
         xd.I.h.call(this)
@@ -2226,12 +2292,12 @@ var minutes = 6E4;
         }
     };
     Bd.prototype.show = function (a) {
-        z(this.M, function (b) {
+        ArrayUtils.forEach(this.M, function (b) {
             b.show(a)
         })
     };
     Bd.prototype.h = function () {
-        z(this.M, function (a) {
+        ArrayUtils.forEach(this.M, function (a) {
             a.C()
         });
         Bd.I.h.call(this)
@@ -2250,12 +2316,12 @@ var minutes = 6E4;
     };
     S.prototype.show = function (a) {
         S.superClass_.show.call(this, a);
-        z(this.Fc, function (b) {
+        ArrayUtils.forEach(this.Fc, function (b) {
             b.show(a)
         })
     };
     S.prototype.h = function () {
-        z(this.Fc, function (a) {
+        ArrayUtils.forEach(this.Fc, function (a) {
             a.C()
         });
         S.superClass_.h.call(this)
@@ -2297,14 +2363,14 @@ var minutes = 6E4;
         return !this.Y.length ? new N(57) : this.Y.shift()
     };
     Dd.prototype.h = function () {
-        z(this.Y, function (a) {
+        ArrayUtils.forEach(this.Y, function (a) {
             a.C()
         });
         this.Y = k;
-        Dd.I.h.call(this)
+        Dd.superClass_.h.call(this)
     };
     var T = function (a) {
-        this.Ba = a.gd;
+        this.Ba = a.grid;
         this.Y = Dd.getInstance();
         this.a = this.Y.get();
         Q(this.a, this.Ba[0]);
@@ -2317,12 +2383,12 @@ var minutes = 6E4;
         this.J.scale(0.7, 0.7);
         this.J.show(h);
         this.Qa = this.fd = 0;
-        this.ce = F();
+        this.ce = getTime();
         this.i = this.hd = 0;
         this.ie = a.name;
-        this.zb = a.U;
-        this.z = a.ee;
-        this.fe = a.de;
+        this.zb = a.texture;
+        this.z = a.extra;
+        this.fe = a.data;
         this.cc = this.jd = 40;
         this.nc = this.ib = this.hb = 0;
         this.Oa = 1400;
@@ -2342,7 +2408,7 @@ var minutes = 6E4;
     var Fd = function (a) {
         a.lc = h;
         a.Oa = a.lc ? 2E3 : 1400;
-        a.kc = J(2) ? 1 : -1
+        a.kc = random(2) ? 1 : -1
     };
     T.prototype.Ia = function () {
         this.i = 2
@@ -2366,7 +2432,7 @@ var minutes = 6E4;
     T.prototype.update = function (a) {
         this.hd = a -= this.ce;
         0 == this.i ? a > this.Oa ? (this.J.show(l), P(this.a, 1), this.i = 1, Gd(this, 0, 0)) : this.lc ? Hd(this, a) : Id(this, a) : 1 == this.i && a > this.zb + this.Oa && (this.i = 3);
-        z(this.ic, function (a) {
+        ArrayUtils.forEach(this.ic, function (a) {
             a.jb()
         })
     };
@@ -2452,7 +2518,7 @@ var minutes = 6E4;
         Md = [74, 70, 68, 66],
         Od = function (a) {
             T.call(this, a);
-            J(2) && Q(this.a, this.Ba[1])
+            random(2) && Q(this.a, this.Ba[1])
         };
     inherit(Od, T);
     var Pd = function (a) {
@@ -2476,14 +2542,14 @@ var minutes = 6E4;
     inherit(Qd, T);
     var Rd = function (a) {
         T.call(this, a);
-        J(2) && Q(this.a, this.Ba[1]);
+        random(2) && Q(this.a, this.Ba[1]);
         Fd(this)
     };
     inherit(Rd, T);
     class Sd {
         constructor(a) {
             T.call(this, a);
-            (a = J(4)) && Q(this.a, this.Ba[a]);
+            (a = random(4)) && Q(this.a, this.Ba[a]);
             this.be = "GOLE"[a];
             Fd(this);
         }
@@ -2492,61 +2558,65 @@ var minutes = 6E4;
     var Td = [],
         U = h,
         Ud = 0;
-    class Vd {
+    class ObjectPoolManager {
         constructor() {
-            this.Wc = {};
-            this.Zb = 0;
+            this.objects = {};
+            this.count = 0;
         }
     }
-    defineSingleton(Vd);
+    defineSingleton(ObjectPoolManager);
 
     Yd = function (a) {
         return !(a in Wd) || !(a in Xd) ? new T(Wd.coin) : new Xd[a](Wd[a])
     };
-    var Item = function (a, b, c, d, e) {
-        this.gd = a;
-        this.name = b;
-        this.U = c;
-        this.ee = d || 0;
-        this.de = e || l
-    },
-        Wd = {},
-        Xd = k,
-        $d = function (a) {
-            var b = J(a.Zb),
-                c = "coin",
-                d = 0,
-                e;
-            for (e in Zd) {
-                var f = Zd[e],
-                    d = d + (a.Wc[f] || 0);
-                if (b < d) {
-                    c = f;
-                    break
-                }
+
+    class Item {
+        constructor(grid, name, texture, extra = 0, data = null) {
+            this.grid = grid;        // Reference to grid or item container
+            this.name = name;        // Name/type of the item
+            this.texture = texture;  // Resource or sprite handle
+            this.extra = extra;      // Optional numeric field
+            this.data = data;        // Optional linked object or metadata
+        }
+    }
+
+    var Wd = {},
+    Xd = k,
+    $d = function (a) {
+        var b = random(a.count),
+            c = "coin",
+            d = 0,
+            e;
+        for (e in Zd) {
+            var f = Zd[e],
+                d = d + (a.objects[f] || 0);
+            if (b < d) {
+                c = f;
+                break
             }
-            return Yd(c)
-        },
-        ae = function (a, b) {
-            a.Zb = 0;
-            a.Wc = b in W ? W[b].da : W[1].da;
-            forEachObject(a.Wc, function (a) {
-                this.Zb += a
-            }, a)
-        },
-        Zd = {
-            ta: "firecraker",
-            Da: "dumpling",
-            ob: "steamer",
-            ha: "coin",
-            Ea: "ingot",
-            Kb: "tea",
-            Fa: "medicine",
-            mb: "mushroom",
-            nb: "papercut",
-            Va: "envelope",
-            lb: "lantern"
-        };
+        }
+        return Yd(c)
+    },
+    ae = function (a, b) {
+        a.count = 0;
+        a.objects = b in W ? W[b].da : W[1].da;
+        forEachObject(a.objects, function (a) {
+            this.count += a
+        }, a)
+    }
+    var Zd = {
+        ta: "firecraker",
+        Da: "dumpling",
+        ob: "steamer",
+        ha: "coin",
+        Ea: "ingot",
+        Kb: "tea",
+        Fa: "medicine",
+        mb: "mushroom",
+        nb: "papercut",
+        Va: "envelope",
+        lb: "lantern"
+    };
     var be = [new Point(0, 4), new Point(1, 4), new Point(2, 4), new Point(3, 4), new Point(3, 3), new Point(3, 2), new Point(3, 1), new Point(3, 0), new Point(2, 0), new Point(1, 0), new Point(0, 0), new Point(0, 1), new Point(0, 2), new Point(1, 2), new Point(2, 2)],
         ce = [new Point(0, 0), new Point(1, 0), new Point(2, 0), new Point(3, 0), new Point(3, 1), new Point(3, 2), new Point(3, 3), new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1)],
         de = [new Point(0, 0), new Point(1, 0), new Point(2, 0), new Point(3, 0), new Point(3, 1), new Point(3, 2), new Point(3, 3), new Point(2, 3), new Point(1, 3), new Point(0, 3), new Point(0, 2), new Point(0, 1)],
@@ -2643,15 +2713,15 @@ var minutes = 6E4;
     }
     class GridPatternManager {
         constructor() {
-            this.cellMap = null;  // Map of cell -> usage counters
-            this.availableCells = null; // Set of free cells
-            this.activeCells = null; // Set of active/special cells
+            this.cellMap = null;  // Map of cell -> usage counters (g)
+            this.availableCells = null; // Set of free cells (wa)
+            this.activeCells = null; // Set of active/special cells (Xa)
 
-            this.patterns = {}; // Predefined shape patterns
+            this.patterns = {}; // Predefined shape patterns (Kc)
         }
         init() {
             this.cellMap = new MapEx();
-            z(getAllGridCells(), function(a) {
+            ArrayUtils.forEach(getAllGridCells(), function(a) {
                 this.cellMap.set(a, {
                     usedCount: 0,
                     specialCount: 0,
@@ -2664,7 +2734,7 @@ var minutes = 6E4;
             this.activeCells = new SetEx;
             forEachObject(ge, function (a, b) {
                 var c = new SetEx;
-                z(a, function (a) {
+                ArrayUtils.forEach(a, function (a) {
                     c.add(23 * a.y + a.x);
                 });
                 this.patterns[b] = c;
@@ -2684,12 +2754,12 @@ var minutes = 6E4;
         }
         match() {
             var a = new SetEx, b = qe(this);
-            gc(this.activeCells, function (c) {
+            forEachItem(this.activeCells, function (c) {
                 a.add(c - b);
             }, this);
             var c = "";
-            forEachObject(this.Kc, function (b, e) {
-                b.Sd(a) && (c = e);
+            forEachObject(this.patterns, function (b, e) {
+                b.equals(a) && (c = e);
             });
             return c;
         }
@@ -2697,19 +2767,19 @@ var minutes = 6E4;
     defineSingleton(GridPatternManager);
 
     ne = function (a) {
-        var b = a.wa.ja(),
+        var b = a.availableCells.getValues(),
             b = b.filter(function (a) {
-                return 22 != a % 23 && 0 <= qa(b, a + 1) && 0 <= qa(b, a + 23) && 0 <= qa(b, a + 23 + 1)
+                return 22 != a % 23 && 0 <= ArrayUtils.indexOf(b, a + 1) && 0 <= ArrayUtils.indexOf(b, a + 23) && 0 <= ArrayUtils.indexOf(b, a + 23 + 1)
             });
         if (!b.length) return -1;
-        a = b[J(b.length)];
+        a = b[random(b.length)];
         return [a, a + 1, a + 23, a + 23 + 1]
     };
 
     var me = function (a) {
-        if (a.wa.Nc()) return -1;
-        a = a.wa.ja();
-        return a[J(a.length)]
+        if (a.availableCells.Nc()) return -1;
+        a = a.availableCells.getValues();
+        return a[random(a.length)]
     },
     oe = function (a, b, c) {
         var d = a.cellMap.get(b);
@@ -2718,15 +2788,15 @@ var minutes = 6E4;
         c ? (d.Ic--, d.Ic || a.activeCells.remove(b)) : d.Gc--
     },
     pe = function (a) {
-        var b = new X;
-        gc(a.activeCells, function (a) {
+        var b = new SetEx;
+        forEachItem(a.activeCells, function (a) {
             0 < this.g.get(a).Gc && b.add(a)
         }, a);
-        return b.ja()
+        return b.values()
     },
     qe = function (a) {
         var b = Infinity;
-        gc(a.activeCells, function (a) {
+        forEachItem(a.activeCells, function (a) {
             b > a && (b = a)
         });
         return b
@@ -2734,38 +2804,41 @@ var minutes = 6E4;
     var re = function (a, b) {
         var c = me(a),
             d = [];
-        gc(a.Kc[b], function (a) {
+        forEachItem(a.patterns[b], function (a) {
             a += c;
             a %= 207;
-            this.wa.contains(a) && d.push(a)
+            this.availableCells.contains(a) && d.push(a)
         }, a);
         return d
     };
-    class se {
+    class TileSpawner extends Disposable {
         constructor() {
+            super();
             this.Ca = this.Ra = this.v = null;
             this.g = GridPatternManager.getInstance();
-            this.bb = Vd.getInstance();
-            this.Ec = k;
+            this.bb = ObjectPoolManager.getInstance();
+            this.Ec = null;
             this.vc = 1;
-            this.ld = k;
+            this.ld  = null;
         }
         init(a) {
             this.v = a;
             this.Ra = new MapEx;
             this.Ca = new SetEx;
-            this.Ca
-            this.Ec = F();
-            this.vc = 1;
-            this.ld = new S(88, -3, -3, this.v);
+            this.Ec = getTime();
+            this.spawnRate = 1;
+            this.spawnArea = new S(88, -3, -3, this.v);
         }
         jb(a) {
             te(this, a);
-            a = F();
+            a = getTime();
             var b = 8 - this.Ca.va();
             if (2500 < a - this.Ec && 0 < b) {
-                for (var b = J(b) + 1, c = 0; c < b; c++) {
-                    var d = $d(this.bb), e = -1, e = "steamer" == d.getName() ? ne(this.g) : me(this.g); -1 != e && ue(this, d, e);
+                for (var b = random(b) + 1, c = 0; c < b; c++) {
+                    var d = $d(this.itemSource),
+                        e = -1,
+                        e = "steamer" == d.getName() ? ne(this.gridManager) : me(this.gridManager); -
+                    1 != e && ue(this, d, e);
                 }
                 this.Ec = a;
             }
@@ -2773,36 +2846,35 @@ var minutes = 6E4;
         getItem(a) {
             return this.Ra.get(a, k);
         }
-        h() {
-            gc(this.Ca, function (a) {
+        dispose() {
+            forEachItem(this.Ca, function (a) {
                 a.C();
             });
             this.Ca.clear();
             this.Ra.clear();
-            this.ld.C();
-            se.I.h.call(this);
+            this.spawnArea.C();
+            super.dispose();
         }
     }
-    inherit(se, Disposable);
-    defineSingleton(se);
+    defineSingleton(TileSpawner);
     var te = function (a, b) {
         console.log(a);
-        40 >= b - a.ye || (gc(a.Ca, function(a) {
+        40 >= b - a.ye || (forEachItem(a.Ca, function(a) {
             a.update(b);
             0 == a.i || 1 == a.i || (this.Ca.remove(a), a.C())
-        }, a), gc(a.Ra, function (a, b) {
+        }, a), forEachItem(a.Ra, function (a, b) {
             a.Bc && (oe(this.g, b), this.Ra.remove(b))
         }, a), a.ye = b)
-    },
-        ve = function (a, b) {
-            var c = re(a.g, b);
-            ae(a.bb, b);
-            z(c, function (a) {
-                var b = $d(this.bb);
-                ue(this, b, a)
-            }, a);
-            ae(a.bb, he)
-        };
+    };
+    var ve = function (a, b) {
+        var c = re(a.g, b);
+        ae(a.bb, b);
+        ArrayUtils.forEach(c, function (a) {
+            var b = $d(this.bb);
+            ue(this, b, a)
+        }, a);
+        ae(a.bb, he)
+    };
 
     ue = function (a, b, c) {
         var d = function (a, b) {
@@ -2810,11 +2882,11 @@ var minutes = 6E4;
             this.Ca.add(a);
             this.g.markCell(b)
         };
-        isArray(c) ? (z(c, function (a) {
+        isArray(c) ? (ArrayUtils.forEach(c, function (a) {
             d.call(this, b, a)
         }, a), Kd(b, c[0])) : (d.call(a, b, c), Kd(b, c));
         Jd(b, a.v);
-        b.zb *= a.vc
+        b.zb *= a.spawnRate
     };
     var we, xe, ye = [
         { point: [3, 7], dir: 1 },
@@ -2827,7 +2899,7 @@ var minutes = 6E4;
     ],
         De = function (a) {
             var b = ye[we], c = b.point;
-            a.Ta() == c[1] && a.Sa() == c[0] && (ze(a, b.dir), we++, we == ye.length && (boostFunction(a, F(), Infinity), a.d[0].K(Be, 80)));
+            a.Ta() == c[1] && a.Sa() == c[0] && (ze(a, b.dir), we++, we == ye.length && (boostFunction(a, getTime(), Infinity), a.d[0].K(Be, 80)));
             a.forward();
             Ce(a);
             if (15 > xe)
@@ -2840,7 +2912,7 @@ var minutes = 6E4;
         this.ma = [];
         this.ba = Ee;
         this.v = a;
-        this.jc = F();
+        this.jc = getTime();
         this.oc = this.qc = k;
         this.Ab = W[1].V;
         this.Fb = W[1].V;
@@ -2878,14 +2950,14 @@ var minutes = 6E4;
     };
     Fe.prototype.forward = function () {
         var a = this.d[this.d.length - 1].Jb();
-        ra(this.d, function (a) {
+        ArrayUtils.forEachReverse(this.d, function (a) {
             a.Pa ? (a.k = a.Pa.k, a.o = a.Pa.o) : 0 == a.W && (a.k += 3 == a.F ? -1 : 4 == a.F ? 1 : 0, a.o += 1 == a.F ? -1 : 2 == a.F ? 1 : 0, a.k = (a.k + 23) % 23, a.o = (a.o + 9) % 9)
         });
         this.g.markCell(this.d[0].Jb(), h);
         oe(this.g, a, h);
         var b = k;
         this.ma.length && (b = this.ma.shift());
-        ra(this.d, function (a) {
+        ArrayUtils.forEachReverse(this.d, function (a) {
             var d = b;
             a.oa = a.F;
             a.F = 0 == a.W ? d ? d : a.F : 2 == a.W ? a.Pa.Pa.F : a.Pa.F
@@ -2897,7 +2969,7 @@ var minutes = 6E4;
             this.forward();
             if (5E3 <= (this.qc ? b - this.qc : 5E3)) {
                 var c = this.g.match();
-                "" != c && (this.dispatchEvent(new Ve(c, b)), this.qc = b, this.d[0].K(Ge, 80, 500))
+                "" != c && (this.dispatchEvent(new MatchPatternEvent(c, b)), this.qc = b, this.d[0].K(Ge, 80, 500))
             }
             We(this, b);
             Ce(this);
@@ -2945,9 +3017,9 @@ var minutes = 6E4;
     },
         We = function (a, b) {
             var c = pe(a.g);
-            c.length ? (z(c, function (a) {
+            c.length ? (ArrayUtils.forEach(c, function (a) {
                 this.d[0].Jb() == a && this.d[0].K(Ie, 80);
-                this.dispatchEvent(new $e(a, b))
+                this.dispatchEvent(new CatchItemEvent(a, b))
             }, a), a.oc = b) : 5E3 < b - a.oc && (a.oc = b, a.d[0].K(He, 80))
         },
         Ue = function (a, b) {
@@ -2985,7 +3057,7 @@ var minutes = 6E4;
     };
 
     Fe.prototype.h = function () {
-        z(this.d, function (a) {
+        ArrayUtils.forEach(this.d, function (a) {
             a.C()
         });
         this.ma = k;
@@ -2998,18 +3070,21 @@ var minutes = 6E4;
     Fe.prototype.Ta = function () {
         return this.d[0].Ta()
     };
-    var $e = function (a, b) {
-        x.call(this, "catch item");
-        this.item = a;
-        this.gb = b
-    };
-    inherit($e, x);
-    var Ve = function (a, b) {
-        x.call(this, "match pattern");
-        this.pattern = a;
-        this.gb = b
-    };
-    inherit(Ve, x);
+    class CatchItemEvent extends CustomEvent {
+        constructor(a, b) {
+            super(this, "catch item");
+            this.item = a;
+            this.gb = b;
+        }
+    }
+    class MatchPatternEvent extends CustomEvent {
+        constructor(a, b) {
+            super(this, "match pattern");
+            this.pattern = a;
+            this.gb = b;
+        }
+    }
+
     var Te = function (a, b, c, d, e, f, n) {
         this.oa = this.F = a;
         this.W = b;
@@ -3052,7 +3127,7 @@ var minutes = 6E4;
             0 == a.W && (c = b || c);
             var d = bf.getInstance(), e = d.Na(a.oa);
             1 == a.W && (a.oa && a.F != a.oa) && (c = pc, e = d.ga.get([a.F, a.oa]));
-            if (!a.a.X || !a.a.X.tc()) Q(a.a, c), a.A && Q(a.A, c);
+            if (!a.a.X || !a.a.X.isPlaying()) Q(a.a, c), a.A && Q(a.A, c);
             0 == a.W && 180 == e ? xc(a.a) : a.a.rotate(e);
             a.A && a.A.show(l);
             uc(a.a, a.k, a.o)
@@ -3130,7 +3205,7 @@ var minutes = 6E4;
         Rb(this.fa, jf.x, jf.y);
         this.cd = 0;
         this.i = "unstarted";
-        this.Vd = F();
+        this.Vd = getTime();
         this.ea = minutes;
         this.za = k;
         this.z = 0;
@@ -3139,14 +3214,14 @@ var minutes = 6E4;
         this.yb = [];
         this.hc = this.Aa = this.Db = this.Cb = k;
         this.Ma = [];
-        this.ka = se.getInstance();
+        this.ka = TileSpawner.getInstance();
         gridClass = this.ka;
         this.ka.init(this.fa);
         this.N = new Fe(this.fa);
         snakeClass = this.N;
         this.Zc = new ub(this.v, h);
         this.B = new E(this);
-        this.bb = Vd.getInstance();
+        this.bb = ObjectPoolManager.getInstance();
         this.ca = new Cd(12, Z.x, Z.y, this.v, 101);
         this.ca.show(l);
         this.La = new Cd(90, kf.x, kf.y, this.v, 100);
@@ -3166,7 +3241,7 @@ var minutes = 6E4;
         this.B.listen(this.La, "click", this.Wd);
         this.Ja = new Kb(3E4, bind(this.$d, this), bind(this.ae, this));
         this.bd = !(!a || !a.standalone);
-        Eb = l;
+        window.isAnimationPaused = l;
         new S(19, mf.x, mf.y, this.v, 100);
         this.Cb = new S(36, nf.x + 99, nf.y, this.v, -1);
         this.Db = new S(53, of.x - 99, of.y, this.v, -1);
@@ -3215,19 +3290,19 @@ var minutes = 6E4;
         If = [51, 52],
         Kf = function (a, b, c, d) {
             return function () {
-                var e = new G;
-                z(b, function (b) {
-                    H(e, function () {
+                var e = new AnimationSequence();
+                ArrayUtils.forEach(b, function (b) {
+                    e.addStep(function () {
                         Q(a, b);
                         O(a, c.x, c.y + d - a.getHeight())
                     });
-                    Hb(e, 80)
+                    addPauseStep(e, 80);
                 });
                 e.play()
             }
         },
         Nf = function (a) {
-            Ue(a.N, F());
+            Ue(a.N, getTime());
             a.i = "running";
             a.ea = minutes;
             Lf(a, 1);
@@ -3240,7 +3315,7 @@ var minutes = 6E4;
             Ud = 0;
             Td = [];
             U = h;
-            z(a.yb, function (a) {
+            ArrayUtils.forEach(a.yb, function (a) {
                 a.show(l)
             });
             a.La.show(h);
@@ -3270,36 +3345,36 @@ var minutes = 6E4;
         }
     };
     var Mf = function (a) {
-        z(getObjectKeys(Wd), function (a) {
+        ArrayUtils.forEach(getObjectKeys(Wd), function (a) {
             this.$b[a] = 0
         }, a)
     },
         Qf = function (a) {
-            var b = new G;
+            var b = new AnimationSequence();
             a.dc = b;
-            for (var c = 1; 39 > c; c++) H(b, bind(De, a, a.N)), Hb(b, 150);
-            Hb(b, 200);
-            H(b, bind(function () {
+            for (var c = 1; 39 > c; c++) b.addStep(bind(De, a, a.N)), addPauseStep(b, 150);
+            addPauseStep(b, 200);
+            b.addStep(bind(function () {
                 this.cb.show(h);
                 yc(this.cb, 400, 0, 1)
             }, a));
-            Hb(b, 600);
-            H(b, bind(function () {
+            addPauseStep(b, 600);
+            b.addStep(bind(function () {
                 O(this.ca, Z.x, Z.y - 80);
                 this.ca.show(h)
             }, a));
-            H(b, bind(function (a) {
+            b.addStep(bind(function (a) {
                 O(this.ca, Z.x, Z.y - 80 * (1 - a * a))
             }, a), 700);
-            H(b, bind(function (a) {
+            b.addStep(bind(function (a) {
                 O(this.ca, Z.x, Z.y - 80 * (0.25 - (0.5 - a) * (0.5 - a)))
             }, a), 700);
-            H(b, bind(function () {
+            b.addStep(bind(function () {
                 this.rd()
             }, a));
-            H(b, bind(function () {
+            b.addStep(bind(function () {
                 sb(this.B, this.ca, "mousedown", this.De)
-            }, a));
+            }, a))
             b.play()
         };
     $.prototype.rd = function () {
@@ -3312,13 +3387,13 @@ var minutes = 6E4;
         a.za.update(Math.floor(a.ea / 1E3));
         a.ea -= b;
         1 == he && 4E4 > a.ea ? Lf(a, 2) : 2 == he && 2E4 > a.ea && Lf(a, 3);
-        0 > a.ea && "running" == a.i && (a.i = "stop", Rf(a), a.za.show(l), zd(a.ya), z(a.yb, function (a) {
+        0 > a.ea && "running" == a.i && (a.i = "stop", Rf(a), a.za.show(l), zd(a.ya), ArrayUtils.forEach(a.yb, function (a) {
             a.show(l)
         }), a.la.load(l))
     },
         Lf = function (a, b) {
             he = b;
-            ae(Vd.getInstance(), b);
+            ae(ObjectPoolManager.getInstance(), b);
             var c = a.N;
             c.Fb = W[b].V;
             c.Ab = c.Fb * c.Gb;
@@ -3367,7 +3442,7 @@ var minutes = 6E4;
                             for (var c = this.ka, d = a.length, e = 0; e < d; e++) {
                                 ue(c, Yd("steamer"), ne(c.g));
                             }
-                            6 == a.length && ve(this.ka, a[J(a.length)])
+                            6 == a.length && ve(this.ka, a[random(a.length)])
                         }
                         Tf(this)
                 }
@@ -3380,7 +3455,7 @@ var minutes = 6E4;
         "" != a && (ve(this.ka, a), this.gc++)
     };
     var Tf = function (a) {
-        z(a.yb, function (a, c) {
+        ArrayUtils.forEach(a.yb, function (a, c) {
             c < Td.length ? (Q(a, sd[Td[c]]), a.show(h)) : a.show(l)
         })
     },
@@ -3415,37 +3490,36 @@ var minutes = 6E4;
     $.prototype.De = function () {
         this.la.load(l);
         Mb(this.Ja);
-        var a = new G;
+        var a = new AnimationSequence();
         this.ec = a;
-        H(a, bind(function () {
+        a.addStep(bind(function () {
             zc(this.cb)
         }, this));
-        H(a, bind(function (a) {
+        a.addStep(bind(function (a) {
             O(this.ca, Z.x, Z.y + 80 * a * a);
             Sb(this.ca.aa(), 1 - a * a)
         }, this), 700);
-        Hb(a, 200);
-        H(a, bind(function () {
+        addPauseStep(a, 200);
+        a.addStep(bind(function () {
             this.cb.show(l);
             this.ca.show(l);
             Sb(this.fa, 1)
         }, this));
-        H(a, bind(function () {
+        a.addStep(bind(function () {
             this.Cb.show(h);
             this.Db.show(h)
         }, this));
-        H(a, bind(function (a) {
+        a.addStep(bind(function (a) {
             O(this.Cb, nf.x + 99 * (1 - a), nf.y);
             O(this.Db, of.x - 99 * (1 - a), of.y)
         }, this), 1E3);
-        H(a, bind(function () {
+        a.addStep(bind(function () {
             yc(this.La, 500, 0, 1);
             this.La.show(h)
         }, this));
-        H(a, bind(function () {
+        a.addStep(bind(function () {
             Of(this)
-        },
-            this));
+        }, this));
         a.play()
     };
     var Of = function (a) {
@@ -3461,10 +3535,10 @@ var minutes = 6E4;
     };
     $.prototype.sd = function () {
         if ("tutorial_start" == this.i || "tutorial_end" == this.i) {
-            var a = new G;
+            var a = new AnimationSequence();
             this.fc = a;
-            for (var b in Bf) H(a, Kf(this.eb[b], Bf[b], Af[b], 29)), Hb(a, 300);
-            H(a, bind(function () {
+            for (var b in Bf) a.addStep(Kf(this.eb[b], Bf[b], Af[b], 29)), addPauseStep(a, 300);
+            a.addStep(bind(function () {
                 "tutorial_start" == this.i && (this.i = "tutorial_end")
             }, this));
             a.play();
@@ -3473,7 +3547,7 @@ var minutes = 6E4;
     };
     var Pf = function (a) {
         zc(a.fb);
-        z(a.eb, function (a) {
+        ArrayUtils.forEach(a.eb, function (a) {
             zc(a)
         });
         a.fb.show(l)
@@ -3491,7 +3565,7 @@ var minutes = 6E4;
         Nf(this);
     };
     m.dd = function () {
-        var a = F(),
+        var a = getTime(),
             b = a - this.cd,
             b = Math.min(50, b);
         "running" == this.i ? Sf(this, b, a) : "unstarted" == this.i && 1500 < a - this.Vd && (this.i = "init", Qf(this));
@@ -3505,7 +3579,7 @@ var minutes = 6E4;
         this.dc && this.dc.stop();
         this.fc && this.fc.stop();
         this.ec && this.ec.stop();
-        Eb = h;
+        window.isAnimationPaused = h;
         this.$b = this.B = k;
         this.za.C();
         this.ya.C();
@@ -3647,12 +3721,11 @@ var minutes = 6E4;
             itemDefs[enumObj.lb] = new Item([R.se, R.ve, R.ue, R.re], enumObj.lb, 8000, 2);
             itemDefs[enumObj.ha] = new Item([R.ha], enumObj.ha, 10000, 1);
             itemDefs[enumObj.Ea] = new Item([R.Ea], enumObj.Ea, 5000, 5);
-
             console.log(itemDefs);
             Wd = itemDefs;
 
             // Start or set some initial state (ae probably attaches / activates level/state manager)
-            ae(Vd.getInstance(), 1);
+            ae(ObjectPoolManager.getInstance(), 1);
 
             // Create controller/handler for the logo DOM element
             logoController = new $(logoElement);
