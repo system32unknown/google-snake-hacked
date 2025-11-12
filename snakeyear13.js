@@ -9,10 +9,7 @@ var snakeClass = null;
 var minutes = 6E4;
 
 (function () {
-    var h = !0,
-        k = null,
-        l = !1,
-        m, p = this
+    var m = this
 
     /** Checks if the value is an Array. */
     function isArray(value) {
@@ -68,21 +65,6 @@ var minutes = 6E4;
         childCtor.prototype = new TempConstructor();
     }
 
-    /**
-     * Creates a new function that pre-applies some arguments before the rest.
-     * Similar to Function.prototype.bind but without binding 'this'.
-     *
-     * @param {Function} func - The target function.
-     * @param {...*} presetArgs - Arguments to pre-apply.
-     * @returns {Function} - A function that calls func with the presetArgs + newArgs.
-     */
-    function partialApply(func, ...presetArgs) {
-        return function (...newArgs) {
-            const allArgs = [...presetArgs, ...newArgs];
-            return func.apply(this, allArgs);
-        };
-    }
-
     function typeOf(value) {
         if (value === null) return "null";
         if (value instanceof Array) return "array";
@@ -95,7 +77,7 @@ var minutes = 6E4;
         if (1 < arguments.length) {
             var c = Array.prototype.slice.call(arguments, 1);
             c.unshift(this, a);
-            return bind.apply(k, c)
+            return bind.apply(null, c)
         }
         return bind(this, a)
     };
@@ -148,8 +130,7 @@ var minutes = 6E4;
     class CustomEvent {
         constructor(type, target) {
             this.type = type;
-            this.target = target;
-            this.currentTarget = target;
+            this.target = this.currentTarget = target;
 
             this.handled = false;
             this.defaultPrevented = false;
@@ -285,27 +266,14 @@ var minutes = 6E4;
 
     // Detect navigator info
     const getUserAgent = () => window.navigator ? window.navigator.userAgent : null;
-    const getNavigator = () => window.navigator || {};
 
     // Browser flags
-    let isOpera = false;
     let isIE = false;
-    let isWebKit = false;
-    let isGecko = false;
 
     const userAgent = getUserAgent();
-    const nav = getNavigator();
-
     if (userAgent) {
-        isOpera  = userAgent.startsWith("Opera");
-        isIE = !isOpera && userAgent.includes("MSIE");
-        isWebKit = !isOpera && userAgent.includes("WebKit");
-        isGecko  = !isOpera && !isWebKit && nav.product === "Gecko";
+        isIE = userAgent.includes("MSIE");
     }
-
-    const platform = nav.platform || "";
-    const isMac = platform.includes("Mac");
-    const isUnix = (nav.appVersion || "").includes("X11");
 
     // IE Document Mode (for compatibility)
     const getDocumentMode = () => {
@@ -318,15 +286,8 @@ var minutes = 6E4;
     (function detectVersion() {
         let match;
 
-        if (isOpera && window.opera) {
-            const version = window.opera.version;
-            browserVersion = typeof version === "function" ? version() : version;
-        } else if (isGecko) {
-            match = /rv\:([^\);]+)(\)|;)/.exec(userAgent);
-        } else if (isIE) {
+        if (isIE) {
             match = /MSIE\s+([^\);]+)(\)|;)/.exec(userAgent);
-        } else if (isWebKit) {
-            match = /WebKit\/(\S+)/.exec(userAgent);
         }
 
         if (match) browserVersion = match[1] || "";
@@ -340,32 +301,6 @@ var minutes = 6E4;
         }
     })();
 
-    // --- Version comparison cache ---
-    const versionCache = {};
-
-    // Compares the current browser version to a target version.
-    const versionAtLeast = (targetVersion) => {
-        if (versionCache[targetVersion] !== undefined)
-            return versionCache[targetVersion];
-
-        const normalize = str => String(str).trim().split(".").map(x => x || "0");
-
-        const aParts = normalize(browserVersion);
-        const bParts = normalize(targetVersion);
-        const len = Math.max(aParts.length, bParts.length);
-
-        let result = 0;
-        for (let i = 0; i < len && result === 0; i++) {
-            const [a, b] = [aParts[i] || "", bParts[i] || ""];
-            const numA = parseInt(a, 10) || 0;
-            const numB = parseInt(b, 10) || 0;
-
-            result = numA < numB ? -1 : numA > numB ? 1 : a.localeCompare(b);
-        }
-
-        return (versionCache[targetVersion] = result >= 0);
-    };
-
     // --- Feature flags ---
     const doc = window.document;
     var docMode = (!doc || !isIE)
@@ -373,11 +308,6 @@ var minutes = 6E4;
         : getDocumentMode() || (doc.compatMode === "CSS1Compat" ? parseInt(browserVersion, 10) : 5);
 
     const supportsDOM9 = !isIE || (isIE && docMode >= 9);
-    const isOldIE = isIE && !versionAtLeast("9");
-
-    !isWebKit || versionAtLeast("528");
-    isGecko && versionAtLeast("1.9b");
-    isIE && versionAtLeast("8");
 
     class CustomBrowserEvent extends CustomEvent {
         constructor(event, currentTarget) {
@@ -449,6 +379,7 @@ var minutes = 6E4;
         constructor(handler, target, type, capture, context) {
             this.key = ++ListenerKeyCount;
             this.handler = handler;
+            console.log(this.handler);
             this.target = target;
             this.type = type;
             this.capture = capture;
@@ -1031,14 +962,14 @@ var minutes = 6E4;
     var Db = function (a, b, c, d) {
         this.Re = a;
         this.Se = b;
-        this.Md = l;
+        this.Md = false;
         this.Ld = c;
         this.Te = d || 0;
         this.Kd = 0
     };
     Db.prototype.jb = function () {
         var a = getTime();
-        if (!(this.Ld && this.Md || !this.Ld && a - this.Kd <= this.Te) && this.Re()) this.Se(), this.Md = h, this.Kd = a
+        if (!(this.Ld && this.Md || !this.Ld && a - this.Kd <= this.Te) && this.Re()) this.Se(), this.Md = true, this.Kd = a
     };
 
     class AnimationSequence {
@@ -1266,9 +1197,6 @@ var minutes = 6E4;
             return this;
         }
     }
-
-    (!isGecko && !isIE) ||(isIE && getDocumentMode() >= 9) || (isGecko && versionAtLeast("1.9.1"));
-    isIE && versionAtLeast("9");
 
     // Utility: Add class(es)
     function addClass(el, ...classes) {
@@ -2114,168 +2042,18 @@ var minutes = 6E4;
             const w = SpriteManager.getWidth(frameSource);
             const h = SpriteManager.getHeight(frameSource);
             sprite.width = w;
-            sprite.height = h;
+            sprite.height = true;
             sprite.element.style.width = `${w + 1}px`;
             sprite.element.style.height = `${h + 1}px`;
         }
     }
     let SpriteManager = null;
 
-    var N = function (a) {
-        this.Q = a;
-        this.T = 0;
-        this.s = M.createFrame(mc(this));
-        this.md = this.nd = this.o = this.k = 0;
-        this.kb = l;
-        this.od = h;
-        this.xc = M.getHeight(mc(this));
-        this.yc = M.getWidth(mc(this));
-        this.ra = null;
-
-        this.X = null;
-        this.uc = this.Eb = l;
-        this.kd = []
-    };
-    inherit(N, EventDispatcher);
-    var M = k;
-    N.prototype.aa = function () {
-        return this.s
-    };
-    var nc = function (a, b) {
-        a.yc != b && a.s && (a.yc = b, a.s.style.width = b + 1 + "px")
-    };
-    N.prototype.getWidth = function () {
-        return M.getWidth(mc(this))
-    };
-    var oc = function (a, b) {
-        a.xc != b && a.s && (a.xc = b, a.s.style.height = b + 1 + "px")
-    };
-    N.prototype.getHeight = function () {
-        return M.getHeight(mc(this))
-    };
-    N.prototype.Ua = function () {
-        return this.Q
-    };
-    var mc = function (a, b) {
-        var c = b == k ? a.Q : b;
-        return isArray(c) ? c[Math.floor(a.T / 90)] : c
-    };
-    N.prototype.Na = function () {
-        return this.T
-    };
-    var O = function (a, b, c) {
-        a.s && (a.k = Math.floor(b), a.o = Math.floor(c), setPosition(a.s, a.k, a.o))
-    },
-        uc = function (a, b, c) {
-            if (a.s) {
-                a.md = b;
-                a.nd = c;
-                a.k = Math.floor(20 * b);
-                a.o = Math.floor(20 * c);
-                if (a.Q == pc || a.Q == qc) a.Q == qc ? 180 == a.T || 0 == a.T ? a.k-- : a.o-- : (a.k--, a.o--);
-                else {
-                    b = rc.get(a.Q);
-                    c = sc.get(a.Q);
-                    var d = a.yc - 20,
-                        e = a.xc - 20;
-                    switch (a.T) {
-                        case 0:
-                            a.k -= b ? d : 0;
-                            a.o -= c ? e : 0;
-                            break;
-                        case 90:
-                            a.k -= c ? 0 : d;
-                            a.o -= b ? e : 0;
-                            break;
-                        case 180:
-                            a.kb && (c = !c);
-                            a.k -= b ? 0 : d;
-                            a.o -= c ? 0 : e;
-                            break;
-                        case 270:
-                            a.k -= c ? d : 0, a.o -= b ? 0 : e
-                    }
-                    if (-1 < tc[0].indexOf(a.Q) || -1 < tc[1].indexOf(a.Q)) a.k +=
-                        180 == a.T ? 1 : 0 == a.T ? -1 : 0, a.o += 270 == a.T ? 1 : 90 == a.T ? -1 : 0
-                }
-                O(a, a.k, a.o)
-            }
-        },
-        P = function (a, b) {
-            a.s.style.zIndex = b
-        },
-        Q = function (a, b) {
-            a.s && (vc(a, b), a.Q != b && (a.Q = b, wc(a)))
-        },
-        wc = function (a) {
-            var b;
-            b = (b = M.frames[mc(a, a.Q)]) ? -(b[0] + 0) + "px " + -(b[1] + 0) + "px" : undefined;
-            a.s.style.backgroundPosition = b;
-            a.Eb && uc(a, a.md, a.nd)
-        };
-    N.prototype.h = function () {
-        var a = this.s;
-        a && a.parentNode && a.parentNode.removeChild(a);
-        this.s = k;
-        N.I.h.call(this)
-    };
-    var vc = function (a, b) {
-        var c = mc(a, b);
-        nc(a, M.getWidth(c));
-        oc(a, M.getHeight(c))
-    };
-    N.prototype.rotate = function (a) {
-        if (this.T != a || this.kb) this.T = a, this.kb = l, vc(this, this.Q), wc(this)
-    };
-    var xc = function (a) {
-        a.kb || (a.T = 180, a.kb = h, vc(a, a.Q), wc(a))
-    };
-    N.prototype.scale = function (a, b) {
-        var c = this.s,
-            d = "";
-        a != k && (d += " scaleX(" + a + ")");
-        b != k && (d += " scaleY(" + b + ")");
-        for (var e = 0, f; f = vendorPrefixes[e++];) c.style[f + "Transform"] = d
-    };
-    N.prototype.show = function (a) {
-        this.od != a && (this.od = a, this.s.style.display = a ? "" : "none")
-    };
-    var yc = function (a, b, c, d) {
-        a.ra && a.ra.stop && a.ra.stop();
-        a.ra = new AnimationSequence();
-        a.ra.addStep(createOpacityAnimator(a.s, c, d), b);
-        a.ra.play()
-    },
-    zc = function (a) {
-        yc(a, 300, 1, 0)
-    };
-    N.prototype.K = function (a, b, c, d, e) {
-        if (c) this.kd.push(setTimeout(bind(function () {
-            this.K(a, b, 0, d, e)
-        }, this), c));
-        else {
-            if (this.X && this.X.isPlaying()) {
-                if (this.uc) return;
-                this.X.stop()
-            }
-            this.X = new AnimationSequence();
-            c = d || 1;
-            for (var f = 0; f < c; f++) ArrayUtils.forEach(a, function (a) {
-                this.X.addStep(bind(function () {
-                    Q(this, a)
-                }, this));
-                addPauseStep(this.X, b)
-            }, this);
-            this.X.play();
-            this.uc = e || l
-        }
-    };
-
     function stopAllAnimations(target) {
         if (target.X) {
             target.X.stop();
-            target.isRunning = false;
-            ArrayUtils.forEach(target.timeoutHandles, handle => clearTimeout(handle));
+            target.isLooping = false;
+            target.timeouts.forEach(handle => clearTimeout(handle));
         }
 
         if (target.ra) {
@@ -2484,8 +2262,8 @@ var minutes = 6E4;
             Qg: 89,
             Rg: 90
         },
-        rc = k,
-        sc = k,
+        rc = null,
+        sc = null,
         sd = {
             G: 33,
             O: 35,
@@ -2505,56 +2283,62 @@ var minutes = 6E4;
             this.Nb = [];
             this.z = 0;
             this.M = [];
-            for (var c = wd, d = 0; 3 > d; d++) {
+            for (var c = createBackgroundTile, d = 0; 3 > d; d++) {
                 this.Nb[d] = a[d];
                 var e = c(b, this.Nb[d].x, this.Nb[d].y);
                 this.M.push(e)
             }
             this.A = c(b, a[0].x, a[0].y);
-            this.Ga = k;
+            this.Ga = null;
             this.P = [];
-            for (d = 0; 2 > d; d++) this.P[d] = c(b, a[d + 4].x, a[d + 4].y), this.P[d].s.style.opacity = 0, this.P[d].show(h);
+            for (d = 0; 2 > d; d++) {
+                this.P[d] = c(b, a[d + 4].x, a[d + 4].y)
+                this.P[d].s.style.opacity = 0;
+                this.P[d].show(true);
+            }
             this.Mb = [];
-            this.Ob = k;
-            this.pd = l
+            this.Ob = null;
+            this.pd = false
         };
     inherit(xd, Disposable);
-    var wd = function (a, b, c) {
-        var d = new Sprite(td[0]);
-        d.show(l);
-        P(d, -2);
-        O(d, b, c);
-        a.appendChild(d.aa());
+
+    function createBackgroundTile(parent, x, y) {
+        var tile = new Sprite(td[0]);
+        tile.show(false);                  // hidden initially
+        Sprite.setZIndex(tile, -2);        // render behind everything
+        Sprite.setPosition(tile, x, y);    // place at coordinates
+        parent.appendChild(tile.getElement());
+        return tile;
+    }
+
+    var yd = function (a, b, c) {
+        b = b || td;
+        var d = [b[0]];
+        c = c || 3;
+        for (var e = 0; e < c; e++)
+            if (0 != a) {
+                var f = a % 10;
+                a = Math.floor(a / 10);
+                d[e] = b[f]
+            } else 0 < e && (d[e] = null);
         return d
-    },
-        yd = function (a, b, c) {
-            b = b || td;
-            var d = [b[0]];
-            c = c || 3;
-            for (var e = 0; e < c; e++)
-                if (0 != a) {
-                    var f = a % 10;
-                    a = Math.floor(a / 10);
-                    d[e] = b[f]
-                } else 0 < e && (d[e] = k);
-            return d
-        };
+    };
     xd.prototype.reset = function () {
         for (var a in this.M) Q(this.M[a], td[0]);
         this.z = 0;
-        this.M[0].show(h);
+        this.M[0].show(true);
         this.P[0].s.style.opacity = 0;
         this.P[1].s.style.opacity = 0;
-        this.P[0].show(h);
-        this.P[1].show(h);
+        this.P[0].show(true);
+        this.P[1].show(true);
         this.Mb = []
     };
     var zd = function (a) {
-        for (var b in a.M) a.M[b].show(l);
+        for (var b in a.M) a.M[b].show(false);
         a.Ga && a.Ga.stop();
-        a.A.show(l);
-        a.P[0].show(l);
-        a.P[1].show(l)
+        a.A.show(false);
+        a.P[0].show(false);
+        a.P[1].show(false)
     };
     xd.prototype.update = function (a) {
         if (!(999 < a || a == this.z)) {
@@ -2565,7 +2349,7 @@ var minutes = 6E4;
                 var d = this.M[c],
                     e = a[c],
                     f = this.Nb[c];
-                e != k ? (d.show(h), d.Ua() != e && Ad(this, f, d, e)) : d.show(l)
+                e != null ? (d.show(true), d.Ua() != e && Ad(this, f, d, e)) : d.show(false)
             }
             this.Mb.push(b)
         }
@@ -2575,40 +2359,40 @@ var minutes = 6E4;
             var b = this.Mb.shift(),
                 b = yd(b, ud, 2),
                 c;
-            for (c in b) stopAllAnimations(this.P[c]), b[c] != k ? (Q(this.P[c], b[c]), yc(this.P[c], 300, 0, 1)) : this.P[c].s.style.opacity = 0;
+            for (c in b) stopAllAnimations(this.P[c]), b[c] != null ? (Q(this.P[c], b[c]), yc(this.P[c], 300, 0, 1)) : this.P[c].s.style.opacity = 0;
             this.Ob = a;
-            this.pd = b[1] != k
+            this.pd = b[1] != null
         }
-        this.Ob && 1E3 < a - this.Ob && (zc(this.P[0]), this.pd && zc(this.P[1]), this.Ob = k)
+        this.Ob && 1E3 < a - this.Ob && (zc(this.P[0]), this.pd && zc(this.P[1]), this.Ob = null)
     };
     var Ad = function (a, b, c, d) {
         var e = a.A;
         a.Ga && a.Ga.stop();
         a.Ga = new AnimationSequence();
-        e.show(h);
+        e.show(true);
         Q(e, d);
         O(e, b.x, b.y - 25);
         a.Ga.addStep(function (a) {
-            1 == a ? (O(c, b.x, b.y), Q(c, d), e.show(l)) : (O(e, b.x, b.y - 25 * (1 - a)), O(c, b.x, b.y + 25 * a))
+            1 == a ? (O(c, b.x, b.y), Q(c, d), e.show(false)) : (O(e, b.x, b.y - 25 * (1 - a)), O(c, b.x, b.y + 25 * a))
         }, 400)
         a.Ga.play()
     };
     xd.prototype.h = function () {
-        ArrayUtils.forEach(this.M, function (a) {
-            a.C()
-        });
+        this.M.forEach(function (a) {
+            a.C();
+        })
         xd.I.h.call(this)
     };
     var Bd = function (a, b, c) {
         this.M = [];
         for (var d = 0; 4 > d; d++) {
             var e = new Sprite(td[0]);
-            O(e, a + 10 * d, b);
-            c.appendChild(e.aa());
+            Sprite.setPosition(e, a + 10 * d, b);
+            c.appendChild(e.getElement());
             this.M.push(e)
         }
         Q(this.M[1], 49);
-        this.Gd = k
+        this.Gd = null
     };
     inherit(Bd, Disposable);
     Bd.prototype.update = function (a) {
@@ -2632,6 +2416,65 @@ var minutes = 6E4;
         });
         Bd.I.h.call(this)
     };
+
+    var O = function(a, b, c) {
+            a.s && (a.k = Math.floor(b),
+                a.o = Math.floor(c),
+                Rb(a.s, a.k, a.o))
+        },
+        uc = function(a, b, c) { // moveToGrid
+            if (a.s) {
+                a.md = b;
+                a.nd = c;
+                a.k = Math.floor(20 * b);
+                a.o = Math.floor(20 * c);
+                if (a.Q == pc || a.Q == qc)
+                    a.Q == qc ? 180 == a.T || 0 == a.T ? a.k-- : a.o-- : (a.k--,
+                        a.o--);
+                else {
+                    b = rc.get(a.Q);
+                    c = sc.get(a.Q);
+                    var d = a.yc - 20,
+                        e = a.xc - 20;
+                    switch (a.T) {
+                        case 0:
+                            a.k -= b ? d : 0;
+                            a.o -= c ? e : 0;
+                            break;
+                        case 90:
+                            a.k -= c ? 0 : d;
+                            a.o -= b ? e : 0;
+                            break;
+                        case 180:
+                            a.kb && (c = !c);
+                            a.k -= b ? 0 : d;
+                            a.o -= c ? 0 : e;
+                            break;
+                        case 270:
+                            a.k -= c ? d : 0,
+                                a.o -= b ? 0 : e
+                    }
+                    if (-1 < tc[0].indexOf(a.Q) || -1 < tc[1].indexOf(a.Q))
+                        a.k += 180 == a.T ? 1 : 0 == a.T ? -1 : 0,
+                        a.o += 270 == a.T ? 1 : 90 == a.T ? -1 : 0
+                }
+                O(a, a.k, a.o)
+            }
+        },
+        P = function(a, b) {
+            a.s.style.zIndex = b
+        },
+        Q = function(a, b) {
+            a.s && (vc(a, b),
+                a.Q != b && (a.Q = b,
+                    wc(a)))
+        },
+        wc = function(a) {
+            var b;
+            b = (b = M.tb[mc(a, a.Q)]) ? -(b[0] + 0) + "px " + -(b[1] + 0) + "px" : g;
+            a.s.style.backgroundPosition = b;
+            a.Eb && uc(a, a.md, a.nd)
+        };
 
     class SpriteGroup extends Sprite {
         /**
@@ -2712,114 +2555,184 @@ var minutes = 6E4;
         }
     }
 
-    var Dd = function () {
-        this.Y = []
-    };
-    inherit(Dd, Disposable);
-    defineSingleton(Dd);
-    Dd.prototype.get = function () {
-        return !this.Y.length ? new Sprite(57) : this.Y.shift()
-    };
-    Dd.prototype.h = function () {
-        ArrayUtils.forEach(this.Y, function (a) {
-            a.C()
-        });
-        this.Y = k;
-        Dd.superClass_.h.call(this)
-    };
-    var T = function (a) {
-        this.Ba = a.grid;
-        this.Y = Dd.getInstance();
-        this.a = this.Y.get();
-        Q(this.a, this.Ba[0]);
-        P(this.a, 17);
-        this.a.show(l);
-        this.J = this.Y.get();
-        Q(this.J, 57);
-        yc(this.J, 300, 0, 1);
-        P(this.J, 0);
-        this.J.scale(0.7, 0.7);
-        this.J.show(h);
-        this.Qa = this.fd = 0;
-        this.ce = getTime();
-        this.i = this.hd = 0;
-        this.ie = a.name;
-        this.zb = a.texture;
-        this.z = a.extra;
-        this.fe = a.data;
-        this.cc = this.jd = 40;
-        this.nc = this.ib = this.hb = 0;
-        this.Oa = 1400;
-        this.lc = l;
-        this.kc = 1;
-        this.ic = [];
-        this.ic.push(new Db(this.he.bind(this), this.ke.bind(this), h), new Db(bind(this.ge, this), bind(this.je, this), l, 400))
-    };
-    inherit(T, Disposable);
+    class SpritePool extends Disposable {
+        constructor() {
+            this.pool = []
+        }
+
+        get() {
+            return this.pool.length === 0 ? new Sprite(57) : this.pool.shift()
+        }
+        dispose() {
+            this.pool.forEach(function(spr) {
+                spr.dispose();
+            });
+            this.pool = null;
+            super.dispose();
+        }
+    }
+    defineSingleton(SpritePool);
+
+    class T extends Disposable {
+        constructor(config) {
+            super();
+
+            this.Ba = config.grid;
+            this.spritePool = SpritePool.getInstance();
+
+            this.mainSprite = this.spritePool.get(); // a
+            Sprite.setFrame(this.mainSprite, this.grid[0]);
+            Sprite.setZIndex(this.mainSprite, 17);
+            this.mainSprite.show(false);
+
+            this.shadowSprite = this.spritePool.get();
+            Sprite.setFrame(this.shadowSprite, 57);
+            yc(this.shadowSprite, 300, 0, 1);
+            Sprite.setZIndex(this.shadowSprite, 0);
+            this.shadowSprite.scale(0.7, 0.7);
+            this.shadowSprite.show(true);
+
+            this.J = this.SpritePool.get();
+            Sprite.setFrame(this.J, 57);
+            yc(this.J, 300, 0, 1);
+            Sprite.setZIndex(this.J, 0);
+            this.J.scale(0.7, 0.7);
+            this.J.show(true);
+
+            this.Qa = this.fd = 0;
+            this.ce = getTime();
+            this.i = this.hd = 0;
+
+            this.ie = config.name;
+            this.zb = config.texture;
+            this.z = config.extra;
+            this.fe = config.data;
+
+            this.cc = this.jd = 40;
+            this.nc = this.ib = this.hb = 0;
+            this.Oa = 1400;
+            this.lc = false;
+            this.kc = 1;
+
+            this.behaviors = [
+                new Db(this.onReady.bind(this), this.onDisappear.bind(this), true),
+                new Db(this.onActive.bind(this), this.onFinish.bind(this), false, 400)
+            ];
+
+            this.behaviors = [];
+            this.behaviors.push(new Db(this.he.bind(this), this.ke.bind(this), true), new Db(bind(this.ge, this), bind(this.je, this), false, 400));
+        }
+        getName() {
+            return this.ie;
+        }
+        qa() {
+            return this.mainSprite;
+        }
+        Ia() {
+            this.i = 2;
+        }
+        dispose() {
+            var pool = this.spritePool;
+            [this.mainSprite, this.shadowSprite].forEach(sprite => {
+                sprite.show(false);
+                stopAllAnimations(sprite);
+                sprite.Eb = false;
+                pool.Y.push(sprite);
+            });
+            this.behaviors = null;
+            super.dispose();
+        }
+        update(a) {
+            this.hd = a -= this.ce;
+            0 == this.i ? a > this.Oa ? (this.J.show(false), Sprite.setZIndex(this.mainSprite, 1), this.i = 1, Gd(this, 0, 0)) : this.lc ? Hd(this, a) : Id(this, a) : 1 == this.i && a > this.zb + this.Oa && (this.i = 3);
+            ArrayUtils.forEach(this.ic, function (a) {
+                a.jb();
+            });
+        }
+
+        /** updates over time */
+        update(now) {
+            this.stateTime = now - this.lastTime;
+
+            if (this.state === 0) {
+                if (now > this.targetY) {
+                    this.shadowSprite.show(false);
+                    Sprite.setZIndex(this.mainSprite, 1);
+                    this.state = 1;
+                    updateSpriteTransform(this, 0, 0);
+                } else if (this.randomMove) {
+                    oscillateMovement(this, now);
+                } else {
+                    floatUpAndDown(this, now);
+                }
+            } else if (this.state === 1 && now > this.texture + this.targetY) {
+                this.state = 3;
+            }
+
+            this.behaviors?.forEach(b => b.jb());
+        }
+
+        /** render sprite position */
+        renderPosition() {
+            const x = 20 * (Math.floor(this.tileIndex % 23) + 0.5);
+            const y = 20 * (Math.floor(this.tileIndex / 23) + 0.5);
+
+            this.posX = x - this.mainSprite.getWidth() / 2;
+            this.posY = y - this.mainSprite.getHeight() / 2;
+            O(this.mainSprite, this.posX, this.posY);
+
+            const shadowX = x - this.shadowSprite.getWidth() / 2;
+            const shadowY = y + this.mainSprite.getHeight() / 2 - this.shadowSprite.getHeight() + this.tileOffset;
+            O(this.shadowSprite, shadowX, shadowY);
+        }
+
+        getName() { return this.name; }
+        getTileIndex() { return this.tileIndex; }
+        getRow() { return Math.floor(this.tileIndex / 23); }
+        getCol() { return this.tileIndex % 23; }
+        getSpriteId() { return this.mainSprite.Ua(); }
+
+        onReady() { return this.state === 1 && this.stateTime > this.texture + this.targetY - 300; }
+        onDisappear() { zc(this.mainSprite); }
+        onActive() { return this.state === 1 && this.data; }
+
+        onFinish() {
+            const index = this.grid.indexOf(this.mainSprite.Ua());
+            Q(this.mainSprite, this.grid[(index + 1) % this.grid.length]);
+        }
+
+        Ud() {
+            var a = this.Qa, b = 20 * (Math.floor(a % 23) + 0.5), a = 20 * (Math.floor(a / 23) + 0.5);
+            this.hb = b - this.mainSprite.getWidth() / 2;
+            this.ib = a - this.mainSprite.getHeight() / 2;
+            O(this.mainSprite, this.hb, this.ib);
+            this.nc = b - this.J.getWidth() / 2;
+            this.qd = a + this.mainSprite.getHeight() / 2 - this.J.getHeight() + this.fd;
+            O(this.J, this.nc, this.qd);
+        }
+    }
+
     var Ed = [450, 900, 1350];
-    T.prototype.getName = function () {
-        return this.ie
-    };
-    T.prototype.qa = function () {
-        return this.a
-    };
     var Fd = function (a) {
-        a.lc = h;
+        a.lc = true;
         a.Oa = a.lc ? 2E3 : 1400;
         a.kc = random(2) ? 1 : -1
     };
-    T.prototype.Ia = function () {
-        this.i = 2
-    };
-    T.prototype.h = function () {
-        var a = this.Y,
-            b = this.a;
-        b.show(l);
-        stopAllAnimations(b);
-        b.Eb = l;
-        a.Y.push(b);
-        a = this.Y;
-        b = this.J;
-        b.show(l);
-        stopAllAnimations(b);
-        b.Eb = l;
-        a.Y.push(b);
-        this.ic = k;
-        T.I.h.call(this)
-    };
-    T.prototype.update = function (a) {
-        this.hd = a -= this.ce;
-        0 == this.i ? a > this.Oa ? (this.J.show(l), P(this.a, 1), this.i = 1, Gd(this, 0, 0)) : this.lc ? Hd(this, a) : Id(this, a) : 1 == this.i && a > this.zb + this.Oa && (this.i = 3);
-        ArrayUtils.forEach(this.ic, function (a) {
-            a.jb()
-        })
-    };
     var Id = function (a, b) {
         var c = 40;
-        800 < b ? c = 10 * (1 - Math.pow((b - 800 - 300) / 300, 2)) : 200 < b && ("none" == a.a.s.style.display && (a.a.show(h), yc(a.a, 300, 0, 1)), c = 40 * (1 - Math.pow((b - 200) / 600, 2)));
+        800 < b ? c = 10 * (1 - Math.pow((b - 800 - 300) / 300, 2)) : 200 < b && ("none" == a.a.s.style.display && (a.a.show(true), yc(a.a, 300, 0, 1)), c = 40 * (1 - Math.pow((b - 200) / 600, 2)));
         Gd(a, 0, Math.floor(c))
     },
-        Hd = function (a, b) {
-            var c = 40,
-                d = 0,
-                e = b - 200,
-                f = Ed[0],
-                n = Ed[1],
-                q = Ed[2];
-            200 < b && ("none" == a.a.s.style.display && (a.a.show(h), yc(a.a, 300, 0, 1)), c = 40 * (1 - Math.pow(e / 1800, 2)), d = 1, e < n ? (d = Math.floor(1E3 * (1 - Math.pow((e - f) / f, 2))) / 1E3, d *= 15 * -a.kc) : (d = Math.floor(1E3 * (1 - Math.pow((e - q) / f, 2))) / 1E3, d *= 15 * a.kc));
-            Gd(a, Math.floor(d),
-                Math.floor(c))
-        };
-    T.prototype.Ud = function () {
-        var a = this.Qa,
-            b = 20 * (Math.floor(a % 23) + 0.5),
-            a = 20 * (Math.floor(a / 23) + 0.5);
-        this.hb = b - this.a.getWidth() / 2;
-        this.ib = a - this.a.getHeight() / 2;
-        O(this.a, this.hb, this.ib);
-        this.nc = b - this.J.getWidth() / 2;
-        this.qd = a + this.a.getHeight() / 2 - this.J.getHeight() + this.fd;
-        O(this.J, this.nc, this.qd)
+    Hd = function (a, b) {
+        var c = 40,
+            d = 0,
+            e = b - 200,
+            f = Ed[0],
+            n = Ed[1],
+            q = Ed[2];
+        200 < b && ("none" == a.a.s.style.display && (a.a.show(true), yc(a.a, 300, 0, 1)), c = 40 * (1 - Math.pow(e / 1800, 2)), d = 1, e < n ? (d = Math.floor(1E3 * (1 - Math.pow((e - f) / f, 2))) / 1E3, d *= 15 * -a.kc) : (d = Math.floor(1E3 * (1 - Math.pow((e - q) / f, 2))) / 1E3, d *= 15 * a.kc));
+        Gd(a, Math.floor(d),
+            Math.floor(c))
     };
     var Gd = function (a, b, c) {
         a.cc == c && a.jd == b || (15 < b || -15 > b) || (a.jd = b, a.cc = c, O(a.a, a.hb - b, a.ib - c), c = 1 - (1 - 0.7) * c / 40, a.J.scale(c, c), b && O(a.J, a.nc - b, a.qd))
@@ -2832,6 +2745,7 @@ var minutes = 6E4;
         a.Qa = b;
         a.Ud()
     };
+    
     m = T.prototype;
     m.Jb = function () {
         return this.Qa
@@ -2913,9 +2827,11 @@ var minutes = 6E4;
         }
     }
     inherit(Sd, T);
+
     var Td = [],
-        U = h,
+        U = true,
         Ud = 0;
+
     class ObjectPoolManager {
         constructor() {
             this.objects = {};
@@ -2924,9 +2840,38 @@ var minutes = 6E4;
     }
     defineSingleton(ObjectPoolManager);
 
-    Yd = function (a) {
-        return !(a in Wd) || !(a in Xd) ? new T(Wd.coin) : new Xd[a](Wd[a])
-    };
+    // Registry of base item data
+    var ItemDefinitions = {};
+
+    // Registry mapping item names to their constructors
+    var ItemClasses = null; // example: { coin: CoinItem, gem: GemItem }
+
+    // Item factory
+    function createItem(name) {
+        if (!(name in ItemDefinitions) || !(name in ItemClasses))
+            return new T(ItemDefinitions.coin);
+        return new ItemClasses[name](ItemDefinitions[name]);
+    }
+
+    // Weighted random loot generator
+    function generateRandomItem(pool) {
+        const roll = random(pool.count);
+        let cumulative = 0;
+        let chosenKey = "coin";
+
+        for (const key in LootTable) {
+            const weight = pool.objects[LootTable[key]] || 0;
+            cumulative += weight;
+            if (roll < cumulative) {
+                chosenKey = LootTable[key];
+                break;
+            }
+        }
+
+        return createItem(chosenKey);
+    }
+
+    Yd = createItem;
 
     class Item {
         constructor(grid, name, texture, extra = 0, data = null) {
@@ -2938,31 +2883,18 @@ var minutes = 6E4;
         }
     }
 
-    var Wd = {},
-    Xd = k,
-    $d = function (a) {
-        var b = random(a.count),
-            c = "coin",
-            d = 0,
-            e;
-        for (e in Zd) {
-            var f = Zd[e],
-                d = d + (a.objects[f] || 0);
-            if (b < d) {
-                c = f;
-                break
-            }
-        }
-        return Yd(c)
-    },
-    ae = function (a, b) {
-        a.count = 0;
-        a.objects = b in W ? W[b].da : W[1].da;
-        forEachObject(a.objects, function (a) {
-            this.count += a
-        }, a)
+    function initializeObjectCounter(target, typeId) {
+        target.count = 0;
+        target.objects = (typeId in ObjectRegistry)
+            ? ObjectRegistry[typeId].data
+            : ObjectRegistry[1].data;
+
+        forEachObject(target.objects, function (value) {
+            this.count += value;
+        }, target);
     }
-    var Zd = {
+
+    var LootTable = {
         ta: "firecraker",
         Da: "dumpling",
         ob: "steamer",
@@ -2989,7 +2921,7 @@ var minutes = 6E4;
         E: ee,
     };
 
-    var he, W = {};
+    var he, ObjectRegistry = {};
     class SetEx {
         constructor(values) {
             this._map = new MapEx();
@@ -3217,7 +3149,7 @@ var minutes = 6E4;
             var b = 8 - this.Ca.va();
             if (2500 < a - this.Ec && 0 < b) {
                 for (var b = random(b) + 1, c = 0; c < b; c++) {
-                    var d = $d(this.itemSource),
+                    var d = generateRandomItem(this.itemSource),
                         e = -1,
                         e = "steamer" == d.getName() ? ne(this.gridManager) : me(this.gridManager); -
                     1 != e && ue(this, d, e);
@@ -3226,7 +3158,7 @@ var minutes = 6E4;
             }
         }
         getItem(a) {
-            return this.Ra.get(a, k);
+            return this.Ra.get(a, null);
         }
         dispose() {
             forEachItem(this.Ca, function (a) {
@@ -3240,7 +3172,6 @@ var minutes = 6E4;
     }
     defineSingleton(TileSpawner);
     var te = function (a, b) {
-        console.log(a);
         40 >= b - a.ye || (forEachItem(a.Ca, function(a) {
             a.update(b);
             0 == a.i || 1 == a.i || (this.Ca.remove(a), a.C())
@@ -3250,12 +3181,12 @@ var minutes = 6E4;
     };
     var ve = function (a, b) {
         var c = re(a.g, b);
-        ae(a.bb, b);
+        initializeObjectCounter(a.bb, b);
         ArrayUtils.forEach(c, function (a) {
-            var b = $d(this.bb);
+            var b = generateRandomItem(this.bb);
             ue(this, b, a)
         }, a);
-        ae(a.bb, he)
+        initializeObjectCounter(a.bb, he)
     };
 
     ue = function (a, b, c) {
@@ -3290,17 +3221,17 @@ var minutes = 6E4;
         };
     var Fe = function (a) {
         this.d = [];
-        this.A = k;
+        this.A = null;
         this.ma = [];
         this.ba = Ee;
         this.v = a;
         this.jc = getTime();
-        this.oc = this.qc = k;
-        this.Ab = W[1].V;
-        this.Fb = W[1].V;
+        this.oc = this.qc = null;
+        this.Ab = ObjectRegistry[1].V;
+        this.Fb = ObjectRegistry[1].V;
         this.Gb = 1;
         this.ed = this.Z = 0;
-        this.Yc = this.Hb = this.Ib = k;
+        this.Yc = this.Hb = this.Ib = null;
         this.g = GridPatternManager.getInstance()
     };
     inherit(Fe, EventDispatcher);
@@ -3317,27 +3248,29 @@ var minutes = 6E4;
         Pe = tc[1],
         Qe = tc[2],
         Re = tc[3],
-        Ee = Cc,
-        Se = function (a, b, c) {
-            a = new Sprite(a);
-            a.show(l);
-            P(a, b);
-            a.Eb = h;
-            c.appendChild(a.aa());
-            return a
-        };
+        Ee = Cc;
+
+    function createSprite(spriteType, zIndex, parentElement) {
+        const sprite = new Sprite(spriteType);
+        sprite.show(true);
+        Sprite.setZIndex(sprite, zIndex);
+        sprite.isLooping = true; // 'Eb = h' looks like a boolean property
+        parentElement.appendChild(sprite.getElement()); // 'aa()' returns DOM element
+        return sprite;
+    }
+
     Fe.prototype.init = function () {
-        for (var a = 22, b = k, c = 0; 15 > c; c++) b = new Te(3, 0 == c ? 0 : 14 == c ? 2 : 1, a, 7, c, b, this.v), b.a.show(l), this.d.push(b), this.g.markCell(161 + a, h), a++, a = 23 <= a ? a - 23 : a;
-        this.A = Se(qc, 15, this.v)
+        for (var a = 22, b = null, c = 0; 15 > c; c++) b = new Te(3, 0 == c ? 0 : 14 == c ? 2 : 1, a, 7, c, b, this.v), b.a.show(false), this.d.push(b), this.g.markCell(161 + a, true), a++, a = 23 <= a ? a - 23 : a;
+        this.A = createSprite(qc, 15, this.v)
     };
     Fe.prototype.forward = function () {
         var a = this.d[this.d.length - 1].Jb();
         ArrayUtils.forEachReverse(this.d, function (a) {
             a.Pa ? (a.k = a.Pa.k, a.o = a.Pa.o) : 0 == a.W && (a.k += 3 == a.F ? -1 : 4 == a.F ? 1 : 0, a.o += 1 == a.F ? -1 : 2 == a.F ? 1 : 0, a.k = (a.k + 23) % 23, a.o = (a.o + 9) % 9)
         });
-        this.g.markCell(this.d[0].Jb(), h);
-        oe(this.g, a, h);
-        var b = k;
+        this.g.markCell(this.d[0].Jb(), true);
+        oe(this.g, a, true);
+        var b = null;
         this.ma.length && (b = this.ma.shift());
         ArrayUtils.forEachReverse(this.d, function (a) {
             var d = b;
@@ -3377,14 +3310,14 @@ var minutes = 6E4;
             };
             if (a.d[0].F == a.d[1].F) {
                 var e = a.d[0].qa().Na();
-                a.A.show(h);
+                a.A.show(true);
                 var f = 20 * a.Sa(),
                     n = 20 * a.Ta();
-                d(f, n, e, c, a.A, h);
+                d(f, n, e, c, a.A, true);
                 a.d[0].move(a.Z)
-            } else a.A.show(l), Ye(a.d[0], a.Z);
+            } else a.A.show(false), Ye(a.d[0], a.Z);
             e = a.d.length - 1;
-            if (Ze(a.d[e - 1])) a.d[e].qa().show(l),
+            if (Ze(a.d[e - 1])) a.d[e].qa().show(false),
                 Ye(a.d[e - 1], a.Z);
             else {
                 a.d[e].move(a.Z);
@@ -3392,57 +3325,60 @@ var minutes = 6E4;
                     f = 20 * a.d[e - 1].Sa(),
                     n = 20 * a.d[e - 1].Ta(),
                     e = q.Na();
-                d(f, n, e, c, q, l)
+                d(f, n, e, c, q, false)
             }
             a.ed = c
         }
     },
-        We = function (a, b) {
-            var c = pe(a.g);
-            c.length ? (ArrayUtils.forEach(c, function (a) {
-                this.d[0].Jb() == a && this.d[0].K(Ie, 80);
-                this.dispatchEvent(new CatchItemEvent(a, b))
-            }, a), a.oc = b) : 5E3 < b - a.oc && (a.oc = b, a.d[0].K(He, 80))
-        },
-        Ue = function (a, b) {
-            a.ba = Ee;
-            a.d[0].K(Ne, 80, 100);
-            a.Ab = a.Fb;
-            a.Gb = 1;
-            a.jc = b;
-            a.Ib = k
-        },
-        ze = function (a, b) {
-            a.Hb != k && (b = xb(b));
-            if (2 > a.ma.length) {
-                var c = a.d[0].F;
-                0 < a.ma.length && (c = a.ma[a.ma.length - 1]);
-                if ((1 == c || 2 == c) && (3 == b || 4 == b) || (1 == b || 2 == b) && (3 == c || 4 == c)) a.ma.push(b), c = 3 == bf.getInstance().$.get([c, b]) ? Le : Me, a.d[0].K(c, 80)
-            }
-        },
-        Ce = function (a) {
-            var b = a.d.length - 1;
-            a.d[b].qa().show(h);
-            for (var c = a.d[b - 1].qa(), d = b - 1; 1 < d; d--) a.d[d].a = a.d[d - 1].a, P(a.d[d].a, 16 - d);
-            a.d[1].a = c;
-            P(a.d[1].a, 15);
-            cf(a.d[0], a.ba);
-            cf(a.d[1]);
-            cf(a.d[b])
-        };
-
-    boostFunction = function (snake, seconds, speed) {
-        console.log("obj: " + snake + " | secs: " + seconds + " | speed: " + speed);
-        snake.Ib = seconds;
-        snake.Gb = speed;
-        snake.Ab = snake.Fb * snake.Gb
-    };
+    We = function (a, b) {
+        var c = pe(a.g);
+        c.length ? (ArrayUtils.forEach(c, function (a) {
+            this.d[0].Jb() == a && this.d[0].K(Ie, 80);
+            this.dispatchEvent(new CatchItemEvent(a, b))
+        }, a), a.oc = b) : 5E3 < b - a.oc && (a.oc = b, a.d[0].K(He, 80))
+    },
+    Ue = function (a, b) {
+        a.ba = Ee;
+        a.d[0].K(Ne, 80, 100);
+        a.Ab = a.Fb;
+        a.Gb = 1;
+        a.jc = b;
+        a.Ib = null
+    },
+    ze = function (a, b) {
+        a.Hb != null && (b = xb(b));
+        if (2 > a.ma.length) {
+            var c = a.d[0].F;
+            0 < a.ma.length && (c = a.ma[a.ma.length - 1]);
+            if ((1 == c || 2 == c) && (3 == b || 4 == b) || (1 == b || 2 == b) && (3 == c || 4 == c)) a.ma.push(b), c = 3 == bf.getInstance().$.get([c, b]) ? Le : Me, a.d[0].K(c, 80)
+        }
+    },
+    Ce = function (a) {
+        var b = a.d.length - 1;
+        a.d[b].getElement().show(true);
+        for (var c = a.d[b - 1].qa(), d = b - 1; 1 < d; d--) {
+            a.d[d].a = a.d[d - 1].a;
+            Sprite.setZIndex(a.d[d].a, 16 - d);
+        }
+        a.d[1].a = c;
+        Sprite.setZIndex(a.d[1].a, 15);
+        cf(a.d[0], a.ba);
+        cf(a.d[1]);
+        cf(a.d[b])
+    },
+    Ae = function(a, b, c) {
+        console.log("obj: " + a + " | secs: " + b + " | speed: " + c);
+        a.Ib = b;
+        a.Gb = c;
+        a.Ab = a.Fb * a.Gb
+    }
+    boostFunction = Ae;
 
     Fe.prototype.h = function () {
         ArrayUtils.forEach(this.d, function (a) {
             a.C()
         });
-        this.ma = k;
+        this.ma = null;
         this.A.C();
         Fe.I.h.call(this)
     };
@@ -3452,6 +3388,7 @@ var minutes = 6E4;
     Fe.prototype.Ta = function () {
         return this.d[0].Ta()
     };
+
     class CatchItemEvent extends CustomEvent {
         constructor(a, b) {
             super("catch item");
@@ -3473,13 +3410,13 @@ var minutes = 6E4;
         this.k = c;
         this.o = d;
         this.Pa = f;
-        this.a = Se(qc, 16 - e, n);
-        this.a.show(h);
-        this.A = k;
-        if (0 == this.W || 2 == this.W) this.A = Se(df[this.W], 16 - e, n);
+        this.a = createSprite(qc, 16 - e, n);
+        this.a.show(true);
+        this.A = null;
+        if (0 == this.W || 2 == this.W) this.A = createSprite(df[this.W], 16 - e, n);
         cf(this)
     };
-    inherit(Te, Disposable);
+    inherit(Te, CustomEvent);
     var df = {
         "0": Cc,
         1: qc,
@@ -3494,7 +3431,7 @@ var minutes = 6E4;
                 e = this.a.Na();
             180 == e ? xc(this.A) : this.A.rotate(e);
             uc(this.A, c, d);
-            this.A.show(h)
+            this.A.show(true)
         }
         uc(this.a, b, a)
     };
@@ -3504,31 +3441,31 @@ var minutes = 6E4;
             c = -1 < Qe.indexOf(a) || -1 < Re.indexOf(a);
         return a == pc || b || c
     },
-        cf = function (a, b) {
-            var c = df[a.W];
-            0 == a.W && (c = b || c);
-            var d = bf.getInstance(), e = d.Na(a.oa);
-            1 == a.W && (a.oa && a.F != a.oa) && (c = pc, e = d.ga.get([a.F, a.oa]));
-            if (!a.a.X || !a.a.X.isPlaying()) Q(a.a, c), a.A && Q(a.A, c);
-            0 == a.W && 180 == e ? xc(a.a) : a.a.rotate(e);
-            a.A && a.A.show(l);
-            uc(a.a, a.k, a.o)
-        },
-        Ye = function (a, b) {
-            var c = a.a.Ua();
-            if (!(-1 < Je.indexOf(c) || -1 < Ke.indexOf(c))) {
-                var c = Math.min(Math.floor(5 * b), 4),
-                    d = bf.getInstance(),
-                    e;
-                0 == a.W ?
-                    (e = d.wc.get([a.oa, a.F]), e = 3 == e ? Oe : Pe) : (e = d.$.get([a.oa, a.F]), e = 3 == e ? Qe : Re, a.a.rotate(d.Na(a.oa)));
-                stopAllAnimations(a.a);
-                Q(a.a, e[c])
-            }
-        };
+    cf = function (a, b) {
+        var c = df[a.W];
+        0 == a.W && (c = b || c);
+        var d = bf.getInstance(), e = d.Na(a.oa);
+        1 == a.W && (a.oa && a.F != a.oa) && (c = pc, e = d.ga.get([a.F, a.oa]));
+        if (!a.a.X || !a.a.X.isPlaying()) Q(a.a, c), a.A && Q(a.A, c);
+        0 == a.W && 180 == e ? xc(a.a) : a.a.rotate(e);
+        a.A && a.A.show(false);
+        uc(a.a, a.k, a.o)
+    },
+    Ye = function (a, b) {
+        var c = a.a.Ua();
+        if (!(-1 < Je.indexOf(c) || -1 < Ke.indexOf(c))) {
+            var c = Math.min(Math.floor(5 * b), 4),
+                d = bf.getInstance(),
+                e;
+            0 == a.W ?
+                (e = d.wc.get([a.oa, a.F]), e = 3 == e ? Oe : Pe) : (e = d.$.get([a.oa, a.F]), e = 3 == e ? Qe : Re, a.a.rotate(d.Na(a.oa)));
+            stopAllAnimations(a.a);
+            Q(a.a, e[c])
+        }
+    };
     m = Te.prototype;
     m.K = function (a, b, c, d, e) {
-        Ze(this) && a != Ke || (b = Math.min(b, 500), this.a.K(a, b, c, d, e), this.A && this.A.K(a, b, c, d, e))
+        Ze(this) && a != nulle || (b = Math.min(b, 500), this.a.K(a, b, c, d, e), this.A && this.A.K(a, b, c, d, e))
     };
     m.h = function () {
         this.a.C();
@@ -3579,67 +3516,74 @@ var minutes = 6E4;
     bf.prototype.Na = function (a) {
         return this.g.get(a)
     };
-    var $ = function (a) {
-        this.v = a;
-        this.fa = createDiv();
-        addClass(this.fa, "grids");
-        this.v.appendChild(this.fa);
-        setPosition(this.fa, jf.x, jf.y);
-        this.cd = 0;
+
+    var $ = function (rootElement) {
+        this.root = rootElement;
+
+        this.gridContainer = createDiv();
+        addClass(this.gridContainer, "grids");
+        this.root.appendChild(this.gridContainer);
+        setPosition(this.gridContainer, START_POS.x, START_POS.y);
+
+        this.lastUpdateTime = 0;
         this.i = "unstarted";
-        this.Vd = getTime();
-        this.ea = minutes;
-        this.za = k;
-        this.z = 0;
+        this.startTime = getTime();
+        this.remainingTime = minutes;
+        this.za = null;
+        this.z = 0; // score
         this.$b = {};
-        this.ya = k;
-        this.yb = [];
-        this.hc = this.Aa = this.Db = this.Cb = k;
+        this.ya = null;
+        this.hc = this.Aa = this.Db = this.Cb = null;
         this.Ma = [];
-        this.ka = TileSpawner.getInstance();
-        gridClass = this.ka;
-        this.ka.init(this.fa);
-        this.N = new Fe(this.fa);
+        this.TileSpawner = TileSpawner.getInstance();
+        gridClass = this.TileSpawner;
+        this.TileSpawner.init(this.gridContainer);
+        this.N = new Fe(this.gridContainer);
         snakeClass = this.N;
-        this.InputController = new InputController(this.v, true);
+        this.InputController = new InputController(this.root, true);
         this.B = new EventHandler(this);
         this.bb = ObjectPoolManager.getInstance();
-        this.ca = new ClickableElement(12, Z.x, Z.y, this.v, 101);
-        this.ca.show(l);
-        this.La = new ClickableElement(90, kf.x, kf.y, this.v, 100);
-        this.La.show(l);
-        this.Ka = h;
-        this.music = new AudioPlayer(["./snakeyear/snake"], this.v);
-        this.cb = new SpriteGroup(31, lf.x, lf.y, this.v, 100);
-        this.cb.show(l);
-        this.fb = k;
+        this.ca = new ClickableElement(12, Z.x, Z.y, this.root, 101);
+        this.ca.show(false);
+        this.La = new ClickableElement(90, kf.x, kf.y, this.root, 100);
+        this.La.show(false);
+        this.Ka = true;
+        this.music = new AudioPlayer(["./snakeyear/snake"], this.root);
+        this.cb = new SpriteGroup(31, lf.x, lf.y, this.root, 100);
+        this.cb.show(false);
+        this.fb = null;
         this.eb = [];
-        this.ec = this.fc = this.dc = k;
-        this.bd = l;
+        this.ec = this.fc = this.dc = null;
+        this.bd = false;
         this.gc = this.$c = 0;
-        this.B.listen(this.InputController, "a", this.Xd);
-        this.B.listen(this.N, "catch item", this.Yd);
-        this.B.listen(this.N, "match pattern", this.Zd);
-        this.B.listen(this.La, "click", this.Wd);
+
         this.visibilityTimer = new VisibilityTimer(3E4, this.$d.bind(this), this.ae.bind(this));
-        this.bd = !(!a || !a.standalone);
-        window.isAnimationPaused = l;
-        new SpriteGroup(19, mf.x, mf.y, this.v, 100);
-        this.Cb = new SpriteGroup(36, nf.x + 99, nf.y, this.v, -1);
-        this.Db = new SpriteGroup(53, of.x - 99, of.y, this.v, -1);
-        this.Cb.show(l);
-        this.Db.show(l);
-        this.za = new Bd(pf.x, pf.y, this.v);
-        this.za.show(l);
-        this.ya = new xd(qf, this.v);
-        for (a = 0; a < rf.length; a++) {
-            var b = rf[a],
-                c = new Sprite(33);
-            c.show(l);
-            O(c, b.x, b.y);
-            this.v.appendChild(c.aa());
-            this.yb[a] = c
+        this.bd = !(!rootElement || !rootElement.standalone);
+        window.isAnimationPaused = false;
+        new SpriteGroup(19, mf.x, mf.y, this.root, 100);
+        this.Cb = new SpriteGroup(36, nf.x + 99, nf.y, this.root, -1);
+        this.Db = new SpriteGroup(53, of.x - 99, of.y, this.root, -1);
+        this.Cb.show(false);
+        this.Db.show(false);
+        this.za = new Bd(pf.x, pf.y, this.root);
+        this.za.show(false);
+        this.ya = new xd(qf, this.root);
+
+        this.icons = [];
+        for (let i = 0; i < SIDE_ICONS.length; i++) {
+            const pos = SIDE_ICONS[i];
+            const sprite = new Sprite(33);
+            sprite.show(false);
+            Sprite.setPosition(sprite, pos.x, pos.y);
+            this.root.appendChild(sprite.getElement());
+            this.icons.push(sprite);
         }
+
+        // this.B.listen(this.InputController, "a", this.Xd);
+        // this.B.listen(this.N, "catch item", this.Yd);
+        // this.B.listen(this.N, "match pattern", this.Zd);
+        // this.B.listen(this.La, "click", this.Wd);
+
         this.N.init();
         this.dd()
     };
@@ -3653,7 +3597,7 @@ var minutes = 6E4;
         xf = [91, 92, 93],
         yf = [new Point(415, 82), new Point(397, 82), new Point(379, 82)],
         mf = new Point(96, 6),
-        jf = new Point(110, 20),
+        START_POS = new Point(110, 20),
         nf = new Point(4, 46),
         of = new Point(577, 46),
         pf = new Point(43, 103),
@@ -3689,18 +3633,18 @@ var minutes = 6E4;
             a.ea = minutes;
             Lf(a, 1);
             a.za.update(Math.floor(a.ea / 1E3));
-            a.za.show(h);
+            a.za.show(true);
             a.z = 0;
             a.ya.update(a.z);
             a.ya.reset();
             Mf(a);
             Ud = 0;
             Td = [];
-            U = h;
+            U = true;
             ArrayUtils.forEach(a.yb, function (a) {
-                a.show(l)
+                a.show(false)
             });
-            a.La.show(h);
+            a.La.show(true);
             a.la.play();
             a.la.H.muted = !a.Ka;
             a.$c++;
@@ -3723,42 +3667,42 @@ var minutes = 6E4;
             Q(a.d[0].qa(), a.ba);
             this.i = "running";
             Pf(this);
-            minutes == this.ea && Nf(this)
+            minutes == this.remainingTime && Nf(this)
         }
     };
     var Mf = function (a) {
-        getObjectKeys(Wd).forEach(function (a) {
+        getObjectKeys(ItemDefinitions).forEach(function (a) {
             this.$b[a] = 0
         }, a);
     },
-        Qf = function (a) {
-            var b = new AnimationSequence();
-            a.dc = b;
-            for (var c = 1; 39 > c; c++) b.addStep(bind(De, a, a.N)), addPauseStep(b, 150);
-            addPauseStep(b, 200);
-            b.addStep(bind(function () {
-                this.cb.show(h);
-                yc(this.cb, 400, 0, 1)
-            }, a));
-            addPauseStep(b, 600);
-            b.addStep(bind(function () {
-                O(this.ca, Z.x, Z.y - 80);
-                this.ca.show(h)
-            }, a));
-            b.addStep(bind(function (a) {
-                O(this.ca, Z.x, Z.y - 80 * (1 - a * a))
-            }, a), 700);
-            b.addStep(bind(function (a) {
-                O(this.ca, Z.x, Z.y - 80 * (0.25 - (0.5 - a) * (0.5 - a)))
-            }, a), 700);
-            b.addStep(bind(function () {
-                this.rd()
-            }, a));
-            b.addStep(bind(function () {
-                sb(this.B, this.ca, "mousedown", this.De)
-            }, a))
-            b.play()
-        };
+    Qf = function (a) {
+        var b = new AnimationSequence();
+        a.dc = b;
+        for (var c = 1; 39 > c; c++) b.addStep(bind(De, a, a.N)), addPauseStep(b, 150);
+        addPauseStep(b, 200);
+        b.addStep(bind(function () {
+            this.cb.show(true);
+            yc(this.cb, 400, 0, 1)
+        }, a));
+        addPauseStep(b, 600);
+        b.addStep(bind(function () {
+            O(this.ca, Z.x, Z.y - 80);
+            this.ca.show(true)
+        }, a));
+        b.addStep(bind(function (a) {
+            O(this.ca, Z.x, Z.y - 80 * (1 - a * a))
+        }, a), 700);
+        b.addStep(bind(function (a) {
+            O(this.ca, Z.x, Z.y - 80 * (0.25 - (0.5 - a) * (0.5 - a)))
+        }, a), 700);
+        b.addStep(bind(function () {
+            this.rd()
+        }, a));
+        b.addStep(bind(function () {
+            sb(this.B, this.ca, "mousedown", this.De)
+        }, a))
+        b.play()
+    };
     $.prototype.rd = function () {
         "init" == this.i && (this.ca.K(Cf, 80), setTimeout(bind(this.rd, this), 3E3))
     };
@@ -3769,21 +3713,21 @@ var minutes = 6E4;
         a.za.update(Math.floor(a.ea / 1E3));
         a.ea -= b;
         1 == he && 4E4 > a.ea ? Lf(a, 2) : 2 == he && 2E4 > a.ea && Lf(a, 3);
-        0 > a.ea && "running" == a.i && (a.i = "stop", Rf(a), a.za.show(l), zd(a.ya), ArrayUtils.forEach(a.yb, function (a) {
-            a.show(l)
-        }), a.la.load(l))
+        0 > a.ea && "running" == a.i && (a.i = "stop", Rf(a), a.za.show(false), zd(a.ya), ArrayUtils.forEach(a.yb, function (a) {
+            a.show(false)
+        }), a.la.load(false))
     },
-        Lf = function (a, b) {
-            he = b;
-            ae(ObjectPoolManager.getInstance(), b);
-            var c = a.N;
-            c.Fb = W[b].V;
-            c.Ab = c.Fb * c.Gb;
-            a.ka.vc = W[b].U
-        };
+    Lf = function (a, b) {
+        he = b;
+        initializeObjectCounter(ObjectPoolManager.getInstance(), b);
+        var c = a.N;
+        c.Fb = ObjectRegistry[b].V;
+        c.Ab = c.Fb * c.Gb;
+        a.ka.vc = ObjectRegistry[b].U
+    };
     $.prototype.Yd = function (a) {
-        var b = this.ka.getItem(a.item);
-        if (b != k)
+        var b = this.TileSpawner.getItem(a.item);
+        if (b != null)
             if (1 == b.i || b.cc < b.a.getHeight()) {
                 var c = b.getName();
                 this.$b[c]++;
@@ -3805,40 +3749,43 @@ var minutes = 6E4;
                         a: {
                             a = Td;
                             c = b.be;
-                            if (1 == a.length) c == a[0] ? U = h : a[0] == "GOOGLE"[0] && c == "GOOGLE"[1] ? U = l : (Td = [], U = h);
+                            if (1 == a.length) c == a[0] ? U = true : a[0] == "GOOGLE"[0] && c == "GOOGLE"[1] ? U = false : (Td = [], U = true);
                             else if (a.length)
                                 if (U && c == a[0] || !U && c == "GOOGLE"[a.length]) {
                                     if (U && 2 == a.length || !U && 5 == a.length) {
                                         a.push(c);
                                         Td = [];
-                                        U = h;
+                                        U = true;
                                         Ud++;
                                         a = a.join("");
                                         break a
                                     }
-                                } else Td = [], U = h;
+                                } else Td = [], U = true;
                             Td.push(c);
                             a = ""
                         }
                         if (a) {
-                            for (var c = this.ka, d = a.length, e = 0; e < d; e++) {
-                                ue(c, Yd("steamer"), ne(c.g));
+                            for (var c = this.TileSpawner, d = a.length, e = 0; e < d; e++) {
+                                ue(c, createItem("steamer"), ne(c.g));
                             }
-                            6 == a.length && ve(this.ka, a[random(a.length)])
+                            6 == a.length && ve(this.TileSpawner, a[random(a.length)])
                         }
                         Tf(this)
                 }
                 b.Ia();
                 this.ya.update(this.z)
-            } else b.J.show(l), P(b.a, 1)
+            } else {
+                b.J.show(false);
+                Sprite.setZIndex(b.a, 1);
+            }
     };
     $.prototype.Zd = function (a) {
         a = a.pattern;
-        "" != a && (ve(this.ka, a), this.gc++)
+        "" != a && (ve(this.TileSpawner, a), this.gc++)
     };
     var Tf = function (a) {
         ArrayUtils.forEach(a.yb, function (a, c) {
-            c < Td.length ? (Q(a, sd[Td[c]]), a.show(h)) : a.show(l)
+            c < Td.length ? (Q(a, sd[Td[c]]), a.show(true)) : a.show(false)
         })
     },
     Rf = function (a) {
@@ -3847,8 +3794,8 @@ var minutes = 6E4;
             setOpacity(a.fa, 0.3);
             Q(a.hc, xf[(80 > a.z ? 1 : 150 > a.z ? 2 : 3) - 1]);
             var b = yd(a.z, vd);
-            a.Aa.show(h);
-            for (var c in b) b[c] != k ? (a.Ma[c].show(h), Q(a.Ma[c], b[c])) : a.Ma[c].show(l)
+            a.Aa.show(true);
+            for (var c in b) b[c] != null ? (a.Ma[c].show(true), Q(a.Ma[c], b[c])) : a.Ma[c].show(false)
         } else {
             a.Aa = new SpriteGroup(61, sf.x, sf.y, a.v, 100);
             if (!a.bd) {
@@ -3862,16 +3809,16 @@ var minutes = 6E4;
             a.Aa.add(a.hc);
             var b = yd(a.z, vd),
                 r;
-            for (r in b) c = b[r], a.Ma[r] = new SpriteGroup(c == k ? td[0] : c, yf[r].x, yf[r].y, a.v, 101), c == k && a.Ma[r].show(l), a.Aa.add(a.Ma[r]);
+            for (r in b) c = b[r], a.Ma[r] = new SpriteGroup(c == null ? td[0] : c, yf[r].x, yf[r].y, a.v, 101), c == null && a.Ma[r].show(false), a.Aa.add(a.Ma[r]);
             setOpacity(a.fa, 0.3)
         }
     };
     $.prototype.Xd = function (a) {
         this.visibilityTimer.resetTimer();
-        "tutorial_end" == this.i ? (Pf(this), Nf(this)) : "running" == this.i && ze(this.N, a.Ie)
+        "tutorial_end" == this.i ? (Pf(this), Nf(this)) : "running" == this.i && ze(this.snake, a.Ie)
     };
     $.prototype.De = function () {
-        this.music.load(l);
+        this.music.load(false);
         this.visibilityTimer.resetTimer();
         var a = new AnimationSequence();
         this.ec = a;
@@ -3884,13 +3831,13 @@ var minutes = 6E4;
         }, this), 700);
         addPauseStep(a, 200);
         a.addStep(bind(function () {
-            this.cb.show(l);
-            this.ca.show(l);
+            this.cb.show(false);
+            this.ca.show(false);
             setOpacity(this.fa, 1)
         }, this));
         a.addStep(bind(function () {
-            this.Cb.show(h);
-            this.Db.show(h)
+            this.Cb.show(true);
+            this.Db.show(true)
         }, this));
         a.addStep(bind(function (a) {
             O(this.Cb, nf.x + 99 * (1 - a), nf.y);
@@ -3898,7 +3845,7 @@ var minutes = 6E4;
         }, this), 1E3);
         a.addStep(bind(function () {
             yc(this.La, 500, 0, 1);
-            this.La.show(h)
+            this.La.show(true)
         }, this));
         a.addStep(bind(function () {
             Of(this)
@@ -3933,28 +3880,28 @@ var minutes = 6E4;
         ArrayUtils.forEach(a.eb, function (a) {
             zc(a)
         });
-        a.fb.show(l)
+        a.fb.show(false)
     };
     m = $.prototype;
     m.Wd = function () {
         this.visibilityTimer.resetTimer();
         this.Ka = !this.Ka;
         Q(this.La, this.Ka ? 90 : 89);
-        this.la.H.muted = this.Ka ? l : h
+        this.la.H.muted = this.Ka ? false : true
     };
     m.ze = function () {
         setOpacity(this.fa, 1);
-        this.Aa.show(l);
+        this.Aa.show(false);
         Nf(this);
     };
     m.dd = function () {
         var a = getTime(),
-            b = a - this.cd,
+            b = a - this.lastUpdateTime,
             b = Math.min(50, b);
-        "running" == this.i ? Sf(this, b, a) : "unstarted" == this.i && 1500 < a - this.Vd && (this.i = "init", Qf(this));
+        "running" == this.i ? Sf(this, b, a) : "unstarted" == this.i && 1500 < a - this.startTime && (this.i = "init", Qf(this));
         b = bind(this.dd, this);
         requestAnimFrame(b);
-        this.cd = a
+        this.lastUpdateTime = a
     };
     m.h = function () {
         this.i = "stop";
@@ -3962,8 +3909,8 @@ var minutes = 6E4;
         this.dc && this.dc.stop();
         this.fc && this.fc.stop();
         this.ec && this.ec.stop();
-        window.isAnimationPaused = h;
-        this.$b = this.B = k;
+        window.isAnimationPaused = true;
+        this.$b = this.B = null;
         this.za.C();
         this.ya.C();
         this.ka.C();
@@ -3986,37 +3933,37 @@ var minutes = 6E4;
 
             // Build a configuration set (rc) with many keys enabled
             var enabledSet = new MapEx();
-            enabledSet.set(Bc, h);
-            enabledSet.set(pc, h);
-            enabledSet.set(id, h);
-            enabledSet.set(jd, h);
-            enabledSet.set(kd, h);
-            enabledSet.set(ld, h);
-            enabledSet.set(md, h);
-            enabledSet.set(nd, h);
-            enabledSet.set(od, h);
-            enabledSet.set(pd, h);
-            enabledSet.set(qd, h);
-            enabledSet.set(rd, h);
+            enabledSet.set(Bc, true);
+            enabledSet.set(pc, true);
+            enabledSet.set(id, true);
+            enabledSet.set(jd, true);
+            enabledSet.set(kd, true);
+            enabledSet.set(ld, true);
+            enabledSet.set(md, true);
+            enabledSet.set(nd, true);
+            enabledSet.set(od, true);
+            enabledSet.set(pd, true);
+            enabledSet.set(qd, true);
+            enabledSet.set(rd, true);
             rc = enabledSet;
 
             // Another configuration set (sc) with a different set of keys
             var otherSet = new MapEx();
-            otherSet.set(Zc, h);
-            otherSet.set($c, h);
-            otherSet.set(ad, h);
-            otherSet.set(bd, h);
-            otherSet.set(cd, h);
-            otherSet.set(id, h);
-            otherSet.set(jd, h);
-            otherSet.set(kd, h);
-            otherSet.set(ld, h);
-            otherSet.set(md, h);
+            otherSet.set(Zc, true);
+            otherSet.set($c, true);
+            otherSet.set(ad, true);
+            otherSet.set(bd, true);
+            otherSet.set(cd, true);
+            otherSet.set(id, true);
+            otherSet.set(jd, true);
+            otherSet.set(kd, true);
+            otherSet.set(ld, true);
+            otherSet.set(md, true);
             sc = otherSet;
 
 
             // Build level / wave presets (W)
-            var keyEnum = Zd;   // Zd appears to be an enum/object of item keys
+            var keyEnum = LootTable;   // Zd appears to be an enum/object of item keys
             var configObj;
 
             configObj = {};
@@ -4027,7 +3974,7 @@ var minutes = 6E4;
             configObj[keyEnum.Fa] = 10;
             configObj[keyEnum.ha] = 40;
             configObj[keyEnum.Ea] = 20;
-            W[1] = { da: configObj, V: 200, U: 1 };
+            ObjectRegistry[1] = { data: configObj, V: 200, U: 1 };
 
             configObj = {};
             configObj[keyEnum.ta] = 10;
@@ -4035,7 +3982,7 @@ var minutes = 6E4;
             configObj[keyEnum.Kb] = 10;
             configObj[keyEnum.nb] = 10;
             configObj[keyEnum.lb] = 50;
-            W[2] = { da: configObj, V: 180, U: 0.85 };
+            ObjectRegistry[2] = { data: configObj, V: 180, U: 0.85 };
 
             configObj = {};
             configObj[keyEnum.nb] = 30;
@@ -4043,33 +3990,33 @@ var minutes = 6E4;
             configObj[keyEnum.mb] = 20;
             configObj[keyEnum.ta] = 30;
             configObj[keyEnum.lb] = 30;
-            W[3] = { da: configObj, V: 160, U: 0.6 };
+            ObjectRegistry[3] = { data: configObj, V: 160, U: 0.6 };
 
             // Some named presets
             configObj = {};
             configObj[keyEnum.ta] = 20;
             configObj[keyEnum.Da] = 30;
             configObj[keyEnum.ha] = 50;
-            W.O = { da: configObj, V: 200, U: 1 };
+            ObjectRegistry.O = { data: configObj, V: 200, U: 1 };
 
             configObj = {};
             configObj[keyEnum.ta] = 40;
             configObj[keyEnum.Da] = 10;
             configObj[keyEnum.ha] = 50;
-            W.O2 = { da: configObj, V: 200, U: 1 };
+            ObjectRegistry.O2 = { data: configObj, V: 200, U: 1 };
 
             configObj = {};
             configObj[keyEnum.Da] = 30;
             configObj[keyEnum.ha] = 40;
             configObj[keyEnum.Ea] = 30;
-            W.G1 = { da: configObj, V: 200, U: 1 };
-            W.E = { da: configObj, V: 200, U: 1 };
-            W.L = { da: configObj, V: 200, U: 1 };
+            ObjectRegistry.G1 = { data: configObj, V: 200, U: 1 };
+            ObjectRegistry.E = { data: configObj, V: 200, U: 1 };
+            ObjectRegistry.L = { data: configObj, V: 200, U: 1 };
 
             configObj = {};
             configObj[keyEnum.ha] = 50;
             configObj[keyEnum.Ea] = 50;
-            W.G = { da: configObj, V: 200, U: 1 };
+            ObjectRegistry.G = { data: configObj, V: 200, U: 1 };
 
             // Some global flags / counters
             he = 1;
@@ -4078,7 +4025,7 @@ var minutes = 6E4;
             GridPatternManager.getInstance().init();
 
             // Build reverse mapping Xd from keys in Zd to some default T, then override some
-            var enumObj = Zd;
+            var enumObj = LootTable;
             var reverseMap = {};
             var enumKey;
             for (enumKey in enumObj) {
@@ -4090,26 +4037,26 @@ var minutes = 6E4;
             reverseMap[enumObj.nb] = Rd;
             reverseMap[enumObj.Va] = Qd;
             reverseMap[enumObj.lb] = Sd;
-            Xd = reverseMap;
+            ItemClasses = reverseMap;
 
             // Build item definitions (Wd)
             var itemDefs = {};
             itemDefs[enumObj.ta] = new Item([R.pe], enumObj.ta, 5000); // rarer item?
             itemDefs[enumObj.Da] = new Item([R.ne, R.oe], enumObj.Da, 7000, 2);
             itemDefs[enumObj.ob] = new Item([R.ob], enumObj.ob, 7000, 10);
-            itemDefs[enumObj.Kb] = new Item([R.we, R.xe], enumObj.Kb, 6000, 2, h);
-            itemDefs[enumObj.Fa] = new Item([R.Fa], enumObj.Fa, 6000, 2, l);
+            itemDefs[enumObj.Kb] = new Item([R.we, R.xe], enumObj.Kb, 6000, 2, true);
+            itemDefs[enumObj.Fa] = new Item([R.Fa], enumObj.Fa, 6000, 2, false);
             itemDefs[enumObj.nb] = new Item([R.qe, R.le], enumObj.nb, 6000, 5);
             itemDefs[enumObj.Va] = new Item([R.Va], enumObj.Va, 7000, 2);
-            itemDefs[enumObj.mb] = new Item([R.mb], enumObj.mb, 7000, 1, l);
+            itemDefs[enumObj.mb] = new Item([R.mb], enumObj.mb, 7000, 1, false);
             itemDefs[enumObj.lb] = new Item([R.se, R.ve, R.ue, R.re], enumObj.lb, 8000, 2);
             itemDefs[enumObj.ha] = new Item([R.ha], enumObj.ha, 10000, 1);
             itemDefs[enumObj.Ea] = new Item([R.Ea], enumObj.Ea, 5000, 5);
             console.log(itemDefs);
-            Wd = itemDefs;
+            ItemDefinitions = itemDefs;
 
             // Start or set some initial state (ae probably attaches / activates level/state manager)
-            ae(ObjectPoolManager.getInstance(), 1);
+            initializeObjectCounter(ObjectPoolManager.getInstance(), 1);
 
             // Create controller/handler for the logo DOM element
             logoController = new $(logoElement);
