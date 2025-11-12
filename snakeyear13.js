@@ -9,8 +9,7 @@ var snakeClass = null;
 var minutes = 6E4;
 
 (function () {
-    var g = void 0,
-        h = !0,
+    var h = !0,
         k = null,
         l = !1,
         m, p = this
@@ -24,11 +23,6 @@ var minutes = 6E4;
     function isArrayLike(value) {
         const type = typeOf(value);
         return type === "array" || (type === "object" && typeof value.length === "number");
-    }
-
-    /** Checks if the value is a string. */
-    function isString(value) {
-        return typeof value === "string";
     }
 
     /**
@@ -105,21 +99,6 @@ var minutes = 6E4;
         childCtor.prototype = new TempConstructor();
     }
 
-    /**
-     * Creates a new function that pre-applies some arguments before the rest.
-     * Similar to Function.prototype.bind but without binding 'this'.
-     *
-     * @param {Function} func - The target function.
-     * @param {...*} presetArgs - Arguments to pre-apply.
-     * @returns {Function} - A function that calls func with the presetArgs + newArgs.
-     */
-    function partialApply(func, ...presetArgs) {
-        return function (...newArgs) {
-            const allArgs = [...presetArgs, ...newArgs];
-            return func.apply(this, allArgs);
-        };
-    }
-
     function bind(fn, thisArg, ...args) {
         return fn.bind(thisArg, ...args);
     }
@@ -132,11 +111,11 @@ var minutes = 6E4;
                 if (a instanceof Object) return b;
                 var c = Object.prototype.toString.call(a);
                 if ("[object Window]" == c) return "object";
-                if ("[object Array]" == c || "number" == typeof a.length && "undefined" != typeof a.splice && "undefined" != typeof a.propertyIsEnumerable && !a.propertyIsEnumerable("splice")) return "array";
-                if ("[object Function]" == c || "undefined" !=
-                    typeof a.call && "undefined" != typeof a.propertyIsEnumerable && !a.propertyIsEnumerable("call")) return "function"
+                if ("[object Array]" == c || "number" == typeof a.length && undefined != typeof a.splice && undefined != typeof a.propertyIsEnumerable && !a.propertyIsEnumerable("splice")) return "array";
+                if ("[object Function]" == c || undefined !=
+                    typeof a.call && undefined != typeof a.propertyIsEnumerable && !a.propertyIsEnumerable("call")) return "function"
             } else return "null";
-        else if ("function" == b && "undefined" == typeof a.call) return "object";
+        else if ("function" == b && undefined == typeof a.call) return "object";
         return b
     }
 
@@ -184,9 +163,12 @@ var minutes = 6E4;
         }
     }
 
-    var la = function (a) {
-        a && "function" == typeof a.C && a.C()
-    };
+    // Safely disposes an object if it has a dispose method.
+    function safeDispose(object) {
+        if (object && typeof object.dispose === "function") {
+            object.dispose();
+        }
+    }
 
     /** ---------------------------
      * Event Class
@@ -313,19 +295,6 @@ var minutes = 6E4;
     };
 
     /**
-     * Returns an array of all values in an object.
-     * @param {Object} obj - The object to extract values from.
-     * @returns {Array} Array of object values.
-     */
-    function getObjectValues(obj) {
-        const values = [];
-        for (const key in obj) {
-            values.push(obj[key]);
-        }
-        return values;
-    }
-
-    /**
      * Returns an array of all keys in an object.
      * @param {Object} obj - The object to extract keys from.
      * @returns {Array} Array of object keys.
@@ -336,44 +305,6 @@ var minutes = 6E4;
             keys.push(key);
         }
         return keys;
-    }
-
-    /**
-     * Reserved property names that may need special handling when copying objects.
-     */
-    const reservedProps = [
-        "constructor",
-        "hasOwnProperty",
-        "isPrototypeOf",
-        "propertyIsEnumerable",
-        "toLocaleString",
-        "toString",
-        "valueOf"
-    ];
-
-    /**
-     * Merges multiple source objects into a target object (like Object.assign),
-     * but also ensures reserved properties are copied.
-     *
-     * @param {Object} target - The object to assign properties to.
-     * @param {...Object} sources - The objects to copy properties from.
-     * @returns {Object} The modified target object.
-     */
-    function deepAssign(target, ...sources) {
-        for (const source of sources) {
-            // Copy normal enumerable properties
-            for (const key in source) {
-                target[key] = source[key];
-            }
-
-            // Explicitly copy reserved properties
-            for (const prop of reservedProps) {
-                if (Object.prototype.hasOwnProperty.call(source, prop)) {
-                    target[prop] = source[prop];
-                }
-            }
-        }
-        return target;
     }
 
     function forEachObject(a, b, c) {
@@ -477,98 +408,106 @@ var minutes = 6E4;
     isGecko && versionAtLeast("1.9b");
     isIE && versionAtLeast("8");
 
-    var ab = function (a, b) {
-        a && this.init(a, b)
-    };
-    inherit(ab, CustomEvent);
-    m = ab.prototype;
-    m.target = null;
-    m.relatedTarget = null;
-    m.offsetX = 0;
-    m.offsetY = 0;
-    m.clientX = 0;
-    m.clientY = 0;
-    m.screenX = 0;
-    m.screenY = 0;
-    m.button = 0;
-    m.keyCode = 0;
-    m.charCode = 0;
-    m.ctrlKey = false;
-    m.altKey = false;
-    m.shiftKey = false;
-    m.metaKey = false;
-    m.Id = k;
-    m.init = function (a, b) {
-        var c = this.type = a.type;
-        x.call(this, c);
-        this.target = a.target || a.srcElement;
-        this.currentTarget = b;
-        var d = a.relatedTarget;
-        if (d) {
-            if (Ja) {
-                var e;
-                a: {
-                    try {
-                        Ya(d.nodeName);
-                        e = h;
-                        break a
-                    } catch (f) { }
-                    e = l
-                }
-                e || (d = k)
+    class CustomBrowserEvent extends CustomEvent {
+        constructor(event, currentTarget) {
+            super(event?.type || "generic");
+            if (event) this.init(event, currentTarget);
+        }
+
+        init(event, currentTarget) {
+            this.type = event.type;
+            this.target = event.target || event.srcElement;
+            this.currentTarget = currentTarget;
+
+            // relatedTarget normalization
+            let related = event.relatedTarget;
+            if (!related) {
+                if (this.type === "mouseover") related = event.fromElement;
+                else if (this.type === "mouseout") related = event.toElement;
             }
-        } else "mouseover" == c ? d = a.fromElement : "mouseout" == c && (d = a.toElement);
-        this.relatedTarget = d;
-        this.offsetX = Ka || a.offsetX !== g ? a.offsetX : a.layerX;
-        this.offsetY = Ka || a.offsetY !== g ? a.offsetY : a.layerY;
-        this.clientX = a.clientX !== g ? a.clientX : a.pageX;
-        this.clientY = a.clientY !== g ? a.clientY : a.pageY;
-        this.screenX = a.screenX || 0;
-        this.screenY = a.screenY || 0;
-        this.button = a.button;
-        this.keyCode = a.keyCode || 0;
-        this.charCode = a.charCode || ("keypress" == c ? a.keyCode : 0);
-        this.ctrlKey = a.ctrlKey;
-        this.altKey = a.altKey;
-        this.shiftKey = a.shiftKey;
-        this.metaKey = a.metaKey;
-        this.state = a.state;
-        this.Id = a;
-        a.defaultPrevented && this.preventDefault();
-        delete this.Ya
-    };
-    m.preventDefault = function () {
-        ab.superClass_.preventDefault.call(this);
-        var a = this.Id;
-        if (a.preventDefault) a.preventDefault();
-        else if (a.returnValue = l, $a) try {
-            if (a.ctrlKey || 112 <= a.keyCode && 123 >= a.keyCode) a.keyCode = -1
-        } catch (b) { }
-    };
-    m.h = function () { };
-    var bb = 0;
-    var cb = function () { };
-    m = cb.prototype;
-    m.key = 0;
-    m.Ha = l;
-    m.Qb = l;
-    m.init = function (a, b, c, d, e, f) {
-        if ("function" == typeOf(a)) this.Fd = h;
-        else if (a && a.handleEvent && "function" == typeOf(a.handleEvent)) this.Fd = l;
-        else throw Error("Invalid listener argument");
-        this.xa = a;
-        this.yd = b;
-        this.src = c;
-        this.type = d;
-        this.capture = !!e;
-        this.Lc = f;
-        this.Qb = l;
-        this.key = ++bb;
-        this.Ha = l
-    };
-    m.handleEvent = function (a) {
-        return this.Fd ? this.xa.call(this.Lc || this.src, a) : this.xa.handleEvent.call(this.xa, a)
-    };
+            this.relatedTarget = related;
+
+            // coordinate normalization
+            this.offsetX = event.offsetX ?? event.layerX ?? 0;
+            this.offsetY = event.offsetY ?? event.layerY ?? 0;
+            this.clientX = event.clientX ?? event.pageX ?? 0;
+            this.clientY = event.clientY ?? event.pageY ?? 0;
+            this.screenX = event.screenX || 0;
+            this.screenY = event.screenY || 0;
+
+            // mouse and keyboard info
+            this.button = event.button || 0;
+            this.keyCode = event.keyCode || 0;
+            this.charCode = event.charCode || (this.type === "keypress" ? event.keyCode : 0);
+
+            // modifier keys
+            this.ctrlKey = !!event.ctrlKey;
+            this.altKey = !!event.altKey;
+            this.shiftKey = !!event.shiftKey;
+            this.metaKey = !!event.metaKey;
+
+            // state (for pointer events, etc.)
+            this.state = event.state || null;
+
+            // store original DOM event
+            this.originalEvent = event;
+
+            // handle default prevention flag
+            if (event.defaultPrevented) this.preventDefault();
+        }
+
+        preventDefault() {
+            super.preventDefault();
+            const e = this.originalEvent;
+            if (e?.preventDefault) {
+                e.preventDefault();
+            } else {
+                e.returnValue = false;
+                try {
+                    // IE: disable function keys and Ctrl shortcuts
+                    if (e.ctrlKey || (e.keyCode >= 112 && e.keyCode <= 123))
+                        e.keyCode = -1;
+                } catch { }
+            }
+        }
+    }
+
+    let globalListenerId = 0;
+    class EventListenerEntry {
+        constructor() {
+            this.key = 0;            // unique ID
+            this.removed = false;    // true if listener was removed
+            this.once = false;       // true if one-time listener
+        }
+
+        init(callback, eventType, source, type, capture, context) {
+            if (typeof callback === "function") {
+                this.isFunctionHandler = true;
+            } else if (callback && typeof callback.handleEvent === "function") {
+                this.isFunctionHandler = false;
+            } else {
+                throw new Error("Invalid listener argument");
+            }
+
+            this.callback = callback;   // function or object with handleEvent()
+            this.eventType = eventType; // original event type
+            this.source = source;       // target element or emitter
+            this.type = type;           // actual event name
+            this.capture = !!capture;   // whether capturing
+            this.context = context;     // context binding
+            this.once = false;
+            this.key = ++globalListenerId;
+        }
+
+        handleEvent(event) {
+            if (this.isFunctionHandler) {
+                return this.callback.call(this.context || this.source, event);
+            } else {
+                return this.callback.handleEvent.call(this.callback, event);
+            }
+        }
+    }
+
     var db = {},
         D = {},
         eb = {},
@@ -605,15 +544,14 @@ var minutes = 6E4;
                 for (var A = 0; A < r.length; A++)
                     if (n = r[A], n.xa == c && n.Lc == f) {
                         if (n.Ha) break;
-                        d || (r[A].Qb = l);
+                        d || (r[A].once = l);
                         return r[A]
                     }
             } else r = n[q] = [], n.D++;
             A = ib();
-            n = new cb;
+            n = new EventListenerEntry();
             n.init(c, A, a, b, e, f);
-            n.Qb =
-                d;
+            n.once = d;
             A.src = a;
             A.xa = n;
             r.push(n);
@@ -679,8 +617,7 @@ var minutes = 6E4;
                 0 <= n && (assert(e.length != k), Array.prototype.splice.call(e, n, 1));
                 0 == e.length && delete eb[c]
             }
-            b.Ha =
-                h;
+            b.Ha = h;
             if (b = D[d][f][c]) b.Ed = h, nb(d, f, c, b);
             delete db[a];
             return h
@@ -692,18 +629,6 @@ var minutes = 6E4;
                 d.Ed = l;
                 0 == f && (delete D[a][b][c], D[a][b].D--, 0 == D[a][b].D && (delete D[a][b], D[a].D--), 0 == D[a].D && delete D[a])
             }
-        },
-        ob = function (a) {
-            var b = 0;
-            if (a != k) {
-                if (a = getUniqueId(a), eb[a]) {
-                    a = eb[a];
-                    for (var c = a.length - 1; 0 <= c; c--) mb(a[c].key), b++
-                }
-            } else forEachObject(db, function (a, c) {
-                mb(c);
-                b++
-            })
         },
         qb = function (a, b, c, d, e) {
             var f = 1;
@@ -750,7 +675,7 @@ var minutes = 6E4;
                 n = h in d;
                 q = l in d;
                 if (n) {
-                    if (0 > e.keyCode || e.returnValue != g) return h;
+                    if (0 > e.keyCode || e.returnValue != undefined) return h;
                     a: {
                         var r =
                             l;
@@ -760,10 +685,10 @@ var minutes = 6E4;
                         } catch (A) {
                             r = h
                         }
-                        if (r || e.returnValue == g) e.returnValue = h
+                        if (r || e.returnValue == undefined) e.returnValue = h
                     }
                 }
-                r = new ab;
+                r = new CustomBrowserEvent();
                 r.init(e, this);
                 e = h;
                 try {
@@ -783,39 +708,86 @@ var minutes = 6E4;
                 }
                 return e
             }
-            c = new ab(b, this);
+            c = new CustomBrowserEvent(b, this);
             return e = pb(a, c)
         };
-    var E = function (a) {
-        this.Hd = a;
-        this.w = []
-    };
-    inherit(E, Disposable);
-    var rb = [];
-    E.prototype.listen = function (a, b, c, d, e) {
-        isArray(b) || (rb[0] = b, b = rb);
-        for (var f = 0; f < b.length; f++) {
-            var n = gb(a, b[f], c || this, d || l, e || this.Hd || this);
-            this.w.push(n)
+
+    // EventManager handles adding, tracking, and cleaning up event listeners.
+    class EventManager extends Disposable {
+        constructor(context) {
+            super();
+            this.context = context;
+            this.listeners = [];
         }
-        return this
-    };
-    var sb = function (a, b, c, d, e, f) {
-        if (isArray(c))
-            for (var n = 0; n < c.length; n++) sb(a, b, c[n], d, e, f);
-        else b = kb(b, c, d || a, e, f || a.Hd || a), a.w.push(b)
-    };
-    E.prototype.Ad = function () {
-        ArrayUtils.forEach(this.w, mb);
-        this.w.length = 0
-    };
-    E.prototype.h = function () {
-        E.I.h.call(this);
-        this.Ad()
-    };
-    E.prototype.handleEvent = function () {
-        throw Error("EventHandler.handleEvent not implemented");
-    };
+
+        /**
+         * Add one or more event listeners.
+         * @param {EventTarget} target - The target to listen on.
+         * @param {string|string[]} eventTypes - Event name(s).
+         * @param {Function} handler - The function to call when the event occurs.
+         * @param {boolean} [useCapture=false] - Whether to use capture mode.
+         * @param {any} [scope=this.context] - The scope for the listener.
+         * @returns {EventManager} - Returns itself for chaining.
+         */
+        listen(target, eventTypes, handler, useCapture = false, scope = this.context) {
+            const events = Array.isArray(eventTypes) ? eventTypes : [eventTypes];
+            for (const event of events) {
+                const listener = gb(
+                    target,
+                    event,
+                    handler || this,
+                    useCapture,
+                    scope
+                );
+                this.listeners.push(listener);
+            }
+            return this;
+        }
+
+        /**
+         * Add multiple listeners using a helper.
+         */
+        addListeners(target, context, eventNames, handler, useCapture, scope) {
+            if (Array.isArray(eventNames)) {
+                for (const name of eventNames) {
+                    this.addListeners(target, context, name, handler, useCapture, scope);
+                }
+            } else {
+                const listener = bindEvent(
+                    context,
+                    eventNames,
+                    handler || target,
+                    useCapture,
+                    scope || this.context
+                );
+                this.listeners.push(listener);
+            }
+        }
+
+        /**
+         * Remove all tracked listeners.
+         */
+        clearAllListeners() {
+            this.listeners.forEach(removeEventListenerHelper);
+            this.listeners.length = 0;
+        }
+
+        /**
+         * Clean up event listeners when disposed.
+         */
+        dispose() {
+            super.dispose();
+            this.clearAllListeners();
+        }
+
+        /**
+         * Placeholder handler method.
+         * Should be overridden by subclasses.
+         */
+        handleEvent() {
+            throw new Error("EventManager.handleEvent not implemented");
+        }
+    }
 
     class EventDispatcher extends Disposable {
         constructor() {
@@ -825,11 +797,11 @@ var minutes = 6E4;
         }
 
         addEventListener(type, callback, useCapture, priority) {
-            addListener(this, type, callback, useCapture, priority);
+            gb(this, type, callback, useCapture, priority);
         }
 
         removeEventListener(type, callback, useCapture, priority) {
-            removeListener(this, type, callback, useCapture, priority);
+            lb(this, type, callback, useCapture, priority);
         }
 
         dispatchEvent(event) {
@@ -880,60 +852,11 @@ var minutes = 6E4;
         }
     }
 
-    var tb = function () { };
-    inherit(tb, Disposable);
-    m = tb.prototype;
-    m.xd = h;
-    m.Hc = k;
-    m.addEventListener = function (a, b, c, d) {
-        gb(this, a, b, c, d)
-    };
-    m.removeEventListener = function (a, b, c, d) {
-        lb(this, a, b, c, d)
-    };
-    m.dispatchEvent = function (a) {
-        var b = a.type || a,
-            c = D;
-        if (b in c) {
-            if (isString(a)) a = new CustomEvent(a, this);
-            else if (a instanceof CustomEvent) a.target = a.target || this;
-            else {
-                var d = a;
-                a = new CustomEvent(b, this);
-                deepAssign(a, d)
-            }
-            var d = 1,
-                e, c = c[b],
-                b = h in c,
-                f;
-            if (b) {
-                e = [];
-                for (f = this; f; f = f.Hc) e.push(f);
-                f = c[h];
-                f.R = f.D;
-                for (var n = e.length - 1; !a.Ya && 0 <= n && f.R; n--) a.currentTarget = e[n], d &= qb(f, e[n], a.type, h, a) && a.Vb != l
-            }
-            if (l in c)
-                if (f = c[l], f.R = f.D, b)
-                    for (n = 0; !a.Ya && n < e.length && f.R; n++) a.currentTarget = e[n], d &= qb(f, e[n], a.type, l, a) && a.Vb != l;
-                else
-                    for (e = this; !a.Ya && e && f.R; e = e.Hc) a.currentTarget =
-                        e, d &= qb(f, e, a.type, l, a) && a.Vb != l;
-            a = Boolean(d)
-        } else a = h;
-        return a
-    };
-    m.h = function () {
-        tb.I.h.call(this);
-        ob(this);
-        this.Hc = k
-    };
-
     class InputController extends EventDispatcher {
         constructor(element = document, preventDefault = false) {
             super();
             this.element = element;
-            this.handler = new EventHandler(this);
+            this.handler = new EventManager(this);
             this.preventDefault = preventDefault;
 
             this.handler.listen(this.element, "keydown", this.onKeyDown.bind(this));
@@ -961,12 +884,12 @@ var minutes = 6E4;
             let accel = event.accelerationIncludingGravity;
             if (accel) {
                 let x = accel.x;
-                let y = accel.Vc; // possibly typo for accel.y
+                let y = accel.y;
 
                 switch (orientation) {
-                    case 90:  x = -accel.y; y = accel.Vc; break;
-                    case -90: x = accel.y;  y = accel.Vc; break;
-                    case 180: x = -accel.x; y = accel.Vc; break;
+                    case 90:  x = -accel.y; y = accel.y; break;
+                    case -90: x = accel.y;  y = accel.y; break;
+                    case 180: x = -accel.x; y = accel.y; break;
                 }
 
                 let gamma = event.gamma || 57 * event.x || 2 * x;
@@ -1020,11 +943,10 @@ var minutes = 6E4;
         }
     }
 
-    // ActionEvent
-    class wb extends CustomEvent {
-        constructor(a) {
-            super("a");
-            this.Ie = a
+    class DirectionEvent extends CustomEvent {
+        constructor(direction) {
+            super("input");
+            this.direction = direction; // 1=up, 2=down, 3=left, 4=right
         }
     }
 
@@ -1063,7 +985,7 @@ var minutes = 6E4;
             }
 
             // Return the first supported property name
-            if (typeof doc[candidate] !== "undefined") return candidate;
+            if (typeof doc[candidate] !== undefined) return candidate;
         }
 
         return null;
@@ -1297,8 +1219,8 @@ var minutes = 6E4;
         constructor(x, y) {
             // `g` likely means undefined or null in the original code.
             // So if x or y are not provided, default to 0.
-            this.x = (typeof x !== 'undefined') ? x : 0;
-            this.y = (typeof y !== 'undefined') ? y : 0;
+            this.x = (typeof x !== undefined) ? x : 0;
+            this.y = (typeof y !== undefined) ? y : 0;
         }
 
         /** Returns a clone (copy) of this point. */
@@ -1348,115 +1270,116 @@ var minutes = 6E4;
     (!isGecko && !isIE) ||(isIE && getDocumentMode() >= 9) || (isGecko && versionAtLeast("1.9.1"));
     isIE && versionAtLeast("9");
 
-    var Pb = function (a, b) {
-        var c;
-        c = a.className;
-        c = isString(c) && c.match(/\S+/g) || [];
-        for (var d = ArrayUtils.slice(arguments, 1), e = c, f = 0; f < d.length; f++) 0 <= ArrayUtils.indexOf(e, d[f]) || e.push(d[f]);
-        a.className = c.join(" ")
-    };
-    var Rb = function (a, b, c) {
-        var d, e = isGecko && (isMac || isUnix) && versionAtLeast("1.9");
-        b instanceof Point ? (d = b.x, b = b.y) : (d = b, b = c);
-        a.style.left = Qb(d, e);
-        a.style.top = Qb(b, e)
-    },
-    Qb = function (a, b) {
-        "number" == typeof a && (a = (b ? Math.round(a) : a) + "px");
-        return a
-    },
-    Sb = function (a, b) {
-        var c = a.style;
-        "opacity" in c ? c.opacity = b : "MozOpacity" in c ? c.MozOpacity = b : "filter" in c && (c.filter = "" === b ? "" : "alpha(opacity=" + 100 * b + ")")
-    };
-    var Tb = function () {
-        this.pb = [];
-        this.ua = 0;
-        this.qb = this.ia = l
-    };
-    inherit(Tb, Disposable);
-    Tb.prototype.h = function () {
-        this.pb = [];
-        this.ua = 0;
-        this.qb = this.ia = l;
-        Tb.I.h.call(this)
-    };
-    Tb.prototype.tc = function () {
-        return this.ia
-    };
-    Tb.prototype.next = function (a, b, c, d) {
-        this.ua++;
-        this.ua >= this.pb.length && (this.ua = b ? 0 : this.pb.length - 1);
-        this.load(a, c, d)
-    };
-    var Ub = function (a, b) {
-        Tb.call(this);
-        this.pb = a;
-        this.H = k;
-        this.Dc = b || document.body;
-        this.Cc = l;
-        this.Wa = this.Lb = k;
-        this.ud = this.ua
-    };
-    inherit(Ub, Tb);
-    var Vb = [{
-        vd: ".mp3",
-        type: "audio/mpeg"
-    }, {
-        vd: ".ogg",
-        type: "audio/ogg"
-    }];
-    m = Ub.prototype;
-    m.h = function () {
-        this.pause();
-        this.Cc = l;
-        this.Wa = this.Lb = k;
-        this.H && this.Dc.removeChild(this.H);
-        Ub.I.h.call(this)
-    };
-    m.wd = function () {
-        this.qb = h;
-        this.Lb && this.Lb();
-        this.Cc && !this.ia && this.play(this.Wa)
-    };
-    m.Ce = function () {
-        this.ia = l;
-        this.Wa && this.Wa()
-    };
-    m.load = function (a, b, c) {
-        this.Cc = a;
-        this.Lb = b || k;
-        this.Wa = c || k;
-        if (this.H && this.ud == this.ua) this.qb && (this.pause(), this.H.currentTime = 0, this.wd());
-        else {
-            this.H && this.Dc.removeChild(this.H);
-            this.qb = l;
-            this.H = document.createElement("audio");
-            this.H.setAttribute("controls", "false");
-            this.H.setAttribute("preload", "auto");
-            this.H.style.display = "none";
-            gb(this.H, "canplay", this.wd, l, this);
-            gb(this.H, "ended", this.Ce, l, this);
-            a = this.pb[this.ua];
-            for (b = 0; c = Vb[b++];) {
-                var d = document.createElement("source");
-                d.setAttribute("src", a + c.vd);
-                d.setAttribute("type", c.type);
-                this.H.appendChild(d)
-            }
-            this.Dc.appendChild(this.H);
-            this.ud = this.ua
+    // Utility: Add class(es)
+    function addClass(el, ...classes) {
+        const existing = (el.className.match(/\S+/g) || []);
+        for (const cls of classes) {
+            if (!existing.includes(cls)) existing.push(cls);
         }
-    };
-    m.play = function (a) {
-        this.qb && !this.ia && (this.Wa = a || k, this.H.play(), this.ia = h)
-    };
-    m.pause = function () {
-        this.ia && (this.H.pause(), this.ia = l)
-    };
-    m.currentTime = function () {
-        return this.ia ? this.H.currentTime : 0
-    };
+        el.className = existing.join(" ");
+    }
+
+    // Utility: Set position
+    function setPosition(el, x, y) {
+        el.style.left = `${Math.round(x)}px`;
+        el.style.top = `${Math.round(y)}px`;
+    }
+
+    // Utility: Set opacity cross-browser
+    function setOpacity(el, value) {
+        const s = el.style;
+        if ('opacity' in s) s.opacity = value;
+        else if ('MozOpacity' in s) s.MozOpacity = value;
+        else if ('filter' in s) s.filter = value === "" ? "" : `alpha(opacity=${value * 100})`;
+    }
+
+    // Playlist base class
+    class Playlist {
+        constructor() {
+            this.tracks = [];
+            this.index = 0;
+            this.ready = false;
+            this.playing = false;
+        }
+
+        reset() {
+            this.tracks = [];
+            this.index = 0;
+            this.ready = this.playing = false;
+        }
+
+        next(loop = false) {
+            this.index++;
+            if (this.index >= this.tracks.length) this.index = loop ? 0 : this.tracks.length - 1;
+            this.load();
+        }
+    }
+
+    // HTML5 audio player subclass
+    class AudioPlayer extends Playlist {
+        constructor(tracks, container = document.body) {
+            super();
+            this.tracks = tracks;
+            this.container = container;
+            this.audio = null;
+            this.onReady = null;
+            this.onEnd = null;
+        }
+
+        load(onReady, onEnd) {
+            this.onReady = onReady;
+            this.onEnd = onEnd;
+
+            if (this.audio) this.container.removeChild(this.audio);
+
+            const audio = document.createElement("audio");
+            audio.preload = "auto";
+            audio.controls = false;
+            audio.style.display = "none";
+
+            const track = this.tracks[this.index];
+            for (const { vd, type } of [
+                { vd: ".mp3", type: "audio/mpeg" },
+                { vd: ".ogg", type: "audio/ogg" }
+            ]) {
+                const source = document.createElement("source");
+                source.src = track + vd;
+                source.type = type;
+                audio.appendChild(source);
+            }
+
+            audio.addEventListener("canplay", () => {
+                this.ready = true;
+                if (this.onReady) this.onReady();
+            });
+
+            audio.addEventListener("ended", () => {
+                this.playing = false;
+                if (this.onEnd) this.onEnd();
+            });
+
+            this.container.appendChild(audio);
+            this.audio = audio;
+        }
+
+        play() {
+            if (this.ready && !this.playing) {
+                this.audio.play();
+                this.playing = true;
+            }
+        }
+
+        pause() {
+            if (this.playing) {
+                this.audio.pause();
+                this.playing = false;
+            }
+        }
+
+        currentTime() {
+            return this.playing ? this.audio.currentTime : 0;
+        }
+    }
 
     /**
      * ImageLoader class — loads an image and notifies listeners when ready.
@@ -1971,6 +1894,233 @@ var minutes = 6E4;
         [834, 509, 38, 23],
         [314, 0, 38, 23]
     ];
+
+    class Sprite extends EventDispatcher {
+        constructor(frameId) {
+            super();
+
+            // Current frame identifier (like image or tile type)
+            this.frameId = frameId;
+
+            // Rotation (0, 90, 180, 270 degrees)
+            this.rotation = 0;
+
+            // DOM element (the sprite's visual)
+            this.element = SpriteManager.createFrame(this._getFrameSource());
+
+            // Position and movement state
+            this.gridX = 0;
+            this.gridY = 0;
+            this.pixelX = 0;
+            this.pixelY = 0;
+
+            // Flip / mirror state
+            this.isFlipped = false;
+
+            // Visible flag
+            this.visible = true;
+
+            // Cached dimensions
+            this.height = SpriteManager.getHeight(this._getFrameSource());
+            this.width = SpriteManager.getWidth(this._getFrameSource());
+
+            // Active animation and effect references
+            this.animation = null;
+            this.transition = null;
+
+            // Flags
+            this.isTransitioning = false;
+            this.isLooping = false;
+
+            // Timers for queued animations
+            this.timeouts = [];
+        }
+
+        // Returns DOM element of the sprite
+        getElement() {
+            return this.element;
+        }
+
+        // Get width / height from manager
+        getWidth() {
+            return SpriteManager.getWidth(this._getFrameSource());
+        }
+        getHeight() {
+            return SpriteManager.getHeight(this._getFrameSource());
+        }
+
+        // Private: frame source (can change by rotation or animation)
+        _getFrameSource(sourceOverride) {
+            const src = sourceOverride === undefined ? this.frameId : sourceOverride;
+            return Array.isArray(src) ? src[Math.floor(this.rotation / 90)] : src;
+        }
+
+        // Returns frameId
+        getFrameId() {
+            return this.frameId;
+        }
+
+        // Returns current rotation
+        getRotation() {
+            return this.rotation;
+        }
+
+        // Update position (absolute)
+        static setPosition(sprite, x, y) {
+            if (sprite.element) {
+                sprite.pixelX = Math.floor(x);
+                sprite.pixelY = Math.floor(y);
+                setPosition(sprite.element, sprite.pixelX, sprite.pixelY);
+            }
+        }
+
+        // Move to grid coordinates (translates grid→pixel position)
+        static moveToGrid(sprite, gridX, gridY) {
+            if (!sprite.element) return;
+
+            sprite.gridX = gridX;
+            sprite.gridY = gridY;
+            sprite.pixelX = Math.floor(20 * gridX);
+            sprite.pixelY = Math.floor(20 * gridY);
+
+            const widthOffset = sprite.width - 20;
+            const heightOffset = sprite.height - 20;
+
+            switch (sprite.rotation) {
+                case 0: break;
+                case 90: sprite.pixelX -= heightOffset; break;
+                case 180: sprite.pixelX -= widthOffset; sprite.pixelY -= heightOffset; break;
+                case 270: sprite.pixelY -= widthOffset; break;
+            }
+
+            Sprite.setPosition(sprite, sprite.pixelX, sprite.pixelY);
+        }
+
+        // Change z-index
+        static setZIndex(sprite, z) {
+            sprite.element.style.zIndex = z;
+        }
+
+        // Change frame
+        static setFrame(sprite, frameId) {
+            if (sprite.element) {
+                Sprite._updateSize(sprite, frameId);
+                if (sprite.frameId !== frameId) {
+                    sprite.frameId = frameId;
+                    Sprite._updateBackground(sprite);
+                }
+            }
+        }
+
+        // Private: refresh background position for current frame
+        static _updateBackground(sprite) {
+            const frame = SpriteManager.frames[sprite._getFrameSource(sprite.frameId)];
+            const pos = frame ? `-${frame[0]}px -${frame[1]}px` : undefined;
+            sprite.element.style.backgroundPosition = pos;
+            if (sprite.isLooping) Sprite.moveToGrid(sprite, sprite.gridX, sprite.gridY);
+        }
+
+        // Cleanup
+        dispose() {
+            if (this.element && this.element.parentNode) {
+                this.element.parentNode.removeChild(this.element);
+            }
+            this.element = null;
+            super.dispose();
+        }
+
+        // Rotation logic
+        rotate(angle) {
+            if (this.rotation !== angle || this.isFlipped) {
+                this.rotation = angle;
+                this.isFlipped = false;
+                Sprite._updateSize(this, this.frameId);
+                Sprite._updateBackground(this);
+            }
+        }
+
+        // Flip vertically
+        flip() {
+            if (!this.isFlipped) {
+                this.rotation = 180;
+                this.isFlipped = true;
+                Sprite._updateSize(this, this.frameId);
+                Sprite._updateBackground(this);
+            }
+        }
+
+        // Apply scale transform
+        scale(scaleX, scaleY) {
+            let transform = "";
+            if (scaleX !== undefined) transform += ` scaleX(${scaleX})`;
+            if (scaleY !== undefined) transform += ` scaleY(${scaleY})`;
+
+            for (const prefix of vendorPrefixes) {
+                this.element.style[`${prefix}Transform`] = transform;
+            }
+        }
+
+        // Show / hide sprite
+        show(visible) {
+            if (this.visible !== visible) {
+                this.visible = visible;
+                this.element.style.display = visible ? "" : "none";
+            }
+        }
+
+        // Fade out
+        static fadeOut(sprite) {
+            Sprite._animateOpacity(sprite, 300, 1, 0);
+        }
+
+        // Fade animation helper
+        static _animateOpacity(sprite, duration, from, to) {
+            if (sprite.animation && sprite.animation.stop) sprite.animation.stop();
+            sprite.animation = new AnimationSequence();
+            sprite.animation.addStep(createOpacityAnimator(sprite.element, from, to), duration);
+            sprite.animation.play();
+        }
+
+        // Play frame animation sequence
+        playFrameSequence(frames, delay, repeatDelay, repeatCount = 1, looping = false) {
+            if (repeatDelay) {
+                this.timeouts.push(setTimeout(() => {
+                    this.playFrameSequence(frames, delay, 0, repeatCount, looping);
+                }, repeatDelay));
+                return;
+            }
+
+            if (this.transition && this.transition.isPlaying()) {
+                if (this.isTransitioning) return;
+                this.transition.stop();
+            }
+
+            this.transition = new AnimationSequence();
+
+            for (let i = 0; i < repeatCount; i++) {
+                frames.forEach(frame => {
+                    this.transition.addStep(() => Sprite.setFrame(this, frame));
+                    addPauseStep(this.transition, delay);
+                });
+            }
+
+            this.transition.play();
+            this.isTransitioning = looping;
+        }
+
+        // Internal helper to update size when frame changes
+        static _updateSize(sprite, frameId) {
+            const frameSource = sprite._getFrameSource(frameId);
+            const w = SpriteManager.getWidth(frameSource);
+            const h = SpriteManager.getHeight(frameSource);
+            sprite.width = w;
+            sprite.height = h;
+            sprite.element.style.width = `${w + 1}px`;
+            sprite.element.style.height = `${h + 1}px`;
+        }
+    }
+    let SpriteManager = null;
+
     var N = function (a) {
         this.Q = a;
         this.T = 0;
@@ -2014,7 +2164,7 @@ var minutes = 6E4;
         return this.T
     };
     var O = function (a, b, c) {
-        a.s && (a.k = Math.floor(b), a.o = Math.floor(c), Rb(a.s, a.k, a.o))
+        a.s && (a.k = Math.floor(b), a.o = Math.floor(c), setPosition(a.s, a.k, a.o))
     },
         uc = function (a, b, c) {
             if (a.s) {
@@ -2059,7 +2209,7 @@ var minutes = 6E4;
         },
         wc = function (a) {
             var b;
-            b = (b = M.frames[mc(a, a.Q)]) ? -(b[0] + 0) + "px " + -(b[1] + 0) + "px" : g;
+            b = (b = M.frames[mc(a, a.Q)]) ? -(b[0] + 0) + "px " + -(b[1] + 0) + "px" : undefined;
             a.s.style.backgroundPosition = b;
             a.Eb && uc(a, a.md, a.nd)
         };
@@ -2133,13 +2283,7 @@ var minutes = 6E4;
         }
     }
 
-    var Ac = function (a) {
-        a.X && (a.X.stop(), a.uc = l, ArrayUtils.forEach(a.kd, function (a) {
-            clearTimeout(a)
-        }));
-        a.ra && a.ra.stop()
-    },
-        qc = [111, 114, 112, 113],
+    var qc = [111, 114, 112, 113],
         Bc = [173, 176, 174, 175],
         Cc = [159, 162, 160, 161],
         Dc = [155, 158, 156, 157],
@@ -2376,7 +2520,7 @@ var minutes = 6E4;
         };
     inherit(xd, Disposable);
     var wd = function (a, b, c) {
-        var d = new N(td[0]);
+        var d = new Sprite(td[0]);
         d.show(l);
         P(d, -2);
         O(d, b, c);
@@ -2431,7 +2575,7 @@ var minutes = 6E4;
             var b = this.Mb.shift(),
                 b = yd(b, ud, 2),
                 c;
-            for (c in b) Ac(this.P[c]), b[c] != k ? (Q(this.P[c], b[c]), yc(this.P[c], 300, 0, 1)) : this.P[c].s.style.opacity = 0;
+            for (c in b) stopAllAnimations(this.P[c]), b[c] != k ? (Q(this.P[c], b[c]), yc(this.P[c], 300, 0, 1)) : this.P[c].s.style.opacity = 0;
             this.Ob = a;
             this.pd = b[1] != k
         }
@@ -2458,7 +2602,7 @@ var minutes = 6E4;
     var Bd = function (a, b, c) {
         this.M = [];
         for (var d = 0; 4 > d; d++) {
-            var e = new N(td[0]);
+            var e = new Sprite(td[0]);
             O(e, a + 10 * d, b);
             c.appendChild(e.aa());
             this.M.push(e)
@@ -2485,65 +2629,93 @@ var minutes = 6E4;
         });
         Bd.I.h.call(this)
     };
-    var S = function (a, b, c, d, e) {
-        N.call(this, a);
-        O(this, b, c);
-        e && P(this, e);
-        d.appendChild(this.aa());
-        this.v = d;
-        this.Fc = []
-    };
-    inherit(S, N);
-    S.prototype.add = function (a) {
-        this.Fc.push(a)
-    };
-    S.prototype.show = function (a) {
-        S.superClass_.show.call(this, a);
-        ArrayUtils.forEach(this.Fc, function (b) {
-            b.show(a)
-        })
-    };
-    S.prototype.h = function () {
-        ArrayUtils.forEach(this.Fc, function (a) {
-            a.C()
-        });
-        S.superClass_.h.call(this)
-    };
-    var Cd = function (a, b, c, d, e) {
-        S.call(this, a, b, c, d, e);
-        this.B = new E(this);
-        this.B.listen(this.s, "click", this.Ee);
-        this.B.listen(this.s, "mousedown", this.Fe);
-        this.B.listen(this.s, "mouseover", this.He);
-        this.B.listen(this.s, "mouseout", this.Ge);
-        this.s.style.cursor = "pointer"
-    };
-    inherit(Cd, S);
-    m = Cd.prototype;
-    m.h = function () {
-        this.B.C();
-        this.B = k;
-        Cd.I.h.call(this)
-    };
-    m.Ee = function () {
-        this.dispatchEvent("click")
-    };
-    m.Fe = function () {
-        this.dispatchEvent("mousedown")
-    };
-    m.He = function () {
-        this.dispatchEvent("mouseover")
-    };
-    m.Ge = function () {
-        this.dispatchEvent("mouseout")
-    };
+
+    class SpriteGroup extends Sprite {
+        /**
+         * @param {any} frameId - Frame or image identifier (passed to Sprite)
+         * @param {number} x - X position
+         * @param {number} y - Y position
+         * @param {HTMLElement} container - Parent DOM element
+         * @param {number} [zIndex] - Optional z-index
+         */
+        constructor(frameId, x, y, container, zIndex) {
+            super(frameId);                     // Call base sprite constructor
+            Sprite.setPosition(this, x, y);     // Set initial position
+            if (zIndex) Sprite.setZIndex(this, zIndex);  // Optional z-index
+            container.appendChild(this.getElement());
+            this.container = container;
+
+            // Child sprites attached to this one
+            this.children = [];
+        }
+
+        /** Add a child sprite */
+        add(childSprite) {
+            this.children.push(childSprite);
+        }
+
+        /** Show or hide this sprite and all its children */
+        show(visible) {
+            super.show(visible);
+            this.children.forEach(child => child.show(visible));
+        }
+
+        /** Dispose of this sprite and its children */
+        dispose() {
+            this.children.forEach(child => child.dispose());
+            super.dispose();
+        }
+    }
+
+    // Clickable UI Element Class
+    class ClickableElement extends SpriteGroup {
+        constructor(id, width, height, parent, style) {
+            super(id, width, height, parent, style);
+
+            this.eventManager = new EventManager(this);
+
+            // Attach mouse event listeners
+            this.eventManager.listen(this.element, "click", this.handleClick.bind(this));
+            this.eventManager.listen(this.element, "mousedown", this.handleMouseDown.bind(this));
+            this.eventManager.listen(this.element, "mouseover", this.handleMouseOver.bind(this));
+            this.eventManager.listen(this.element, "mouseout", this.handleMouseOut.bind(this));
+
+            // Indicate interactivity
+            this.element.style.cursor = "pointer";
+        }
+
+        // Cleanup
+        destroy() {
+            this.eventManager.dispose();
+            this.eventManager = null;
+            super.destroy();
+        }
+
+        // Event Handlers
+        handleClick() {
+            this.dispatchEvent("click");
+        }
+
+        handleMouseDown() {
+            this.dispatchEvent("mousedown");
+        }
+
+        handleMouseOver() {
+            this.dispatchEvent("mouseover");
+        }
+
+        handleMouseOut() {
+            this.dispatchEvent("mouseout");
+        }
+    }
+
     var Dd = function () {
         this.Y = []
     };
     inherit(Dd, Disposable);
     defineSingleton(Dd);
     Dd.prototype.get = function () {
-        return !this.Y.length ? new N(57) : this.Y.shift()
+        return !this.Y.length ? new Sprite(57) : this.Y.shift()
     };
     Dd.prototype.h = function () {
         ArrayUtils.forEach(this.Y, function (a) {
@@ -2600,13 +2772,13 @@ var minutes = 6E4;
         var a = this.Y,
             b = this.a;
         b.show(l);
-        Ac(b);
+        stopAllAnimations(b);
         b.Eb = l;
         a.Y.push(b);
         a = this.Y;
         b = this.J;
         b.show(l);
-        Ac(b);
+        stopAllAnimations(b);
         b.Eb = l;
         a.Y.push(b);
         this.ic = k;
@@ -2649,14 +2821,14 @@ var minutes = 6E4;
     var Gd = function (a, b, c) {
         a.cc == c && a.jd == b || (15 < b || -15 > b) || (a.jd = b, a.cc = c, O(a.a, a.hb - b, a.ib - c), c = 1 - (1 - 0.7) * c / 40, a.J.scale(c, c), b && O(a.J, a.nc - b, a.qd))
     },
-        Jd = function (a, b) {
-            b.appendChild(a.a.aa());
-            b.appendChild(a.J.aa())
-        },
-        Kd = function (a, b) {
-            a.Qa = b;
-            a.Ud()
-        };
+    Jd = function (a, b) {
+        b.appendChild(a.a.aa());
+        b.appendChild(a.J.aa())
+    },
+    Kd = function (a, b) {
+        a.Qa = b;
+        a.Ud()
+    };
     m = T.prototype;
     m.Jb = function () {
         return this.Qa
@@ -2949,15 +3121,37 @@ var minutes = 6E4;
     }
     defineSingleton(GridPatternManager);
 
-    ne = function (a) {
-        var b = a.availableCells.getValues(),
-            b = b.filter(function (a) {
-                return 22 != a % 23 && 0 <= ArrayUtils.indexOf(b, a + 1) && 0 <= ArrayUtils.indexOf(b, a + 23) && 0 <= ArrayUtils.indexOf(b, a + 23 + 1)
-            });
-        if (!b.length) return -1;
-        a = b[random(b.length)];
-        return [a, a + 1, a + 23, a + 23 + 1]
-    };
+    /**
+     * Finds a 2x2 block of available cells in the grid.
+     * @param {Object} gridManager - Object containing availableCells (with getValues method)
+     * @returns {Array|number} - Array of 4 cell indices or -1 if none found
+     */
+    function find2x2Block(gridManager) {
+        // Get all available cell indices
+        const cells = gridManager.availableCells.getValues();
+
+        // Filter cells that can form a valid 2x2 block
+        const validCells = cells.filter(index => {
+            // Check right and bottom neighbors exist
+            const right = cells.includes(index + 1);
+            const bottom = cells.includes(index + 23);
+            const bottomRight = cells.includes(index + 23 + 1);
+
+            // Prevent wrapping to next row
+            const notLastColumn = index % 23 !== 22;
+
+            return notLastColumn && right && bottom && bottomRight;
+        });
+
+        if (validCells.length === 0) return -1;
+
+        // Pick a random starting cell
+        const start = validCells[Math.floor(Math.random() * validCells.length)];
+
+        // Return the 4 indices forming the 2x2 block
+        return [start, start + 1, start + 23, start + 23 + 1];
+    }
+    ne = find2x2Block;
 
     var me = function (a) {
         if (a.availableCells.Nc()) return -1;
@@ -3010,7 +3204,7 @@ var minutes = 6E4;
             this.Ca = new SetEx;
             this.Ec = getTime();
             this.spawnRate = 1;
-            this.spawnArea = new S(88, -3, -3, this.v);
+            this.spawnArea = new SpriteGroup(88, -3, -3, this.v);
         }
         jb(a) {
             te(this, a);
@@ -3120,7 +3314,7 @@ var minutes = 6E4;
         Re = tc[3],
         Ee = Cc,
         Se = function (a, b, c) {
-            a = new N(a);
+            a = new Sprite(a);
             a.show(l);
             P(a, b);
             a.Eb = h;
@@ -3323,7 +3517,7 @@ var minutes = 6E4;
                     e;
                 0 == a.W ?
                     (e = d.wc.get([a.oa, a.F]), e = 3 == e ? Oe : Pe) : (e = d.$.get([a.oa, a.F]), e = 3 == e ? Qe : Re, a.a.rotate(d.Na(a.oa)));
-                Ac(a.a);
+                stopAllAnimations(a.a);
                 Q(a.a, e[c])
             }
         };
@@ -3383,9 +3577,9 @@ var minutes = 6E4;
     var $ = function (a) {
         this.v = a;
         this.fa = createDiv();
-        Pb(this.fa, "grids");
+        addClass(this.fa, "grids");
         this.v.appendChild(this.fa);
-        Rb(this.fa, jf.x, jf.y);
+        setPosition(this.fa, jf.x, jf.y);
         this.cd = 0;
         this.i = "unstarted";
         this.Vd = getTime();
@@ -3403,15 +3597,15 @@ var minutes = 6E4;
         this.N = new Fe(this.fa);
         snakeClass = this.N;
         this.Zc = new InputController(this.v, h);
-        this.B = new E(this);
+        this.B = new EventManager(this);
         this.bb = ObjectPoolManager.getInstance();
-        this.ca = new Cd(12, Z.x, Z.y, this.v, 101);
+        this.ca = new ClickableElement(12, Z.x, Z.y, this.v, 101);
         this.ca.show(l);
-        this.La = new Cd(90, kf.x, kf.y, this.v, 100);
+        this.La = new ClickableElement(90, kf.x, kf.y, this.v, 100);
         this.La.show(l);
         this.Ka = h;
-        this.la = new Ub(["./snakeyear/snake"], this.v);
-        this.cb = new S(31, lf.x, lf.y, this.v, 100);
+        this.la = new AudioPlayer(["./snakeyear/snake"], this.v);
+        this.cb = new SpriteGroup(31, lf.x, lf.y, this.v, 100);
         this.cb.show(l);
         this.fb = k;
         this.eb = [];
@@ -3425,9 +3619,9 @@ var minutes = 6E4;
         this.Ja = new VisibilityTimer(3E4, bind(this.$d, this), bind(this.ae, this));
         this.bd = !(!a || !a.standalone);
         window.isAnimationPaused = l;
-        new S(19, mf.x, mf.y, this.v, 100);
-        this.Cb = new S(36, nf.x + 99, nf.y, this.v, -1);
-        this.Db = new S(53, of.x - 99, of.y, this.v, -1);
+        new SpriteGroup(19, mf.x, mf.y, this.v, 100);
+        this.Cb = new SpriteGroup(36, nf.x + 99, nf.y, this.v, -1);
+        this.Db = new SpriteGroup(53, of.x - 99, of.y, this.v, -1);
         this.Cb.show(l);
         this.Db.show(l);
         this.za = new Bd(pf.x, pf.y, this.v);
@@ -3435,7 +3629,7 @@ var minutes = 6E4;
         this.ya = new xd(qf, this.v);
         for (a = 0; a < rf.length; a++) {
             var b = rf[a],
-                c = new N(33);
+                c = new Sprite(33);
             c.show(l);
             O(c, b.x, b.y);
             this.v.appendChild(c.aa());
@@ -3645,25 +3839,25 @@ var minutes = 6E4;
         Rf = function (a) {
             isOver = true;
             if (a.Aa) {
-                Sb(a.fa, 0.3);
+                setOpacity(a.fa, 0.3);
                 Q(a.hc, xf[(80 > a.z ? 1 : 150 > a.z ? 2 : 3) - 1]);
                 var b = yd(a.z, vd);
                 a.Aa.show(h);
                 for (var c in b) b[c] != k ? (a.Ma[c].show(h), Q(a.Ma[c], b[c])) : a.Ma[c].show(l)
             } else {
-                a.Aa = new S(61, sf.x, sf.y, a.v, 100);
+                a.Aa = new SpriteGroup(61, sf.x, sf.y, a.v, 100);
                 if (!a.bd) {
-                    var q = new Cd(52, vf.x, vf.y, a.v, 101);
+                    var q = new ClickableElement(52, vf.x, vf.y, a.v, 101);
                     a.B.listen(q, "click", a.ze);
                     a.B.listen(q, "mouseover", Kf(q, Ff, vf, 28));
                     a.B.listen(q, "mouseout", Kf(q, If, vf, 28));
                     a.Aa.add(q)
-                } a.hc = new S(xf[(80 > a.z ? 1 : 150 > a.z ? 2 : 3) - 1], wf.x, wf.y, a.v, 101);
+                } a.hc = new SpriteGroup(xf[(80 > a.z ? 1 : 150 > a.z ? 2 : 3) - 1], wf.x, wf.y, a.v, 101);
                 a.Aa.add(a.hc);
                 var b = yd(a.z, vd),
                     r;
-                for (r in b) c = b[r], a.Ma[r] = new S(c == k ? td[0] : c, yf[r].x, yf[r].y, a.v, 101), c == k && a.Ma[r].show(l), a.Aa.add(a.Ma[r]);
-                Sb(a.fa, 0.3)
+                for (r in b) c = b[r], a.Ma[r] = new SpriteGroup(c == k ? td[0] : c, yf[r].x, yf[r].y, a.v, 101), c == k && a.Ma[r].show(l), a.Aa.add(a.Ma[r]);
+                setOpacity(a.fa, 0.3)
             }
         };
     $.prototype.Xd = function (a) {
@@ -3680,13 +3874,13 @@ var minutes = 6E4;
         }, this));
         a.addStep(bind(function (a) {
             O(this.ca, Z.x, Z.y + 80 * a * a);
-            Sb(this.ca.aa(), 1 - a * a)
+            setOpacity(this.ca.aa(), 1 - a * a)
         }, this), 700);
         addPauseStep(a, 200);
         a.addStep(bind(function () {
             this.cb.show(l);
             this.ca.show(l);
-            Sb(this.fa, 1)
+            setOpacity(this.fa, 1)
         }, this));
         a.addStep(bind(function () {
             this.Cb.show(h);
@@ -3706,10 +3900,10 @@ var minutes = 6E4;
         a.play()
     };
     var Of = function (a) {
-        a.fb = new Cd(94, zf.x, zf.y, a.v, 100);
-        for (var b in Bf) a.eb[b] = new Cd(Bf[b][0], Af[b].x, Af[b].y, a.v, 101), a.B.listen(a.eb[b], "click", a.td), a.fb.add(a.eb[b]);
+        a.fb = new ClickableElement(94, zf.x, zf.y, a.v, 100);
+        for (var b in Bf) a.eb[b] = new ClickableElement(Bf[b][0], Af[b].x, Af[b].y, a.v, 101), a.B.listen(a.eb[b], "click", a.td), a.fb.add(a.eb[b]);
         a.i = "tutorial_start";
-        a.B.listen(a.fb, "click", a.td);
+        a.eventManager.listen(a.fb, "click", a.td);
         a.sd()
     };
     $.prototype.td = function () {
@@ -3743,7 +3937,7 @@ var minutes = 6E4;
         this.la.H.muted = this.Ka ? l : h
     };
     m.ze = function () {
-        Sb(this.fa, 1);
+        setOpacity(this.fa, 1);
         this.Aa.show(l);
         Nf(this);
     };
@@ -3758,7 +3952,7 @@ var minutes = 6E4;
     };
     m.h = function () {
         this.i = "stop";
-        la(this.B);
+        safeDispose(this.B);
         this.dc && this.dc.stop();
         this.fc && this.fc.stop();
         this.ec && this.ec.stop();
@@ -3773,15 +3967,16 @@ var minutes = 6E4;
         this.Ja.C();
         $.I.h.call(this)
     };
-    var logoElement = k;
-    var logoController = k;
+
+    var logoElement = null;
+    var logoController = null;
     (function(callInit){
         callInit();
     })(function init() {
         if (logoElement = document.getElementById("hplogo")) {
             // Sprite / resource loader for the doodle
-            M = new SpriteSheet("./snakeyear/snakeyear-sprite.png", lc);
-            M.load();
+            SpriteManager = new SpriteSheet("./snakeyear/snakeyear-sprite.png", lc);
+            SpriteManager.load();
 
             // Build a configuration set (rc) with many keys enabled
             var enabledSet = new MapEx();
