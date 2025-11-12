@@ -19,12 +19,6 @@ var minutes = 6E4;
         return typeOf(value) === "array";
     }
 
-    /** Checks if the value is array-like (Array or object with a numeric length). */
-    function isArrayLike(value) {
-        const type = typeOf(value);
-        return type === "array" || (type === "object" && typeof value.length === "number");
-    }
-
     /**
      * Returns or assigns a unique ID to the given object.
      * Used to differentiate between objects in maps or sets.
@@ -38,31 +32,6 @@ var minutes = 6E4;
 
     /** Global incremental counter for unique IDs. */
     let uniqueIdCounter = 0;
-
-    /**
-     * Creates a function bound to a specific `this` value and optionally prepends arguments.
-     * Similar to `Function.prototype.bind`.
-     */
-    function bindWithArgs(fn, context, ...presetArgs) {
-        if (!fn) throw new Error("bindWithArgs: function is undefined");
-        return function (...args) {
-            return fn.apply(context, [...presetArgs, ...args]);
-        };
-    }
-
-    /**
-     * A universal `bind` function fallback — uses native `Function.bind` if available,
-     * otherwise uses the custom `bindWithArgs` implementation.
-     */
-    function bind(fn, context, ...args) {
-        // Replace itself after first call to optimize performance.
-        bind = (Function.prototype.bind &&
-                Function.prototype.bind.toString().includes("native code"))
-            ? Function.prototype.bind
-            : bindWithArgs;
-
-        return bind.apply(null, [fn, context, ...args]);
-    }
 
     /**
      * Adds a static singleton getter to a class.
@@ -99,24 +68,27 @@ var minutes = 6E4;
         childCtor.prototype = new TempConstructor();
     }
 
-    function bind(fn, thisArg, ...args) {
-        return fn.bind(thisArg, ...args);
+    /**
+     * Creates a new function that pre-applies some arguments before the rest.
+     * Similar to Function.prototype.bind but without binding 'this'.
+     *
+     * @param {Function} func - The target function.
+     * @param {...*} presetArgs - Arguments to pre-apply.
+     * @returns {Function} - A function that calls func with the presetArgs + newArgs.
+     */
+    function partialApply(func, ...presetArgs) {
+        return function (...newArgs) {
+            const allArgs = [...presetArgs, ...newArgs];
+            return func.apply(this, allArgs);
+        };
     }
 
-    function typeOf(a) {
-        var b = typeof a;
-        if ("object" == b)
-            if (a) {
-                if (a instanceof Array) return "array";
-                if (a instanceof Object) return b;
-                var c = Object.prototype.toString.call(a);
-                if ("[object Window]" == c) return "object";
-                if ("[object Array]" == c || "number" == typeof a.length && undefined != typeof a.splice && undefined != typeof a.propertyIsEnumerable && !a.propertyIsEnumerable("splice")) return "array";
-                if ("[object Function]" == c || undefined !=
-                    typeof a.call && undefined != typeof a.propertyIsEnumerable && !a.propertyIsEnumerable("call")) return "function"
-            } else return "null";
-        else if ("function" == b && undefined == typeof a.call) return "object";
-        return b
+    function typeOf(value) {
+        if (value === null) return "null";
+        if (value instanceof Array) return "array";
+        if (value instanceof Function) return "function";
+        if (value instanceof Object) return "object";
+        return typeof value;
     }
 
     Function.prototype.bind = Function.prototype.bind || function (a, b) {
@@ -376,8 +348,7 @@ var minutes = 6E4;
         if (versionCache[targetVersion] !== undefined)
             return versionCache[targetVersion];
 
-        const normalize = str =>
-            String(str).trim().split(".").map(x => x || "0");
+        const normalize = str => String(str).trim().split(".").map(x => x || "0");
 
         const aParts = normalize(browserVersion);
         const bParts = normalize(targetVersion);
@@ -472,320 +443,349 @@ var minutes = 6E4;
         }
     }
 
-    let globalListenerId = 0;
-    class EventListenerEntry {
-        constructor() {
-            this.key = 0;            // unique ID
-            this.removed = false;    // true if listener was removed
-            this.once = false;       // true if one-time listener
-        }
-
-        init(callback, eventType, source, type, capture, context) {
-            if (typeof callback === "function") {
-                this.isFunctionHandler = true;
-            } else if (callback && typeof callback.handleEvent === "function") {
-                this.isFunctionHandler = false;
-            } else {
-                throw new Error("Invalid listener argument");
-            }
-
-            this.callback = callback;   // function or object with handleEvent()
-            this.eventType = eventType; // original event type
-            this.source = source;       // target element or emitter
-            this.type = type;           // actual event name
-            this.capture = !!capture;   // whether capturing
-            this.context = context;     // context binding
+    // Listener class
+    var ListenerKeyCount = 0;
+    class Listener {
+        constructor(handler, target, type, capture, context) {
+            this.key = ++ListenerKeyCount;
+            this.handler = handler;
+            this.target = target;
+            this.type = type;
+            this.capture = capture;
+            this.context = context;
+            this.removed = false;
             this.once = false;
-            this.key = ++globalListenerId;
+
+            this.callback = (event) => this.invoke(event);
         }
 
-        handleEvent(event) {
-            if (this.isFunctionHandler) {
-                return this.callback.call(this.context || this.source, event);
-            } else {
-                return this.callback.handleEvent.call(this.callback, event);
+        invoke(event) {
+            if (this.removed) return false;
+            const result = this.handler.call(this.context || this.target, event);
+            if (this.once) unbindListener(this.key);
+            return result;
+        }
+    }
+
+    // Event listener registries
+    const listenerRegistry = {};
+    const eventTypeRegistry = {};
+    const nodeListeners = {};
+    const legacyEventNames = {};
+
+    // Add event listener
+    function addListener(target, type, handler, capture = false, context) {
+        if (Array.isArray(type)) {
+            type.forEach(t => {
+                console.log(t);
+                addListener(target, t, handler, capture, context)
+            });
+            return null;
+        }
+
+        const listener = registerListener(target, type, handler, false, capture, context);
+        console.log(listener);
+        listenerRegistry[listener.key] = listener;
+        return listener.key;
+    }
+
+    // Internal listener registration
+    function registerListener(target, type, handler, once, capture, context) {
+        if (!type) throw new Error("Invalid event type");
+        capture = !!capture;
+
+        // Track event types
+        if (!eventTypeRegistry[type]) eventTypeRegistry[type] = { captureCount: 0, bubbleCount: 0 };
+        const typeEntry = eventTypeRegistry[type];
+        if (!typeEntry[capture]) {
+            typeEntry[capture] = {};
+            typeEntry.captureCount++;
+        }
+
+        const captureEntry = typeEntry[capture];
+        const targetId = getNodeId(target);
+        let listeners = captureEntry[targetId];
+
+        if (listeners) {
+            for (const listener of listeners) {
+                if (listener.handler === handler && listener.context === context) {
+                    if (listener.removed) break;
+                    if (!once) listener.once = false;
+                    return listener;
+                }
+            }
+        } else {
+            listeners = captureEntry[targetId] = [];
+            captureEntry.captureCount++;
+        }
+
+        const listener = new Listener(handler, target, type, capture, context);
+        listener.once = once;
+        listeners.push(listener);
+
+        if (!nodeListeners[targetId]) nodeListeners[targetId] = [];
+        nodeListeners[targetId].push(listener);
+
+        const eventName = legacyEventNames[type] || (legacyEventNames[type] = "on" + type);
+        if (target.addEventListener)
+            target.addEventListener(type, listener.callback, capture);
+        else if (target.attachEvent)
+            target.attachEvent(eventName, listener.callback);
+
+        return listener;
+    }
+
+    // Remove listener
+    function removeListener(target, type, handler, capture, context) {
+        if (Array.isArray(type)) {
+            type.forEach(t => removeListener(target, t, handler, capture, context));
+            return;
+        }
+
+        capture = !!capture;
+        const typeEntry = eventTypeRegistry[type]?.[capture]?.[getNodeId(target)];
+        if (!typeEntry) return;
+
+        for (const listener of typeEntry) {
+            if (listener.handler === handler && listener.capture === capture && listener.context === context) {
+                unbindListener(listener.key);
+                break;
             }
         }
     }
 
-    var db = {},
-        D = {},
-        eb = {},
-        fb = {},
-        gb = function (a, b, c, d, e) {
-            if (isArray(b)) {
-                for (var f = 0; f < b.length; f++) gb(a, b[f], c, d, e);
-                return k
-            }
-            a = hb(a, b, c, l, d, e);
-            b = a.key;
-            db[b] = a;
-            return b
-        },
-        hb = function (a, b, c, d, e, f) {
-            if (!b) throw Error("Invalid event type");
-            e = !!e;
-            var n = D;
-            b in n || (n[b] = {
-                D: 0,
-                R: 0
-            });
-            n = n[b];
-            e in n || (n[e] = {
-                D: 0,
-                R: 0
-            }, n.D++);
-            var n = n[e],
-                q = getUniqueId(a),
-                r;
-            n.R++;
-            if (n[q]) {
-                r = n[q];
-                for (var A = 0; A < r.length; A++)
-                    if (n = r[A], n.xa == c && n.Lc == f) {
-                        if (n.Ha) break;
-                        d || (r[A].once = l);
-                        return r[A]
-                    }
-            } else r = n[q] = [], n.D++;
-            A = ib();
-            n = new EventListenerEntry();
-            n.init(c, A, a, b, e, f);
-            n.once = d;
-            A.src = a;
-            A.xa = n;
-            r.push(n);
-            eb[q] || (eb[q] = []);
-            eb[q].push(n);
-            a.addEventListener ? (a == p || !a.xd) && a.addEventListener(b, A, e) : a.attachEvent(b in fb ? fb[b] : fb[b] = "on" + b, A);
-            return n
-        },
-        ib = function () {
-            var a = jb,
-                b = supportsDOM9 ? function (c) {
-                    return a.call(b.src, b.xa, c)
-                } : function (c) {
-                    c = a.call(b.src, b.xa, c);
-                    if (!c) return c
-                };
-            return b
-        },
-        kb = function (a, b, c, d, e) {
-            if (isArray(b)) {
-                for (var f = 0; f < b.length; f++) kb(a, b[f], c, d, e);
-                return k
-            }
-            a = hb(a, b, c, h, d, e);
-            b = a.key;
-            db[b] = a;
-            return b
-        },
-        lb = function (a, b, c, d, e) {
-            if (isArray(b))
-                for (var f = 0; f < b.length; f++) lb(a, b[f],
-                    c, d, e);
-            else {
-                d = !!d;
-                a: {
-                    f = D;
-                    if (b in f && (f = f[b], d in f && (f = f[d], a = getUniqueId(a), f[a]))) {
-                        a = f[a];
-                        break a
-                    }
-                    a = k
-                }
-                if (a)
-                    for (f = 0; f < a.length; f++)
-                        if (a[f].xa == c && a[f].capture == d && a[f].Lc == e) {
-                            mb(a[f].key);
-                            break
-                        }
-            }
-        },
-        mb = function (a) {
-            var b = db[a];
-            if (!b || b.Ha) return l;
-            var c = b.src,
-                d = b.type,
-                e = b.yd,
-                f = b.capture;
-            c.removeEventListener ? (c == p || !c.xd) && c.removeEventListener(d, e, f) : c.detachEvent && c.detachEvent(d in fb ? fb[d] : fb[d] = "on" + d, e);
-            c = getUniqueId(c);
-            if (eb[c]) {
-                var e = eb[c],
-                    n = ArrayUtils.indexOf(e, b);
-                0 <= n && (assert(e.length != k), Array.prototype.splice.call(e, n, 1));
-                0 == e.length && delete eb[c]
-            }
-            b.Ha = h;
-            if (b = D[d][f][c]) b.Ed = h, nb(d, f, c, b);
-            delete db[a];
-            return h
-        },
-        nb = function (a, b, c, d) {
-            if (!d.Tb && d.Ed) {
-                for (var e = 0, f = 0; e < d.length; e++) d[e].Ha ? d[e].yd.src = k : (e != f && (d[f] = d[e]), f++);
-                d.length = f;
-                d.Ed = l;
-                0 == f && (delete D[a][b][c], D[a][b].D--, 0 == D[a][b].D && (delete D[a][b], D[a].D--), 0 == D[a].D && delete D[a])
-            }
-        },
-        qb = function (a, b, c, d, e) {
-            var f = 1;
-            b = getUniqueId(b);
-            if (a[b]) {
-                var n = --a.R,
-                    q =
-                        a[b];
-                q.Tb ? q.Tb++ : q.Tb = 1;
-                try {
-                    for (var r = q.length, A = 0; A < r; A++) {
-                        var v = q[A];
-                        v && !v.Ha && (f &= pb(v, e) !== l)
-                    }
-                } finally {
-                    a.R = Math.max(n, a.R), q.Tb--, nb(c, d, b, q)
-                }
-            }
-            return Boolean(f)
-        },
-        pb = function (a, b) {
-            a.Qb && mb(a.key);
-            return a.handleEvent(b)
-        },
-        jb = function (a, b) {
-            if (a.Ha) return h;
-            var c = a.type,
-                d = D;
-            if (!(c in d)) return h;
-            var d = d[c],
-                e, f;
-            if (!supportsDOM9) {
-                var n;
-                if (!(n = b)) a: {
-                    n = ["window", "event"];
-                    for (var q = p; e = n.shift();)
-                        if (q[e] != k) q = q[e];
-                        else {
-                            n = k;
-                            break a
-                        } n = q
-                }
-                e = n;
-                n = h in d;
-                q = l in d;
-                if (n) {
-                    if (0 > e.keyCode || e.returnValue != undefined) return h;
-                    a: {
-                        var r =
-                            l;
-                        if (0 == e.keyCode) try {
-                            e.keyCode = -1;
-                            break a
-                        } catch (A) {
-                            r = h
-                        }
-                        if (r || e.returnValue == undefined) e.returnValue = h
-                    }
-                }
-                r = new CustomBrowserEvent();
-                r.init(e, this);
-                e = h;
-                try {
-                    if (n) {
-                        for (var v = [], I = r.currentTarget; I; I = I.parentNode) v.push(I);
-                        f = d[h];
-                        f.R = f.D;
-                        for (var Y = v.length - 1; !r.Ya && 0 <= Y && f.R; Y--) r.currentTarget = v[Y], e &= qb(f, v[Y], c, h, r);
-                        if (q) {
-                            f = d[l];
-                            f.R = f.D;
-                            for (Y = 0; !r.Ya && Y < v.length && f.R; Y++) r.currentTarget = v[Y], e &= qb(f, v[Y], c, l, r)
-                        }
-                    } else e = pb(a, r)
-                } finally {
-                    v && (v.length = 0)
-                }
-                return e
-            }
-            c = new CustomBrowserEvent(b, this);
-            return e = pb(a, c)
-        };
+    // Unbind listener by ID
+    function unbindListener(key) {
+        const listener = listenerRegistry[key];
+        if (!listener || listener.removed) return false;
 
-    // EventManager handles adding, tracking, and cleaning up event listeners.
-    class EventManager extends Disposable {
+        const { target, type, capture, callback } = listener;
+        if (target.removeEventListener)
+            target.removeEventListener(type, callback, capture);
+        else if (target.detachEvent)
+            target.detachEvent(legacyEventNames[type], callback);
+
+        listener.removed = true;
+        delete listenerRegistry[key];
+        return true;
+    }
+
+    // Remove all listeners on target
+    function removeAllListeners(target) {
+        let count = 0;
+        if (target) {
+            const id = getNodeId(target);
+            if (nodeListeners[id]) {
+                for (const l of nodeListeners[id]) unbindListener(l.key), count++;
+            }
+        } else {
+            for (const key in listenerRegistry)
+                unbindListener(key), count++;
+        }
+        return count;
+    }
+
+    // Dispatch event manually
+    function dispatchEvent(target, event) {
+        const type = event.type || event;
+        const typeEntry = eventTypeRegistry[type];
+        if (!typeEntry) return false;
+
+        if (typeof event === "string")
+            event = new CustomEvent(type, { bubbles: true, cancelable: true });
+
+        event.target = event.target || target;
+        let result = true;
+
+        if (typeEntry[true]) {
+            for (let node = target; node; node = node.parentNode) {
+                result &= fireListeners(typeEntry[true], node, type, true, event);
+            }
+        }
+
+        if (typeEntry[false]) {
+            for (let node = target; node; node = node.parentNode) {
+                result &= fireListeners(typeEntry[false], node, type, false, event);
+            }
+        }
+
+        return !!result;
+    }
+
+    // Helper: fire listeners on a node
+    function fireListeners(entry, target, type, capture, event) {
+        const id = getNodeId(target);
+        const listeners = entry[id];
+        if (!listeners) return true;
+
+        let allGood = true;
+        for (const listener of listeners) {
+            if (!listener.removed) {
+                const result = listener.invoke(event);
+                if (result === false) allGood = false;
+            }
+        }
+        return allGood;
+    }
+
+    // Internal node ID map
+    let nodeIdCounter = 0;
+    const nodeIdMap = new WeakMap();
+    function getNodeId(node) {
+        if (!nodeIdMap.has(node)) nodeIdMap.set(node, ++nodeIdCounter);
+        return nodeIdMap.get(node);
+    }
+
+    function handleNativeEvent(listenerObj, nativeEvent) {
+        // If the listener is marked as removed or inactive, stop early
+        if (listenerObj.removed) return false;
+
+        const eventType = listenerObj.type;
+        const registry = eventMap; // originally `D`
+
+        // No listeners for this event type
+        if (!(eventType in registry)) return false;
+
+        const eventTypeData = registry[eventType];
+        let eventWrapper;
+
+        // Handle legacy browsers (no addEventListener)
+        if (!supportsDOM9) {
+            // Try to resolve event from window.event (IE)
+            if (!nativeEvent) {
+                let eventChain = ["window", "event"];
+                let obj = globalWindow; // originally `p`
+                let found;
+                while ((found = eventChain.shift())) {
+                    if (obj[found] != null) {
+                        obj = obj[found];
+                    } else {
+                        nativeEvent = undefined;
+                        break;
+                    }
+                }
+                nativeEvent = obj;
+            }
+
+            eventWrapper = nativeEvent;
+            const hasCapturePhase = true in eventTypeData;
+            const hasBubblePhase = false in eventTypeData;
+
+            // Some IE key event fixes
+            if (hasCapturePhase) {
+                if (eventWrapper.keyCode < 0 || eventWrapper.returnValue !== undefined)
+                    return false;
+                let fixed = false;
+                if (eventWrapper.keyCode === 0) {
+                    try {
+                        eventWrapper.keyCode = -1;
+                    } catch {
+                        fixed = true;
+                    }
+                }
+                if (fixed || eventWrapper.returnValue === undefined) {
+                    eventWrapper.returnValue = false;
+                }
+            }
+
+            const customEvent = new CustomBrowserEvent();
+            customEvent.init(eventWrapper, this);
+
+            let handled = false;
+
+            try {
+                if (hasCapturePhase) {
+                    // Build target path for capture phase
+                    const path = [];
+                    for (let target = customEvent.currentTarget; target; target = target.parentNode) {
+                        path.push(target);
+                    }
+
+                    let phaseHandlers = eventTypeData[true];
+                    phaseHandlers.activeCount = phaseHandlers.totalCount;
+
+                    // Capture phase (top-down)
+                    for (let i = path.length - 1; !customEvent.cancelled && i >= 0 && phaseHandlers.activeCount; i--) {
+                        customEvent.currentTarget = path[i];
+                        handled &= dispatchPhase(phaseHandlers, path[i], eventType, true, customEvent);
+                    }
+
+                    // Bubble phase (bottom-up)
+                    if (hasBubblePhase) {
+                        phaseHandlers = eventTypeData[false];
+                        phaseHandlers.activeCount = phaseHandlers.totalCount;
+                        for (let i = 0; !customEvent.cancelled && i < path.length && phaseHandlers.activeCount; i++) {
+                            customEvent.currentTarget = path[i];
+                            handled &= dispatchPhase(phaseHandlers, path[i], eventType, false, customEvent);
+                        }
+                    }
+                } else {
+                    handled = dispatchListener(listenerObj, customEvent);
+                }
+            } finally {
+                // Clean up event path array
+                if (path) path.length = 0;
+            }
+
+            return handled;
+        }
+
+        // Modern browsers
+        const customEvent = new CustomBrowserEvent(nativeEvent, this);
+        return dispatchListener(listenerObj, customEvent);
+    }
+
+    class EventHandler extends Disposable {
         constructor(context) {
             super();
             this.context = context;
             this.listeners = [];
         }
 
-        /**
-         * Add one or more event listeners.
-         * @param {EventTarget} target - The target to listen on.
-         * @param {string|string[]} eventTypes - Event name(s).
-         * @param {Function} handler - The function to call when the event occurs.
-         * @param {boolean} [useCapture=false] - Whether to use capture mode.
-         * @param {any} [scope=this.context] - The scope for the listener.
-         * @returns {EventManager} - Returns itself for chaining.
-         */
-        listen(target, eventTypes, handler, useCapture = false, scope = this.context) {
-            const events = Array.isArray(eventTypes) ? eventTypes : [eventTypes];
-            for (const event of events) {
-                const listener = gb(
+        listen(target, eventTypes, handler, capture = false, scope) {
+            if (!Array.isArray(eventTypes)) eventTypes = [eventTypes];
+            for (let type of eventTypes) {
+                const key = addListener(
                     target,
-                    event,
+                    type,
                     handler || this,
-                    useCapture,
-                    scope
+                    capture,
+                    scope || this.context || this
                 );
-                this.listeners.push(listener);
+                this.listeners.push(key);
             }
             return this;
         }
 
-        /**
-         * Add multiple listeners using a helper.
-         */
-        addListeners(target, context, eventNames, handler, useCapture, scope) {
-            if (Array.isArray(eventNames)) {
-                for (const name of eventNames) {
-                    this.addListeners(target, context, name, handler, useCapture, scope);
+        add(target, source, eventTypes, handler, capture = false, scope) {
+            if (Array.isArray(eventTypes)) {
+                for (let type of eventTypes) {
+                    this.add(target, source, type, handler, capture, scope);
                 }
             } else {
-                const listener = bindEvent(
-                    context,
-                    eventNames,
+                const key = addCaptureListener(
+                    source,
+                    eventTypes,
                     handler || target,
-                    useCapture,
-                    scope || this.context
+                    capture,
+                    scope || target.context || target
                 );
-                this.listeners.push(listener);
+                this.listeners.push(key);
             }
         }
 
-        /**
-         * Remove all tracked listeners.
-         */
-        clearAllListeners() {
-            this.listeners.forEach(removeEventListenerHelper);
+        clear() {
+            this.listeners.forEach(removeListener);
             this.listeners.length = 0;
         }
 
-        /**
-         * Clean up event listeners when disposed.
-         */
         dispose() {
             super.dispose();
-            this.clearAllListeners();
+            this.clear();
         }
 
-        /**
-         * Placeholder handler method.
-         * Should be overridden by subclasses.
-         */
         handleEvent() {
-            throw new Error("EventManager.handleEvent not implemented");
+            throw new Error("EventHandler.handleEvent not implemented");
         }
     }
 
@@ -797,11 +797,11 @@ var minutes = 6E4;
         }
 
         addEventListener(type, callback, useCapture, priority) {
-            gb(this, type, callback, useCapture, priority);
+            addListener(this, type, callback, useCapture, priority);
         }
 
         removeEventListener(type, callback, useCapture, priority) {
-            lb(this, type, callback, useCapture, priority);
+            removeListener(this, type, callback, useCapture, priority);
         }
 
         dispatchEvent(event) {
@@ -856,7 +856,7 @@ var minutes = 6E4;
         constructor(element = document, preventDefault = false) {
             super();
             this.element = element;
-            this.handler = new EventManager(this);
+            this.handler = new EventHandler(this);
             this.preventDefault = preventDefault;
 
             this.handler.listen(this.element, "keydown", this.onKeyDown.bind(this));
@@ -1151,8 +1151,8 @@ var minutes = 6E4;
 
             // Listen to document visibility changes
             if (this.visibilityChangeEvent) {
-                const listener = bind(this.onVisibilityChange, this);
-                this.listen(document, this.visibilityChangeEvent, listener);
+                var listener = new EventHandler(this);
+                listener.listen(document, this.visibilityChangeEvent, listener);
             }
 
             // Start initial timer
@@ -2624,6 +2624,9 @@ var minutes = 6E4;
         })
     };
     Bd.prototype.h = function () {
+        this.M.forEach(function(v) {
+            a.C();
+        })
         ArrayUtils.forEach(this.M, function (a) {
             a.C()
         });
@@ -2672,13 +2675,13 @@ var minutes = 6E4;
         constructor(id, width, height, parent, style) {
             super(id, width, height, parent, style);
 
-            this.eventManager = new EventManager(this);
+            this.eventHandler = new EventHandler(this);
 
             // Attach mouse event listeners
-            this.eventManager.listen(this.element, "click", this.handleClick.bind(this));
-            this.eventManager.listen(this.element, "mousedown", this.handleMouseDown.bind(this));
-            this.eventManager.listen(this.element, "mouseover", this.handleMouseOver.bind(this));
-            this.eventManager.listen(this.element, "mouseout", this.handleMouseOut.bind(this));
+            this.eventHandler.listen(this.element, "click", this.handleClick.bind(this));
+            this.eventHandler.listen(this.element, "mousedown", this.handleMouseDown.bind(this));
+            this.eventHandler.listen(this.element, "mouseover", this.handleMouseOver.bind(this));
+            this.eventHandler.listen(this.element, "mouseout", this.handleMouseOut.bind(this));
 
             // Indicate interactivity
             this.element.style.cursor = "pointer";
@@ -2686,8 +2689,8 @@ var minutes = 6E4;
 
         // Cleanup
         destroy() {
-            this.eventManager.dispose();
-            this.eventManager = null;
+            this.eventHandler.dispose();
+            this.eventHandler = null;
             super.destroy();
         }
 
@@ -2750,7 +2753,7 @@ var minutes = 6E4;
         this.lc = l;
         this.kc = 1;
         this.ic = [];
-        this.ic.push(new Db(bind(this.he, this), bind(this.ke, this), h), new Db(bind(this.ge, this), bind(this.je, this), l, 400))
+        this.ic.push(new Db(this.he.bind(this), this.ke.bind(this), h), new Db(bind(this.ge, this), bind(this.je, this), l, 400))
     };
     inherit(T, Disposable);
     var Ed = [450, 900, 1350];
@@ -2976,14 +2979,16 @@ var minutes = 6E4;
         ce = [new Point(0, 0), new Point(1, 0), new Point(2, 0), new Point(3, 0), new Point(3, 1), new Point(3, 2), new Point(3, 3), new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1)],
         de = [new Point(0, 0), new Point(1, 0), new Point(2, 0), new Point(3, 0), new Point(3, 1), new Point(3, 2), new Point(3, 3), new Point(2, 3), new Point(1, 3), new Point(0, 3), new Point(0, 2), new Point(0, 1)],
         ee = [new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(0, 0), new Point(1, 0), new Point(2, 0), new Point(3, 0), new Point(3, 1), new Point(3, 2), new Point(2, 2), new Point(1, 2)],
-        fe = [new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(0, 0), new Point(1, 0), new Point(1, 1), new Point(1, 2), new Point(1, 3), new Point(2, 3), new Point(3, 3)],
-        ge = {};
-    ge.G = [new Point(2, 3), new Point(3, 3), new Point(3, 4), new Point(3, 5), new Point(2, 5), new Point(1, 5), new Point(0, 5), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(0, 0), new Point(1, 0), new Point(2, 0), new Point(3, 0)];
-    ge.G1 = be;
-    ge.O = ce;
-    ge.O2 = de;
-    ge.L = fe;
-    ge.E = ee;
+        fe = [new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(0, 0), new Point(1, 0), new Point(1, 1), new Point(1, 2), new Point(1, 3), new Point(2, 3), new Point(3, 3)]
+    var ge = {
+        G: [new Point(2, 3), new Point(3, 3), new Point(3, 4), new Point(3, 5), new Point(2, 5), new Point(1, 5), new Point(0, 5), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(0, 0), new Point(1, 0), new Point(2, 0), new Point(3, 0)],
+        G1: be,
+        O: ce,
+        O2: de,
+        L: fe,
+        E: ee,
+    };
+
     var he, W = {};
     class SetEx {
         constructor(values) {
@@ -3076,12 +3081,12 @@ var minutes = 6E4;
         }
         init() {
             this.cellMap = new MapEx();
-            ArrayUtils.forEach(getAllGridCells(), function(a) {
+            getAllGridCells().forEach(function(a) {
                 this.cellMap.set(a, {
                     usedCount: 0,
                     specialCount: 0,
                     totalCount: 0
-                });
+                })
             }, this);
 
             this.availableCells = new SetEx;
@@ -3596,27 +3601,27 @@ var minutes = 6E4;
         this.ka.init(this.fa);
         this.N = new Fe(this.fa);
         snakeClass = this.N;
-        this.Zc = new InputController(this.v, h);
-        this.B = new EventManager(this);
+        this.InputController = new InputController(this.v, true);
+        this.B = new EventHandler(this);
         this.bb = ObjectPoolManager.getInstance();
         this.ca = new ClickableElement(12, Z.x, Z.y, this.v, 101);
         this.ca.show(l);
         this.La = new ClickableElement(90, kf.x, kf.y, this.v, 100);
         this.La.show(l);
         this.Ka = h;
-        this.la = new AudioPlayer(["./snakeyear/snake"], this.v);
+        this.music = new AudioPlayer(["./snakeyear/snake"], this.v);
         this.cb = new SpriteGroup(31, lf.x, lf.y, this.v, 100);
         this.cb.show(l);
         this.fb = k;
         this.eb = [];
-        this.Ja = this.ec = this.fc = this.dc = k;
+        this.ec = this.fc = this.dc = k;
         this.bd = l;
         this.gc = this.$c = 0;
-        this.B.listen(this.Zc, "a", this.Xd);
+        this.B.listen(this.InputController, "a", this.Xd);
         this.B.listen(this.N, "catch item", this.Yd);
         this.B.listen(this.N, "match pattern", this.Zd);
         this.B.listen(this.La, "click", this.Wd);
-        this.Ja = new VisibilityTimer(3E4, bind(this.$d, this), bind(this.ae, this));
+        this.visibilityTimer = new VisibilityTimer(3E4, this.$d.bind(this), this.ae.bind(this));
         this.bd = !(!a || !a.standalone);
         window.isAnimationPaused = l;
         new SpriteGroup(19, mf.x, mf.y, this.v, 100);
@@ -3703,7 +3708,7 @@ var minutes = 6E4;
         };
     $.prototype.$d = function () {
         if ("running" == this.i) {
-            this.la.pause();
+            this.music.pause();
             var a = this.N;
             a.ba = Yc;
             Q(a.d[0].qa(), a.ba);
@@ -3712,7 +3717,7 @@ var minutes = 6E4;
     };
     $.prototype.ae = function () {
         if ("tutorial_start" == this.i || "tutorial_end" == this.i) {
-            this.la.play();
+            this.music.play();
             var a = this.N;
             a.ba = Ee;
             Q(a.d[0].qa(), a.ba);
@@ -3722,9 +3727,9 @@ var minutes = 6E4;
         }
     };
     var Mf = function (a) {
-        ArrayUtils.forEach(getObjectKeys(Wd), function (a) {
+        getObjectKeys(Wd).forEach(function (a) {
             this.$b[a] = 0
-        }, a)
+        }, a);
     },
         Qf = function (a) {
             var b = new AnimationSequence();
@@ -3836,37 +3841,38 @@ var minutes = 6E4;
             c < Td.length ? (Q(a, sd[Td[c]]), a.show(h)) : a.show(l)
         })
     },
-        Rf = function (a) {
-            isOver = true;
-            if (a.Aa) {
-                setOpacity(a.fa, 0.3);
-                Q(a.hc, xf[(80 > a.z ? 1 : 150 > a.z ? 2 : 3) - 1]);
-                var b = yd(a.z, vd);
-                a.Aa.show(h);
-                for (var c in b) b[c] != k ? (a.Ma[c].show(h), Q(a.Ma[c], b[c])) : a.Ma[c].show(l)
-            } else {
-                a.Aa = new SpriteGroup(61, sf.x, sf.y, a.v, 100);
-                if (!a.bd) {
-                    var q = new ClickableElement(52, vf.x, vf.y, a.v, 101);
-                    a.B.listen(q, "click", a.ze);
-                    a.B.listen(q, "mouseover", Kf(q, Ff, vf, 28));
-                    a.B.listen(q, "mouseout", Kf(q, If, vf, 28));
-                    a.Aa.add(q)
-                } a.hc = new SpriteGroup(xf[(80 > a.z ? 1 : 150 > a.z ? 2 : 3) - 1], wf.x, wf.y, a.v, 101);
-                a.Aa.add(a.hc);
-                var b = yd(a.z, vd),
-                    r;
-                for (r in b) c = b[r], a.Ma[r] = new SpriteGroup(c == k ? td[0] : c, yf[r].x, yf[r].y, a.v, 101), c == k && a.Ma[r].show(l), a.Aa.add(a.Ma[r]);
-                setOpacity(a.fa, 0.3)
+    Rf = function (a) {
+        isOver = true;
+        if (a.Aa) {
+            setOpacity(a.fa, 0.3);
+            Q(a.hc, xf[(80 > a.z ? 1 : 150 > a.z ? 2 : 3) - 1]);
+            var b = yd(a.z, vd);
+            a.Aa.show(h);
+            for (var c in b) b[c] != k ? (a.Ma[c].show(h), Q(a.Ma[c], b[c])) : a.Ma[c].show(l)
+        } else {
+            a.Aa = new SpriteGroup(61, sf.x, sf.y, a.v, 100);
+            if (!a.bd) {
+                var q = new ClickableElement(52, vf.x, vf.y, a.v, 101);
+                a.B.listen(q, "click", a.ze);
+                a.B.listen(q, "mouseover", Kf(q, Ff, vf, 28));
+                a.B.listen(q, "mouseout", Kf(q, If, vf, 28));
+                a.Aa.add(q)
             }
-        };
+            a.hc = new SpriteGroup(xf[(80 > a.z ? 1 : 150 > a.z ? 2 : 3) - 1], wf.x, wf.y, a.v, 101);
+            a.Aa.add(a.hc);
+            var b = yd(a.z, vd),
+                r;
+            for (r in b) c = b[r], a.Ma[r] = new SpriteGroup(c == k ? td[0] : c, yf[r].x, yf[r].y, a.v, 101), c == k && a.Ma[r].show(l), a.Aa.add(a.Ma[r]);
+            setOpacity(a.fa, 0.3)
+        }
+    };
     $.prototype.Xd = function (a) {
-        this.Ja.resetTimer();
+        this.visibilityTimer.resetTimer();
         "tutorial_end" == this.i ? (Pf(this), Nf(this)) : "running" == this.i && ze(this.N, a.Ie)
     };
     $.prototype.De = function () {
-        this.la.load(l);
-        this.Ja.resetTimer();
+        this.music.load(l);
+        this.visibilityTimer.resetTimer();
         var a = new AnimationSequence();
         this.ec = a;
         a.addStep(bind(function () {
@@ -3903,11 +3909,11 @@ var minutes = 6E4;
         a.fb = new ClickableElement(94, zf.x, zf.y, a.v, 100);
         for (var b in Bf) a.eb[b] = new ClickableElement(Bf[b][0], Af[b].x, Af[b].y, a.v, 101), a.B.listen(a.eb[b], "click", a.td), a.fb.add(a.eb[b]);
         a.i = "tutorial_start";
-        a.eventManager.listen(a.fb, "click", a.td);
+        a.eventHandler.listen(a.fb, "click", a.td);
         a.sd()
     };
     $.prototype.td = function () {
-        this.Ja.resetTimer();
+        this.visibilityTimer.resetTimer();
         "tutorial_end" == this.i && (Pf(this), Nf(this))
     };
     $.prototype.sd = function () {
@@ -3931,7 +3937,7 @@ var minutes = 6E4;
     };
     m = $.prototype;
     m.Wd = function () {
-        this.Ja.resetTimer();
+        this.visibilityTimer.resetTimer();
         this.Ka = !this.Ka;
         Q(this.La, this.Ka ? 90 : 89);
         this.la.H.muted = this.Ka ? l : h
