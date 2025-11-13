@@ -4,8 +4,9 @@ var item_amount = document.getElementById("item_amount");
 var min_time = document.getElementById("min_time");
 
 function spawn() {
-    for (var c = gridClass, d = item_amount.value, e = 0; e < d; e++) {
-        ue(c, Yd(item_type.value), ne(c.g));
+    var c = gridClass;
+    for (var d = item_amount.value, e = 0; e < d; e++) {
+        spawnItem(c, createItem(item_type.value), find2x2Block(c.g));
     }
 }
 

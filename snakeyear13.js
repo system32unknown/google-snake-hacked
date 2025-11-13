@@ -1,7 +1,6 @@
-var ue = null;
-var Yd = null;
-var ne = null;
-var Ge = null;
+var spawnItem = null;
+var createItem = null;
+var find2x2Block = null;
 var gridClass = null;
 var boostFunction = null;
 var snakeClass = null;
@@ -10,11 +9,6 @@ var minutes = 6E4;
 
 (function () {
     var m = this
-
-    /** Checks if the value is an Array. */
-    function isArray(value) {
-        return typeOf(value) === "array";
-    }
 
     /**
      * Returns or assigns a unique ID to the given object.
@@ -959,18 +953,45 @@ var minutes = 6E4;
         return new Date().getTime()
     }
 
-    var Db = function (a, b, c, d) {
-        this.Re = a;
-        this.Se = b;
-        this.Md = false;
-        this.Ld = c;
-        this.Te = d || 0;
-        this.Kd = 0
-    };
-    Db.prototype.jb = function () {
-        var a = getTime();
-        if (!(this.Ld && this.Md || !this.Ld && a - this.Kd <= this.Te) && this.Re()) this.Se(), this.Md = true, this.Kd = a
-    };
+    /**
+     * ConditionalTrigger executes a callback when a condition becomes true.
+     * It supports optional delay and one-time trigger modes.
+     */
+    class ConditionalTrigger {
+        /**
+         * @param {Function} conditionFn - Function that returns true when the condition is met.
+         * @param {Function} onTriggerFn - Function to call when triggered.
+         * @param {boolean} [singleUse=false] - If true, trigger only once.
+         * @param {number} [cooldown=0] - Minimum time (ms) between triggers if not single-use.
+         */
+        constructor(conditionFn, onTriggerFn, singleUse = false, cooldown = 0) {
+            this.conditionFn = conditionFn;   // Function to check
+            this.onTriggerFn = onTriggerFn;   // Callback to fire
+            this.triggered = false;           // Has been triggered already
+            this.singleUse = singleUse;       // True = one-time trigger
+            this.cooldown = cooldown;         // Delay between triggers
+            this.lastTriggerTime = 0;         // Timestamp of last trigger
+        }
+
+        /**
+         * Checks the condition and fires the callback if appropriate.
+         */
+        update() {
+            const now = getTime();
+
+            const readyToTrigger =
+                // If single-use, only if not already triggered
+                !(this.singleUse && this.triggered)
+                // If repeating, only after cooldown has passed
+                && (this.singleUse || now - this.lastTriggerTime > this.cooldown);
+
+            if (readyToTrigger && this.conditionFn()) {
+                this.onTriggerFn();
+                this.triggered = true;
+                this.lastTriggerTime = now;
+            }
+        }
+    }
 
     class AnimationSequence {
         constructor() {
@@ -1144,7 +1165,7 @@ var minutes = 6E4;
 
     function random(a) {
         return Math.floor(Math.random() * a)
-    };
+    }
 
     class Point {
         constructor(x, y) {
@@ -1908,25 +1929,54 @@ var minutes = 6E4;
 
             sprite.gridX = gridX;
             sprite.gridY = gridY;
+
             sprite.pixelX = Math.floor(20 * gridX);
             sprite.pixelY = Math.floor(20 * gridY);
 
-            const widthOffset = sprite.width - 20;
-            const heightOffset = sprite.height - 20;
+            if (sprite.frameId === qc || sprite.frameId === pc) {
+                if (sprite.frameId === qc) {
+                    if (sprite.rotation === 180 || sprite.rotation === 0) sprite.pixelY--;
+                    else sprite.pixelX--;
+                } else {
+                    sprite.pixelY--;
+                    sprite.pixelX--;
+                }
+            } else {
+                var b = rc.get(sprite.frameId);
+                var c = sc.get(sprite.frameId);
 
-            switch (sprite.rotation) {
-                case 0: break;
-                case 90: sprite.pixelX -= heightOffset; break;
-                case 180: sprite.pixelX -= widthOffset; sprite.pixelY -= heightOffset; break;
-                case 270: sprite.pixelY -= widthOffset; break;
+                var widthOffset = sprite.width - 20;
+                var heightOffset = sprite.height - 20;
+
+                switch (sprite.rotation) {
+                    case 0: 
+                        sprite.pixelY -= b ? widthOffset : 0;
+                        sprite.pixelX -= c ? heightOffset : 0;
+                        break;
+                    case 90:
+                        sprite.pixelY -= c ? 0 : widthOffset;
+                        sprite.pixelX -= b ? heightOffset : 0;
+                        break;
+                    case 180:
+                        if (sprite.isFlipped) c = !c;
+                        sprite.pixelY -= b ? 0 : widthOffset;
+                        sprite.pixelX -= c ? 0 : heightOffset;
+                        break;
+                    case 270:
+                        sprite.pixelY -= c ? widthOffset : 0;
+                        sprite.pixelX -= b ? 0 : heightOffset;
+                }
+                if (-1 < tc[0].indexOf(sprite.frameId) || -1 < tc[1].indexOf(sprite.frameId))
+                    sprite.pixelY += 180 == sprite.rotation ? 1 : 0 == sprite.rotation ? -1 : 0,
+                    sprite.pixelX += 270 == sprite.rotation ? 1 : 90 == sprite.rotation ? -1 : 0
             }
 
             Sprite.setPosition(sprite, sprite.pixelX, sprite.pixelY);
         }
 
-        // Change z-index
-        static setZIndex(sprite, z) {
-            sprite.element.style.zIndex = z;
+        // Change z-isndex
+        setZIndex(z) {
+            this.element.style.zIndex = z;
         }
 
         // Change frame
@@ -1998,11 +2048,11 @@ var minutes = 6E4;
 
         // Fade out
         static fadeOut(sprite) {
-            Sprite._animateOpacity(sprite, 300, 1, 0);
+            Sprite.animateOpacity(sprite, 300, 1, 0);
         }
 
         // Fade animation helper
-        static _animateOpacity(sprite, duration, from, to) {
+        static animateOpacity(sprite, duration, from, to) {
             if (sprite.animation && sprite.animation.stop) sprite.animation.stop();
             sprite.animation = new AnimationSequence();
             sprite.animation.addStep(createOpacityAnimator(sprite.element, from, to), duration);
@@ -2262,8 +2312,6 @@ var minutes = 6E4;
             Qg: 89,
             Rg: 90
         },
-        rc = null,
-        sc = null,
         sd = {
             G: 33,
             O: 35,
@@ -2278,203 +2326,370 @@ var minutes = 6E4;
             [dd, ed, fd, gd, hd],
             [nd, od, pd, qd, rd],
             [id, jd, kd, ld, md]
-        ],
-        xd = function (a, b) {
+        ]
+
+    var rc = null;
+    var sc = null;
+
+    class ScoreDisplay extends Disposable {
+        constructor(tilePositions, textureId) {
+            super();
+
+            // Base positions for main digits
+            this.digitPositions = [];
+            this.currentScore = 0;
+            this.mainDigits = [];
+
+            // Create main digit tiles (3 digits)
+            for (let i = 0; i < 3; i++) {
+                this.digitPositions[i] = tilePositions[i];
+                this.mainDigits.push(createBackgroundTile(textureId, this.digitPositions[i].x, this.digitPositions[i].y));
+            }
+
+            // Background or base tile for the score display
+            this.baseTile = createBackgroundTile(textureId, tilePositions[0].x, tilePositions[0].y);
+
+            // Temporary flashing or bonus digit overlays
+            this.overlayDigits = [];
+            for (let i = 0; i < 2; i++) {
+                this.overlayDigits[i] = createBackgroundTile(textureId, tilePositions[i + 4].x, tilePositions[i + 4].y);
+                this.overlayDigits[i].element.style.opacity = 0;
+                this.overlayDigits[i].show(true);
+            }
+
+            // Frame change history and timing
+            this.pendingChanges = [];
+            this.lastUpdateTime = null;
+            this.overlayVisible = false;
+        }
+
+        /**
+         * Resets the score display to 0 and hides overlays.
+         */
+        reset() {
+            for (let i in this.mainDigits) {
+                Sprite.setFrame(this.mainDigits[i], td[0]); // reset frame to 0 digit
+            }
+
+            this.currentScore = 0;
+
+            // Ensure main and overlay digits are visible but transparent
+            this.mainDigits[0].show(true);
+            this.overlayDigits[0].s.style.opacity = 0;
+            this.overlayDigits[1].s.style.opacity = 0;
+            this.overlayDigits[0].show(true);
+            this.overlayDigits[1].show(true);
+            this.pendingChanges = [];
+        }
+
+        /**
+         * Updates the score display to show a new score.
+         * @param {number} newScore - The updated score value.
+         */
+        update(newScore) {
+            if (newScore > 999 || newScore === this.currentScore) return;
+
+            let delta = newScore - this.currentScore;
+            this.currentScore = newScore;
+
+            // Generate sprite frames for each digit
+            const newDigitFrames = createDigitSprites(newScore);
+
+            for (let i in newDigitFrames) {
+                const digitSprite = this.mainDigits[i];
+                const newFrame = newDigitFrames[i];
+                const pos = this.digitPositions[i];
+
+                if (newFrame != null) {
+                    digitSprite.show(true);
+                    if (digitSprite.getFrameId() !== newFrame) {
+                        // Animate digit transition
+                        playSwapAnimation(this, pos, digitSprite, newFrame);
+                    }
+                } else {
+                    digitSprite.show(false);
+                }
+            }
+
+            this.pendingChanges.push(delta);
+        }
+
+        /**
+         * Called every frame — animates overlay digits showing score gain.
+         * @param {number} currentTime - Timestamp for timing overlays.
+         */
+        animateOverlay(currentTime) {
+            if (this.pendingChanges.length) {
+                const delta = this.pendingChanges.shift();
+                const overlayFrames = createDigitSprites(delta, ud, 2);
+
+                for (let i in overlayFrames) {
+                    stopAllAnimations(this.overlayDigits[i]);
+                    const frame = overlayFrames[i];
+
+                    if (frame != null) {
+                        Sprite.setFrame(this.overlayDigits[i], frame);
+                        Sprite.animateOpacity(this.overlayDigits[i], 300, 0, 1);
+                    } else {
+                        this.overlayDigits[i].s.style.opacity = 0;
+                    }
+                }
+
+                this.lastUpdateTime = currentTime;
+                this.overlayVisible = overlayFrames[1] != null;
+            }
+
+            // Fade out overlays after 1 second
+            if (this.lastUpdateTime && currentTime - this.lastUpdateTime > 1000) {
+                Sprite.fadeOut(this.overlayDigits[0]);
+                if (this.overlayVisible) Sprite.fadeOut(this.overlayDigits[1]);
+                this.lastUpdateTime = null;
+            }
+        }
+
+        /**
+         * Clean up resources.
+         */
+        dispose() {
+            this.mainDigits.forEach(sprite => sprite.destroy());
+            super.dispose();
+        }
+    }
+
+    class xd extends Disposable {
+        constructor(a, b) {
+            super();
             this.Nb = [];
             this.z = 0;
             this.M = [];
-            for (var c = createBackgroundTile, d = 0; 3 > d; d++) {
+            for (var d = 0; 3 > d; d++) {
                 this.Nb[d] = a[d];
-                var e = c(b, this.Nb[d].x, this.Nb[d].y);
-                this.M.push(e)
+                this.M.push(createBackgroundTile(b, this.Nb[d].x, this.Nb[d].y));
             }
-            this.A = c(b, a[0].x, a[0].y);
+            this.A = createBackgroundTile(b, a[0].x, a[0].y);
             this.Ga = null;
             this.P = [];
             for (d = 0; 2 > d; d++) {
-                this.P[d] = c(b, a[d + 4].x, a[d + 4].y)
-                this.P[d].s.style.opacity = 0;
+                this.P[d] = createBackgroundTile(b, a[d + 4].x, a[d + 4].y);
+                console.log(this.P[d]);
+                this.P[d].element.style.opacity = 0;
                 this.P[d].show(true);
             }
             this.Mb = [];
             this.Ob = null;
-            this.pd = false
-        };
-    inherit(xd, Disposable);
+            this.pd = false;
+        }
+        reset() {
+            for (var a in this.M) Sprite.setFrame(this.M[a], td[0]);
+            this.z = 0;
+            this.M[0].show(true);
+            this.P[0].s.style.opacity = 0;
+            this.P[1].s.style.opacity = 0;
+            this.P[0].show(true);
+            this.P[1].show(true);
+            this.Mb = [];
+        }
+        update(a) {
+            if (!(999 < a || a == this.z)) {
+                var b = a - this.z;
+                this.z = a;
+                a = createDigitSprites(a);
+                for (var c in a) {
+                    var d = this.M[c];
+                    var e = a[c];
+                    var f = this.Nb[c];
+                    if (e != null) {
+                        d.show(true)
+                        if (d.getFrameId() != e) playSwapAnimation(this, f, d, e)
+                    } else d.show(false);
+                }
+                this.Mb.push(b);
+            }
+        }
+        jb(a) {
+            if (this.Mb.length) {
+                var b = this.Mb.shift()
+                var b = createDigitSprites(b, ud, 2);
+                for (c in b) {
+                    stopAllAnimations(this.P[c])
+                    if (b[c] != null) {
+                        Sprite.setFrame(this.P[c], b[c]);
+                        Sprite.animateOpacity(this.P[c], 300, 0, 1);
+                    } else this.P[c].s.style.opacity = 0;
+                }
+                this.Ob = a;
+                this.pd = b[1] != null;
+            }
+            if (this.Ob && 1E3 < a - this.Ob) {
+                Sprite.fadeOut(this.P[0]);
+                if (this.pd) Sprite.fadeOut(this.P[1]);
+                this.Ob = null;
+            }
+        }
+        dispose() {
+            this.M.forEach(function (a) {
+                a.C();
+            });
+            super.dispose();
+        }
+    }
+
+    /**
+     * Creates an array of digit sprites representing a number.
+     * 
+     * @param {number} number - The number to convert into sprite digits.
+     * @param {Array} spriteSet - Optional array of sprites for digits (default = `td`).
+     * @param {number} length - Number of digits to generate (default = 3).
+     * @returns {Array} Array of sprite references for each digit.
+     */
+    function createDigitSprites(number, spriteSet = td, length = 3) {
+        const digits = [spriteSet[0]];
+
+        for (let i = 0; i < length; i++) {
+            if (number !== 0) {
+                const digit = number % 10;
+                number = Math.floor(number / 10);
+                digits[i] = spriteSet[digit];
+            } else if (i > 0) {
+                digits[i] = null; // Hide leading zeros
+            }
+        }
+
+        return digits;
+    }
+
+    /**
+     * Hides and resets visual elements of a display object.
+     * 
+     * @param {Object} obj - The target object containing display elements.
+     * Expected structure:
+     *   obj.M : map of sprites
+     *   obj.Ga : animation instance (optional)
+     *   obj.A : main sprite
+     *   obj.P : array of sprites (e.g., [left, right])
+     */
+    function resetDisplay(obj) {
+        // Hide all mapped elements
+        for (const key in obj.M) {
+            obj.M[key].show(false);
+        }
+
+        // Stop active animation
+        if (obj.Ga) obj.Ga.stop();
+
+        // Hide main and side elements
+        obj.A.show(false);
+        obj.P[0].show(false);
+        obj.P[1].show(false);
+    }
 
     function createBackgroundTile(parent, x, y) {
         var tile = new Sprite(td[0]);
-        tile.show(false);                  // hidden initially
-        Sprite.setZIndex(tile, -2);        // render behind everything
-        Sprite.setPosition(tile, x, y);    // place at coordinates
+        tile.show(false);               // hidden initially
+        tile.setZIndex(-2);             // render behind everything
+        Sprite.setPosition(tile, x, y); // place at coordinates
         parent.appendChild(tile.getElement());
         return tile;
     }
 
-    var yd = function (a, b, c) {
-        b = b || td;
-        var d = [b[0]];
-        c = c || 3;
-        for (var e = 0; e < c; e++)
-            if (0 != a) {
-                var f = a % 10;
-                a = Math.floor(a / 10);
-                d[e] = b[f]
-            } else 0 < e && (d[e] = null);
-        return d
-    };
-    xd.prototype.reset = function () {
-        for (var a in this.M) Q(this.M[a], td[0]);
-        this.z = 0;
-        this.M[0].show(true);
-        this.P[0].s.style.opacity = 0;
-        this.P[1].s.style.opacity = 0;
-        this.P[0].show(true);
-        this.P[1].show(true);
-        this.Mb = []
-    };
-    var zd = function (a) {
-        for (var b in a.M) a.M[b].show(false);
-        a.Ga && a.Ga.stop();
-        a.A.show(false);
-        a.P[0].show(false);
-        a.P[1].show(false)
-    };
-    xd.prototype.update = function (a) {
-        if (!(999 < a || a == this.z)) {
-            var b = a - this.z;
-            this.z = a;
-            a = yd(a);
-            for (var c in a) {
-                var d = this.M[c],
-                    e = a[c],
-                    f = this.Nb[c];
-                e != null ? (d.show(true), d.Ua() != e && Ad(this, f, d, e)) : d.show(false)
-            }
-            this.Mb.push(b)
-        }
-    };
-    xd.prototype.jb = function (a) {
-        if (this.Mb.length) {
-            var b = this.Mb.shift(),
-                b = yd(b, ud, 2),
-                c;
-            for (c in b) stopAllAnimations(this.P[c]), b[c] != null ? (Q(this.P[c], b[c]), yc(this.P[c], 300, 0, 1)) : this.P[c].s.style.opacity = 0;
-            this.Ob = a;
-            this.pd = b[1] != null
-        }
-        this.Ob && 1E3 < a - this.Ob && (zc(this.P[0]), this.pd && zc(this.P[1]), this.Ob = null)
-    };
-    var Ad = function (a, b, c, d) {
-        var e = a.A;
-        a.Ga && a.Ga.stop();
-        a.Ga = new AnimationSequence();
-        e.show(true);
-        Q(e, d);
-        O(e, b.x, b.y - 25);
-        a.Ga.addStep(function (a) {
-            1 == a ? (O(c, b.x, b.y), Q(c, d), e.show(false)) : (O(e, b.x, b.y - 25 * (1 - a)), O(c, b.x, b.y + 25 * a))
-        }, 400)
-        a.Ga.play()
-    };
-    xd.prototype.h = function () {
-        this.M.forEach(function (a) {
-            a.C();
-        })
-        xd.I.h.call(this)
-    };
-    var Bd = function (a, b, c) {
-        this.M = [];
-        for (var d = 0; 4 > d; d++) {
-            var e = new Sprite(td[0]);
-            Sprite.setPosition(e, a + 10 * d, b);
-            c.appendChild(e.getElement());
-            this.M.push(e)
-        }
-        Q(this.M[1], 49);
-        this.Gd = null
-    };
-    inherit(Bd, Disposable);
-    Bd.prototype.update = function (a) {
-        if (a != this.Gd) {
-            var b = Math.floor(a / 60) % 10,
-                c = Math.floor(a % 60);
-            0 > b || 0 > c || (Q(this.M[0], td[b]), Q(this.M[2], td[Math.floor(c / 10)]), Q(this.M[3], td[c % 10]), this.Gd = a)
-        }
-    };
-    Bd.prototype.show = function (a) {
-        ArrayUtils.forEach(this.M, function (b) {
-            b.show(a)
-        })
-    };
-    Bd.prototype.h = function () {
-        this.M.forEach(function(v) {
-            a.C();
-        })
-        ArrayUtils.forEach(this.M, function (a) {
-            a.C()
-        });
-        Bd.I.h.call(this)
-    };
+    /**
+     * Plays a swap/transition animation between two sprites.
+     * @param {Object} ctx - The context containing sprite `A` and its animation state.
+     * @param {Object} startPos - Object with `{x, y}` representing the base position.
+     * @param {Sprite} targetSprite - The sprite to animate towards.
+     * @param {number} frameIndex - Frame index to display during animation.
+     */
+    function playSwapAnimation(ctx, startPos, targetSprite, frameIndex) {
+        const mainSprite = ctx.A;
 
-    var O = function(a, b, c) {
-            a.s && (a.k = Math.floor(b),
-                a.o = Math.floor(c),
-                Rb(a.s, a.k, a.o))
-        },
-        uc = function(a, b, c) { // moveToGrid
-            if (a.s) {
-                a.md = b;
-                a.nd = c;
-                a.k = Math.floor(20 * b);
-                a.o = Math.floor(20 * c);
-                if (a.Q == pc || a.Q == qc)
-                    a.Q == qc ? 180 == a.T || 0 == a.T ? a.k-- : a.o-- : (a.k--,
-                        a.o--);
-                else {
-                    b = rc.get(a.Q);
-                    c = sc.get(a.Q);
-                    var d = a.yc - 20,
-                        e = a.xc - 20;
-                    switch (a.T) {
-                        case 0:
-                            a.k -= b ? d : 0;
-                            a.o -= c ? e : 0;
-                            break;
-                        case 90:
-                            a.k -= c ? 0 : d;
-                            a.o -= b ? e : 0;
-                            break;
-                        case 180:
-                            a.kb && (c = !c);
-                            a.k -= b ? 0 : d;
-                            a.o -= c ? 0 : e;
-                            break;
-                        case 270:
-                            a.k -= c ? d : 0,
-                                a.o -= b ? 0 : e
-                    }
-                    if (-1 < tc[0].indexOf(a.Q) || -1 < tc[1].indexOf(a.Q))
-                        a.k += 180 == a.T ? 1 : 0 == a.T ? -1 : 0,
-                        a.o += 270 == a.T ? 1 : 90 == a.T ? -1 : 0
-                }
-                O(a, a.k, a.o)
+        // Stop any ongoing animation
+        if (ctx.Ga) ctx.Ga.stop();
+
+        // Create a new animation sequence
+        ctx.Ga = new AnimationSequence();
+
+        // Setup initial display state
+        mainSprite.show(true);
+        Sprite.setFrame(mainSprite, frameIndex);
+        Sprite.setPosition(mainSprite, startPos.x, startPos.y - 25);
+
+        // Define animation step
+        ctx.Ga.addStep(progress => {
+            if (progress === 1) {
+                // End of animation: show final sprite
+                Sprite.setPosition(targetSprite, startPos.x, startPos.y);
+                Sprite.setFrame(targetSprite, frameIndex);
+                mainSprite.show(false);
+            } else {
+                // During animation: move sprites in opposite vertical directions
+                Sprite.setPosition(mainSprite, startPos.x, startPos.y - 25 * (1 - progress));
+                Sprite.setPosition(targetSprite, startPos.x, startPos.y + 25 * progress);
             }
-        },
-        P = function(a, b) {
-            a.s.style.zIndex = b
-        },
-        Q = function(a, b) {
-            a.s && (vc(a, b),
-                a.Q != b && (a.Q = b,
-                    wc(a)))
-        },
-        wc = function(a) {
-            var b;
-            b = (b = M.tb[mc(a, a.Q)]) ? -(b[0] + 0) + "px " + -(b[1] + 0) + "px" : g;
-            a.s.style.backgroundPosition = b;
-            a.Eb && uc(a, a.md, a.nd)
-        };
+        }, 400);
+
+        // Play the sequence
+        ctx.Ga.play();
+    }
+
+    class TimerDisplay extends Disposable {
+        /**
+         * Creates a 4-digit timer (e.g. MM:SS) using sprite digits.
+         * @param {number} x - Starting x-position on the screen.
+         * @param {number} y - Y-position on the screen.
+         * @param {HTMLElement} parent - The DOM or container to attach the digits to.
+         */
+        constructor(x, y, parent) {
+            super();
+
+            this.digits = []; // Array of 4 digit sprites (M1, colon?, S1, S2)
+            this.lastValue = null; // Used to avoid redundant updates
+
+            // Create 4 sprite digits spaced horizontally
+            for (let i = 0; i < 4; i++) {
+                const digitSprite = new Sprite(td[0]);
+                Sprite.setPosition(digitSprite, x + 10 * i, y);
+                parent.appendChild(digitSprite.getElement());
+                this.digits.push(digitSprite);
+            }
+
+            // Optionally set colon or middle separator sprite
+            Sprite.setFrame(this.digits[1], 49);
+        }
+
+        /**
+         * Update the timer display to match the current time (in seconds).
+         * @param {number} time - Time in seconds.
+         */
+        update(time) {
+            if (time === this.lastValue) return;
+
+            const minutes = Math.floor(time / 60) % 10;
+            const seconds = Math.floor(time % 60);
+
+            if (minutes >= 0 && seconds >= 0) {
+                Sprite.setFrame(this.digits[0], td[minutes]);
+                Sprite.setFrame(this.digits[2], td[Math.floor(seconds / 10)]);
+                Sprite.setFrame(this.digits[3], td[seconds % 10]);
+                this.lastValue = time;
+            }
+        }
+
+        /**
+         * Show or hide all timer digits.
+         * @param {boolean} visible - Whether to show the digits.
+         */
+        show(visible) {
+            this.digits.forEach(digit => digit.show(visible));
+        }
+
+        /**
+         * Cleanup sprite resources when disposed.
+         */
+        dispose() {
+            this.digits.forEach(digit => digit.dispose());
+            super.dispose();
+        }
+    }
 
     class SpriteGroup extends Sprite {
         /**
@@ -2487,7 +2702,7 @@ var minutes = 6E4;
         constructor(frameId, x, y, container, zIndex) {
             super(frameId);                     // Call base sprite constructor
             Sprite.setPosition(this, x, y);     // Set initial position
-            if (zIndex) Sprite.setZIndex(this, zIndex);  // Optional z-index
+            if (zIndex) this.setZIndex(zIndex);  // Optional z-index
             container.appendChild(this.getElement());
             this.container = container;
 
@@ -2573,264 +2788,296 @@ var minutes = 6E4;
     }
     defineSingleton(SpritePool);
 
-    class T extends Disposable {
+    var T = function(params) {
+        
+    }
+
+    class GridEntity extends Disposable {
         constructor(config) {
             super();
 
-            this.Ba = config.grid;
+            // Grid configuration
+            this.grid = config.grid;
             this.spritePool = SpritePool.getInstance();
 
-            this.mainSprite = this.spritePool.get(); // a
+            // --- Main sprite setup ---
+            this.mainSprite = this.spritePool.get();
             Sprite.setFrame(this.mainSprite, this.grid[0]);
-            Sprite.setZIndex(this.mainSprite, 17);
+            this.mainSprite.setZIndex(17);
             this.mainSprite.show(false);
 
+            // --- Shadow sprite setup ---
             this.shadowSprite = this.spritePool.get();
             Sprite.setFrame(this.shadowSprite, 57);
-            yc(this.shadowSprite, 300, 0, 1);
-            Sprite.setZIndex(this.shadowSprite, 0);
+            Sprite.animateOpacity(this.shadowSprite, 300, 0, 1);
+            this.shadowSprite.setZIndex(0);
             this.shadowSprite.scale(0.7, 0.7);
             this.shadowSprite.show(true);
 
-            this.J = this.SpritePool.get();
-            Sprite.setFrame(this.J, 57);
-            yc(this.J, 300, 0, 1);
-            Sprite.setZIndex(this.J, 0);
-            this.J.scale(0.7, 0.7);
-            this.J.show(true);
+            // --- Core properties ---
+            this.tileIndex = 0;
+            this.lastTime = getTime();
+            this.phase = 0;
+            this.state = 0;
 
-            this.Qa = this.fd = 0;
-            this.ce = getTime();
-            this.i = this.hd = 0;
+            // Config metadata
+            this.name = config.name;
+            this.texture = config.texture;
+            this.extra = config.extra;
+            this.data = config.data;
 
-            this.ie = config.name;
-            this.zb = config.texture;
-            this.z = config.extra;
-            this.fe = config.data;
-
+            // Sprite positions
             this.cc = this.jd = 40;
             this.nc = this.ib = this.hb = 0;
-            this.Oa = 1400;
-            this.lc = false;
-            this.kc = 1;
 
+            // Motion parameters
+            this.targetY = 1400;
+            this.randomMove = false;
+            this.direction = 1;
+
+            // Behavior triggers
             this.behaviors = [
-                new Db(this.onReady.bind(this), this.onDisappear.bind(this), true),
-                new Db(this.onActive.bind(this), this.onFinish.bind(this), false, 400)
+                new ConditionalTrigger(this.onReady.bind(this), this.onDisappear.bind(this), true),
+                new ConditionalTrigger(this.onActive.bind(this), this.onFinish.bind(this), false, 400)
             ];
+        }
 
-            this.behaviors = [];
-            this.behaviors.push(new Db(this.he.bind(this), this.ke.bind(this), true), new Db(bind(this.ge, this), bind(this.je, this), false, 400));
-        }
-        getName() {
-            return this.ie;
-        }
-        qa() {
-            return this.mainSprite;
-        }
-        Ia() {
-            this.i = 2;
-        }
         dispose() {
-            var pool = this.spritePool;
+            const pool = this.spritePool;
             [this.mainSprite, this.shadowSprite].forEach(sprite => {
                 sprite.show(false);
                 stopAllAnimations(sprite);
                 sprite.Eb = false;
-                pool.Y.push(sprite);
+                pool.pool.push(sprite);
             });
             this.behaviors = null;
             super.dispose();
         }
-        update(a) {
-            this.hd = a -= this.ce;
-            0 == this.i ? a > this.Oa ? (this.J.show(false), Sprite.setZIndex(this.mainSprite, 1), this.i = 1, Gd(this, 0, 0)) : this.lc ? Hd(this, a) : Id(this, a) : 1 == this.i && a > this.zb + this.Oa && (this.i = 3);
-            ArrayUtils.forEach(this.ic, function (a) {
-                a.jb();
-            });
-        }
 
-        /** updates over time */
         update(now) {
             this.stateTime = now - this.lastTime;
 
             if (this.state === 0) {
                 if (now > this.targetY) {
                     this.shadowSprite.show(false);
-                    Sprite.setZIndex(this.mainSprite, 1);
+                    this.mainSprite.setZIndex(1);
                     this.state = 1;
-                    updateSpriteTransform(this, 0, 0);
+                    applyMovement(this, 0, 0);
                 } else if (this.randomMove) {
-                    oscillateMovement(this, now);
+                    handleParallaxScroll(this, now);
                 } else {
-                    floatUpAndDown(this, now);
+                    handleVerticalScroll(this, now);
                 }
             } else if (this.state === 1 && now > this.texture + this.targetY) {
-                this.state = 3;
+                this.state = 3; // finished / expired
             }
 
-            this.behaviors?.forEach(b => b.jb());
+            this.behaviors?.forEach(b => b.update());
         }
 
-        /** render sprite position */
         renderPosition() {
             const x = 20 * (Math.floor(this.tileIndex % 23) + 0.5);
             const y = 20 * (Math.floor(this.tileIndex / 23) + 0.5);
 
             this.posX = x - this.mainSprite.getWidth() / 2;
             this.posY = y - this.mainSprite.getHeight() / 2;
-            O(this.mainSprite, this.posX, this.posY);
+            Sprite.setPosition(this.mainSprite, this.posX, this.posY);
 
             const shadowX = x - this.shadowSprite.getWidth() / 2;
             const shadowY = y + this.mainSprite.getHeight() / 2 - this.shadowSprite.getHeight() + this.tileOffset;
-            O(this.shadowSprite, shadowX, shadowY);
+            Sprite.setPosition(this.shadowSprite, shadowX, shadowY);
         }
 
-        getName() { return this.name; }
-        getTileIndex() { return this.tileIndex; }
+        getCellIndex() { return this.tileIndex; }
         getRow() { return Math.floor(this.tileIndex / 23); }
-        getCol() { return this.tileIndex % 23; }
-        getSpriteId() { return this.mainSprite.Ua(); }
+        getColumn() { return this.tileIndex % 23; }
 
-        onReady() { return this.state === 1 && this.stateTime > this.texture + this.targetY - 300; }
-        onDisappear() { zc(this.mainSprite); }
-        onActive() { return this.state === 1 && this.data; }
-
-        onFinish() {
-            const index = this.grid.indexOf(this.mainSprite.Ua());
-            Q(this.mainSprite, this.grid[(index + 1) % this.grid.length]);
+        cycleFrame() {
+            let index = this.grid.indexOf(this.mainSprite.getFrame());
+            index = (index + 1) % this.grid.length;
+            Sprite.setFrame(this.mainSprite, this.grid[index]);
         }
 
-        Ud() {
-            var a = this.Qa, b = 20 * (Math.floor(a % 23) + 0.5), a = 20 * (Math.floor(a / 23) + 0.5);
-            this.hb = b - this.mainSprite.getWidth() / 2;
-            this.ib = a - this.mainSprite.getHeight() / 2;
-            O(this.mainSprite, this.hb, this.ib);
-            this.nc = b - this.J.getWidth() / 2;
-            this.qd = a + this.mainSprite.getHeight() / 2 - this.J.getHeight() + this.fd;
-            O(this.J, this.nc, this.qd);
+        isEndingSoon() {
+            return this.state === 1 && this.stateTime > this.texture + this.targetY - 300;
+        }
+
+        fadeOut() {
+            Sprite.fadeOut(this.mainSprite);
+        }
+
+        hasData() {
+            return this.state === 1 && this.data;
         }
     }
 
-    var Ed = [450, 900, 1350];
-    var Fd = function (a) {
-        a.lc = true;
-        a.Oa = a.lc ? 2E3 : 1400;
-        a.kc = random(2) ? 1 : -1
-    };
-    var Id = function (a, b) {
-        var c = 40;
-        800 < b ? c = 10 * (1 - Math.pow((b - 800 - 300) / 300, 2)) : 200 < b && ("none" == a.a.s.style.display && (a.a.show(true), yc(a.a, 300, 0, 1)), c = 40 * (1 - Math.pow((b - 200) / 600, 2)));
-        Gd(a, 0, Math.floor(c))
-    },
-    Hd = function (a, b) {
-        var c = 40,
-            d = 0,
-            e = b - 200,
-            f = Ed[0],
-            n = Ed[1],
-            q = Ed[2];
-        200 < b && ("none" == a.a.s.style.display && (a.a.show(true), yc(a.a, 300, 0, 1)), c = 40 * (1 - Math.pow(e / 1800, 2)), d = 1, e < n ? (d = Math.floor(1E3 * (1 - Math.pow((e - f) / f, 2))) / 1E3, d *= 15 * -a.kc) : (d = Math.floor(1E3 * (1 - Math.pow((e - q) / f, 2))) / 1E3, d *= 15 * a.kc));
-        Gd(a, Math.floor(d),
-            Math.floor(c))
-    };
-    var Gd = function (a, b, c) {
-        a.cc == c && a.jd == b || (15 < b || -15 > b) || (a.jd = b, a.cc = c, O(a.a, a.hb - b, a.ib - c), c = 1 - (1 - 0.7) * c / 40, a.J.scale(c, c), b && O(a.J, a.nc - b, a.qd))
-    },
-    Jd = function (a, b) {
-        b.appendChild(a.a.aa());
-        b.appendChild(a.J.aa())
-    },
-    Kd = function (a, b) {
-        a.Qa = b;
-        a.Ud()
-    };
+    /**
+     * Handles vertical movement and fade-in scaling effect.
+     * @param {Object} obj - The scene or sprite object with position and sprite info.
+     * @param {number} scrollY - The current scroll position.
+     */
+    function handleVerticalScroll(obj, scrollY) {
+        let movementY = 40;
+
+        if (scrollY > 800) {
+            // Fade out after 800px, with a parabolic easing curve
+            movementY = 10 * (1 - Math.pow((scrollY - 1100) / 300, 2));
+        } else if (scrollY > 200) {
+            // Fade in between 200–800px
+            if (obj.sprite.style.display === "none") {
+                obj.sprite.show(true);
+                Sprite.animateOpacity(obj.sprite, 300, 0, 1);
+            }
+            movementY = 40 * (1 - Math.pow((scrollY - 200) / 600, 2));
+        }
+
+        applyMovement(obj, 0, Math.floor(movementY));
+    }
+
+    /**
+     * Handles horizontal parallax and scaling.
+     * @param {Object} obj - The scene or sprite object with velocity and scaling data.
+     * @param {number} scrollY - The current scroll position.
+     */
+    function handleParallaxScroll(obj, scrollY) {
+        let movementY = 40;
+        let offsetX = 0;
+        const relativeScroll = scrollY - 200;
+
+        const SCROLL_LEVELS = [450, 900, 1350];
+        const [low, mid, high] = SCROLL_LEVELS;
+
+        if (scrollY > 200) {
+            if (obj.sprite.style.display === "none") {
+                obj.sprite.show(true);
+                Sprite.animateOpacity(obj.sprite, 300, 0, 1);
+            }
+
+            movementY = 40 * (1 - Math.pow(relativeScroll / 1800, 2));
+            offsetX = 1;
+
+            if (relativeScroll < mid) {
+                // Move left
+                offsetX = Math.floor(1000 * (1 - Math.pow((relativeScroll - low) / low, 2))) / 1000;
+                offsetX *= -15 * obj.direction;
+            } else {
+                // Move right
+                offsetX = Math.floor(1000 * (1 - Math.pow((relativeScroll - high) / low, 2))) / 1000;
+                offsetX *= 15 * obj.direction;
+            }
+        }
+
+        applyMovement(obj, Math.floor(offsetX), Math.floor(movementY));
+    }
+
+    /**
+     * Applies movement and scaling to a sprite.
+     * @param {Object} obj - The target object containing sprite and transform data.
+     * @param {number} deltaX - X offset.
+     * @param {number} deltaY - Y offset.
+     */
+    function applyMovement(obj, deltaX, deltaY) {
+        if ((obj.lastY === deltaY && obj.lastX === deltaX) || Math.abs(deltaX) > 15) return;
+
+        obj.lastX = deltaX;
+        obj.lastY = deltaY;
+
+        // Move sprite
+        setPosition(obj.sprite, obj.baseX - deltaX, obj.baseY - deltaY);
+
+        // Scale smoothly with vertical movement
+        const scale = 1 - (1 - 0.7) * deltaY / 40;
+        obj.transform.scale(scale, scale);
+
+        // Move based on parallax
+        if (deltaX) {
+            setPosition(obj.transform, obj.centerX - deltaX, obj.centerY);
+        }
+    }
+
+    function initMotion(a) {
+        a.enabled = true;
+        a.speed = this.enabled ? 2000 : 1400;
+        a.direction = Math.random() < 0.5 ? 1 : -1;
+    }
+    function attachSpritesToContainer(entity, container) {
+        container.appendChild(entity.mainSprite.getElement());
+        container.appendChild(entity.shadowSprite.getElement());
+    }
+    function setController(entity, controller) {
+        entity.controller = controller;
+        entity.refreshState();
+    }
     
-    m = T.prototype;
-    m.Jb = function () {
-        return this.Qa
-    };
-    m.Ta = function () {
-        return Math.floor(this.Qa / 23)
-    };
-    m.Sa = function () {
-        return this.Qa % 23
-    };
-    m.Ua = function () {
-        return this.a.Ua()
-    };
-    m.he = function () {
-        return 1 == this.i && this.hd > this.zb + this.Oa - 300
-    };
-    m.ke = function () {
-        zc(this.a)
-    };
-    m.ge = function () {
-        return 1 == this.i && this.fe
-    };
-    m.je = function () {
-        var a = this.Ba.indexOf(this.a.Ua()),
-            a = (a + 1) % this.Ba.length;
-        Q(this.a, this.Ba[a])
-    };
-    var Nd = function (a) {
-        T.call(this, a);
-        this.a.K(Ld, 700, this.Oa);
-        this.a.K(Md, 80, this.Oa + 700 * Ld.length);
-        this.fd = -5
-    };
-    inherit(Nd, T);
-    Nd.prototype.Ia = function () {
-        this.a.K(Md, 400);
-        setTimeout(bind(function () {
-            this.i = 2
-        }, this), 500)
-    };
-    var Ld = [86, 84, 83, 80, 78, 76],
-        Md = [74, 70, 68, 66],
-        Od = function (a) {
-            T.call(this, a);
-            random(2) && Q(this.a, this.Ba[1])
-        };
-    inherit(Od, T);
-    var Pd = function (a) {
-        T.call(this, a);
-        Q(this.J, 11)
-    };
-    inherit(Pd, T);
-    Pd.prototype.Ud = function () {
-        var a = this.Qa,
-            b = 20 * (Math.floor(a % 23) + 0.5),
-            a = 20 * (Math.floor(a / 23) + 0.5);
-        this.hb = b - this.a.getWidth() / 4;
-        this.ib = a - this.a.getHeight() / 4;
-        O(this.a, this.hb, this.ib);
-        O(this.J, b - this.J.getWidth() / 4, a + 5 - this.J.getHeight())
-    };
-    var Qd = function (a) {
-        T.call(this, a);
-        Fd(this)
-    };
-    inherit(Qd, T);
-    var Rd = function (a) {
-        T.call(this, a);
-        random(2) && Q(this.a, this.Ba[1]);
-        Fd(this)
-    };
-    inherit(Rd, T);
-    class Sd {
-        constructor(a) {
-            T.call(this, a);
-            (a = random(4)) && Q(this.a, this.Ba[a]);
-            this.be = "GOLE"[a];
-            Fd(this);
+    class AnimatedFallingEntity extends GridEntity {
+        constructor(config) {
+            super(config);
+            this.sprite.K(Ld, 700, this.targetY);
+            this.sprite.K(Md, 80, this.targetY + 700 * Ld.length);
+            this.speed = -5;
+        }
+
+        onImpact() {
+            this.sprite.K(Md, 400);
+            setTimeout(() => { this.state = 2; }, 500);
         }
     }
-    inherit(Sd, T);
 
-    var Td = [],
-        U = true,
-        Ud = 0;
+    var Ld = [86, 84, 83, 80, 78, 76]
+    var Md = [74, 70, 68, 66]
+
+    class StaticVariantEntity extends GridEntity {
+        constructor(config) {
+            super(config);
+            if (random(2)) Sprite.setFrame(this.sprite, this.grid[1]);
+        }
+    }
+
+    class ShadowedEntity extends GridEntity {
+        constructor(config) {
+            super(config);
+            Sprite.setFrame(this.shadow, 11);
+        }
+
+        updatePosition() {
+            const idx = this.Qa;
+            const x = 20 * (Math.floor(idx % 23) + 0.5);
+            const y = 20 * (Math.floor(idx / 23) + 0.5);
+
+            this.hb = x - this.sprite.getWidth() / 4;
+            this.ib = y - this.sprite.getHeight() / 4;
+            Sprite.setPosition(this.sprite, this.hb, this.ib);
+            Sprite.setPosition(this.shadow, x - this.shadow.getWidth() / 4, y + 5 - this.shadow.getHeight());
+        }
+    }
+
+    class MovingEntity extends GridEntity {
+        constructor(config) {
+            super(config);
+            initMotion(this);
+        }
+    }
+
+    class RandomMovingEntity extends GridEntity {
+        constructor(config) {
+            super(config);
+            if (random(2)) Sprite.setFrame(this.sprite, this.grid[1]);
+            initMotion(this);
+        }
+    }
+
+    class LanternEntity extends GridEntity {
+        constructor(config) {
+            super(config);
+            const variant = random(4);
+            if (variant) Sprite.setFrame(this.sprite, this.grid[variant]);
+            this.variantKey = "GOLE"[variant];
+            initMotion(this);
+        }
+    }
+
+    var Td = []
+    var U = true
 
     class ObjectPoolManager {
         constructor() {
@@ -2871,7 +3118,7 @@ var minutes = 6E4;
         return createItem(chosenKey);
     }
 
-    Yd = createItem;
+    createItem = createItem;
 
     class Item {
         constructor(grid, name, texture, extra = 0, data = null) {
@@ -2895,7 +3142,7 @@ var minutes = 6E4;
     }
 
     var LootTable = {
-        ta: "firecraker",
+        firecraker: "firecraker",
         Da: "dumpling",
         ob: "steamer",
         ha: "coin",
@@ -2904,8 +3151,8 @@ var minutes = 6E4;
         Fa: "medicine",
         mb: "mushroom",
         nb: "papercut",
-        Va: "envelope",
-        lb: "lantern"
+        envelope: "envelope",
+        lantern: "lantern"
     };
     var be = [new Point(0, 4), new Point(1, 4), new Point(2, 4), new Point(3, 4), new Point(3, 3), new Point(3, 2), new Point(3, 1), new Point(3, 0), new Point(2, 0), new Point(1, 0), new Point(0, 0), new Point(0, 1), new Point(0, 2), new Point(1, 2), new Point(2, 2)],
         ce = [new Point(0, 0), new Point(1, 0), new Point(2, 0), new Point(3, 0), new Point(3, 1), new Point(3, 2), new Point(3, 3), new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1)],
@@ -3045,7 +3292,8 @@ var minutes = 6E4;
             }
         }
         match() {
-            var a = new SetEx, b = qe(this);
+            var a = new SetEx
+            var b = getLowestActiveCellIndex(this);
             forEachItem(this.activeCells, function (c) {
                 a.add(c - b);
             }, this);
@@ -3076,7 +3324,6 @@ var minutes = 6E4;
 
             // Prevent wrapping to next row
             const notLastColumn = index % 23 !== 22;
-
             return notLastColumn && right && bottom && bottomRight;
         });
 
@@ -3088,43 +3335,101 @@ var minutes = 6E4;
         // Return the 4 indices forming the 2x2 block
         return [start, start + 1, start + 23, start + 23 + 1];
     }
-    ne = find2x2Block;
+    find2x2Block = find2x2Block;
 
-    var me = function (a) {
-        if (a.availableCells.Nc()) return -1;
-        a = a.availableCells.getValues();
-        return a[random(a.length)]
-    },
-    oe = function (a, b, c) {
-        var d = a.cellMap.get(b);
-        d.Jc--;
-        !d.Jc && !(-1 < blockedCells.indexOf(b)) && a.availableCells.add(b);
-        c ? (d.Ic--, d.Ic || a.activeCells.remove(b)) : d.Gc--
-    },
-    pe = function (a) {
-        var b = new SetEx;
-        forEachItem(a.activeCells, function (a) {
-            0 < this.g.get(a).Gc && b.add(a)
-        }, a);
-        return b.values()
-    },
-    qe = function (a) {
-        var b = Infinity;
-        forEachItem(a.activeCells, function (a) {
-            b > a && (b = a)
+    /**
+     * Selects a random available cell index from the grid.
+     * 
+     * @param {Object} grid - The grid or cell manager.
+     * @returns {number} The selected cell index, or -1 if none available.
+     */
+    function selectRandomAvailableCell(grid) {
+        if (grid.availableCells.isEmpty()) return -1;
+
+        const available = grid.availableCells.getValues();
+        return available[random(available.length)];
+    }
+
+    /**
+     * Updates a specific cell's usage counters after an operation.
+     * 
+     * @param {Object} grid - The grid or cell manager.
+     * @param {number} cellIndex - The target cell index.
+     * @param {boolean} isActive - Whether the operation was active (true) or passive (false).
+     */
+    function updateCellUsage(grid, cellIndex, isActive) {
+        const cell = grid.cellMap.get(cellIndex);
+
+        // Decrease reference counters
+        cell.Jc--;
+
+        // If cell is now unused and not blocked, mark it as available
+        if (cell.Jc === 0 && blockedCells.indexOf(cellIndex) === -1) {
+            grid.availableCells.add(cellIndex);
+        }
+
+        // Adjust active/passive counts
+        if (isActive) {
+            cell.Ic--;
+            if (cell.Ic === 0) grid.activeCells.remove(cellIndex);
+        } else {
+            cell.Gc--;
+        }
+    }
+
+    /**
+     * Returns a list of currently active cells that still have active links.
+     * 
+     * @param {Object} grid - The grid or cell manager.
+     * @returns {Array<number>} Active cell indices.
+     */
+    function getActiveLinkedCells(grid) {
+        const result = new SetEx();
+
+        forEachItem(grid.activeCells, function (cellIndex) {
+            if (this.g.get(cellIndex).Gc > 0) result.add(cellIndex);
+        }, grid);
+
+        return result.values();
+    }
+
+    /**
+     * Finds the smallest (earliest) active cell index.
+     * 
+     * @param {Object} grid - The grid or cell manager.
+     * @returns {number} Minimum active cell index.
+     */
+    function getLowestActiveCellIndex(grid) {
+        let min = Infinity;
+
+        forEachItem(grid.activeCells, function (cellIndex) {
+            if (cellIndex < min) min = cellIndex;
         });
-        return b
-    };
-    var re = function (a, b) {
-        var c = me(a),
-            d = [];
-        forEachItem(a.patterns[b], function (a) {
-            a += c;
-            a %= 207;
-            this.availableCells.contains(a) && d.push(a)
-        }, a);
-        return d
-    };
+
+        return min;
+    }
+
+    /**
+     * Generates a pattern-based cell sequence starting from a random available cell.
+     * 
+     * @param {Object} grid - The grid or cell manager.
+     * @param {string|number} patternId - The ID of the pattern to use.
+     * @returns {Array<number>} Array of valid target cell indices.
+     */
+    function generatePatternedCellSequence(grid, patternId) {
+        const startCell = selectRandomAvailableCell(grid);
+        const result = [];
+
+        forEachItem(grid.patterns[patternId], function (offset) {
+            let target = (offset + startCell) % 207;
+            if (this.availableCells.contains(target)) {
+                result.push(target);
+            }
+        }, grid);
+
+        return result;
+    }
+
     class TileSpawner extends Disposable {
         constructor() {
             super();
@@ -3144,15 +3449,15 @@ var minutes = 6E4;
             this.spawnArea = new SpriteGroup(88, -3, -3, this.v);
         }
         jb(a) {
-            te(this, a);
+            updateItems(this, a);
             a = getTime();
             var b = 8 - this.Ca.va();
             if (2500 < a - this.Ec && 0 < b) {
                 for (var b = random(b) + 1, c = 0; c < b; c++) {
-                    var d = generateRandomItem(this.itemSource),
-                        e = -1,
-                        e = "steamer" == d.getName() ? ne(this.gridManager) : me(this.gridManager); -
-                    1 != e && ue(this, d, e);
+                    var d = generateRandomItem(this.itemSource);
+                    e = -1;
+                    e = "steamer" == d.getName() ? find2x2Block(this.gridManager) : selectRandomAvailableCell(this.gridManager);
+                    if (-1 != e) spawnItem(this, d, e);
                 }
                 this.Ec = a;
             }
@@ -3171,36 +3476,73 @@ var minutes = 6E4;
         }
     }
     defineSingleton(TileSpawner);
-    var te = function (a, b) {
-        40 >= b - a.ye || (forEachItem(a.Ca, function(a) {
-            a.update(b);
-            0 == a.i || 1 == a.i || (this.Ca.remove(a), a.C())
-        }, a), forEachItem(a.Ra, function (a, b) {
-            a.Bc && (oe(this.g, b), this.Ra.remove(b))
-        }, a), a.ye = b)
-    };
-    var ve = function (a, b) {
-        var c = re(a.g, b);
-        initializeObjectCounter(a.bb, b);
-        ArrayUtils.forEach(c, function (a) {
-            var b = generateRandomItem(this.bb);
-            ue(this, b, a)
-        }, a);
-        initializeObjectCounter(a.bb, he)
-    };
 
-    ue = function (a, b, c) {
-        var d = function (a, b) {
-            this.Ra.set(b, a);
-            this.Ca.add(a);
-            this.g.markCell(b)
+    // Update items and remove inactive ones
+    function updateItems(obj, currentTime) {
+        if (currentTime - obj.lastUpdateTime <= 40) return;
+
+        // Update each item in Ca
+        forEachItem(obj.Ca, function(item) {
+            item.update(currentTime);
+
+            // Remove items that are not in states 0 or 1
+            if (item.i !== 0 && item.i !== 1) {
+                this.Ca.remove(item);
+                item.C();
+            }
+        }, obj);
+
+        // Update Ra cells
+        forEachItem(obj.Ra, function(cell, key) {
+            if (cell.Bc) {
+                updateCellUsage(this.g, key);
+                this.Ra.remove(key);
+            }
+        }, obj);
+
+        obj.lastUpdateTime = currentTime;
+    }
+
+    // Generate items for a grid based on a pattern
+    function fillGridWithItems(obj, patternCount) {
+        const sequence = generatePatternedCellSequence(obj.g, patternCount);
+        initializeObjectCounter(obj.objectPool, patternCount);
+
+        sequence.forEach(function(cell) {
+            const randomItem = generateRandomItem(this.objectPool);
+            spawnItem(this, randomItem, cell);
+        }, obj);
+
+        initializeObjectCounter(obj.objectPool, he);
+    }
+
+    /**
+     * Spawns an item into the grid at specified positions.
+     * 
+     * @param {Object} tileSpawner - The TileSpawner instance managing the grid.
+     * @param {Object} item - The item object to spawn.
+     * @param {Point|Point[]} positions - Single position or array of positions to place the item.
+     */
+    function spawnItem(tileSpawner, item, positions) {
+        const addItemToGrid = (it, pos) => {
+            tileSpawner.Ra.set(pos, it);   // Map grid position → item
+            tileSpawner.Ca.add(it);        // Track active items
+            tileSpawner.g.markCell(pos);   // Mark cell as occupied
         };
-        isArray(c) ? (ArrayUtils.forEach(c, function (a) {
-            d.call(this, b, a)
-        }, a), Kd(b, c[0])) : (d.call(a, b, c), Kd(b, c));
-        Jd(b, a.v);
-        b.zb *= a.spawnRate
-    };
+
+        if (Array.isArray(positions)) {
+            positions.forEach(pos => addItemToGrid.call(tileSpawner, item, pos));
+            setController(item, positions[0]);
+        } else {
+            addItemToGrid.call(tileSpawner, item, positions);
+            setController(item, positions);
+        }
+
+        attachSpritesToContainer(item, tileSpawner.v);
+        item.zb *= tileSpawner.spawnRate; // Apply spawn rate multiplier
+    }
+    spawnItem = spawnItem
+
     var we, xe, ye = [
         { point: [3, 7], dir: 1 },
         { point: [2, 6], dir: 4 },
@@ -3210,32 +3552,17 @@ var minutes = 6E4;
         { point: [2, 3], dir: 4 },
         { point: [4, 2], dir: 4 }
     ],
-        De = function (a) {
-            var b = ye[we], c = b.point;
-            a.Ta() == c[1] && a.Sa() == c[0] && (ze(a, b.dir), we++, we == ye.length && (boostFunction(a, getTime(), Infinity), a.d[0].K(Be, 80)));
-            a.forward();
-            Ce(a);
-            if (15 > xe)
-                for (b = 0; 15 > b; b++) a.d[b].a.show(b <= xe + 1);
-            xe++
-        };
-    var Fe = function (a) {
-        this.d = [];
-        this.A = null;
-        this.ma = [];
-        this.ba = Ee;
-        this.v = a;
-        this.jc = getTime();
-        this.oc = this.qc = null;
-        this.Ab = ObjectRegistry[1].V;
-        this.Fb = ObjectRegistry[1].V;
-        this.Gb = 1;
-        this.ed = this.Z = 0;
-        this.Yc = this.Hb = this.Ib = null;
-        this.g = GridPatternManager.getInstance()
+    De = function (a) {
+        var b = ye[we], c = b.point;
+        a.Ta() == c[1] && a.Sa() == c[0] && (ze(a, b.dir), we++, we == ye.length && (boostFunction(a, getTime(), Infinity), a.d[0].K(Be, 80)));
+        a.forward();
+        Ce(a);
+        if (15 > xe)
+            for (b = 0; 15 > b; b++) a.d[b].a.show(b <= xe + 1);
+        xe++
     };
-    inherit(Fe, EventDispatcher);
-    Ge = [Uc, Tc, Sc, Tc, Uc];
+
+    var Ge = [Uc, Tc, Sc, Tc, Uc];
     var Be = [Uc, Tc, Sc],
         He = [Ic, Jc, Kc, Lc],
         Ie = [Fc, Gc, Hc],
@@ -3253,11 +3580,28 @@ var minutes = 6E4;
     function createSprite(spriteType, zIndex, parentElement) {
         const sprite = new Sprite(spriteType);
         sprite.show(true);
-        Sprite.setZIndex(sprite, zIndex);
+        sprite.setZIndex(zIndex);
         sprite.isLooping = true; // 'Eb = h' looks like a boolean property
         parentElement.appendChild(sprite.getElement()); // 'aa()' returns DOM element
         return sprite;
     }
+
+    var Fe = function (a) {
+        this.d = [];
+        this.A = null;
+        this.ma = [];
+        this.ba = Ee;
+        this.v = a;
+        this.jc = getTime();
+        this.oc = this.qc = null;
+        this.Ab = ObjectRegistry[1].V;
+        this.Fb = ObjectRegistry[1].V;
+        this.Gb = 1;
+        this.ed = this.Z = 0;
+        this.Yc = this.Hb = this.Ib = null;
+        this.g = GridPatternManager.getInstance()
+    };
+    inherit(Fe, EventDispatcher);
 
     Fe.prototype.init = function () {
         for (var a = 22, b = null, c = 0; 15 > c; c++) b = new Te(3, 0 == c ? 0 : 14 == c ? 2 : 1, a, 7, c, b, this.v), b.a.show(false), this.d.push(b), this.g.markCell(161 + a, true), a++, a = 23 <= a ? a - 23 : a;
@@ -3266,16 +3610,16 @@ var minutes = 6E4;
     Fe.prototype.forward = function () {
         var a = this.d[this.d.length - 1].Jb();
         ArrayUtils.forEachReverse(this.d, function (a) {
-            a.Pa ? (a.k = a.Pa.k, a.o = a.Pa.o) : 0 == a.W && (a.k += 3 == a.F ? -1 : 4 == a.F ? 1 : 0, a.o += 1 == a.F ? -1 : 2 == a.F ? 1 : 0, a.k = (a.k + 23) % 23, a.o = (a.o + 9) % 9)
+            a.parent ? (a.k = a.parent.k, a.o = a.parent.o) : 0 == a.W && (a.k += 3 == a.F ? -1 : 4 == a.F ? 1 : 0, a.o += 1 == a.F ? -1 : 2 == a.F ? 1 : 0, a.k = (a.k + 23) % 23, a.o = (a.o + 9) % 9)
         });
         this.g.markCell(this.d[0].Jb(), true);
-        oe(this.g, a, true);
+        updateCellUsage(this.g, a, true);
         var b = null;
         this.ma.length && (b = this.ma.shift());
         ArrayUtils.forEachReverse(this.d, function (a) {
             var d = b;
             a.oa = a.F;
-            a.F = 0 == a.W ? d ? d : a.F : 2 == a.W ? a.Pa.Pa.F : a.Pa.F
+            a.F = 0 == a.W ? d ? d : a.F : 2 == a.W ? a.parent.parent.F : a.parent.F
         })
     };
     Fe.prototype.move = function (a, b) {
@@ -3306,7 +3650,7 @@ var minutes = 6E4;
                 180 == c ? a += 20 - d : 270 == c && (b += 20 - d);
                 f && e.rotate(c);
                 180 == c || 0 == c ? (nc(e, d + 1), a -= 180 == c ? 2 : 0) : (oc(e, d + 1), b -= 270 == c ? 2 : 0);
-                O(e, a, b)
+                Sprite.setPosition(e, a, b)
             };
             if (a.d[0].F == a.d[1].F) {
                 var e = a.d[0].qa().Na();
@@ -3331,7 +3675,7 @@ var minutes = 6E4;
         }
     },
     We = function (a, b) {
-        var c = pe(a.g);
+        var c = getActiveLinkedCells(a.g);
         c.length ? (ArrayUtils.forEach(c, function (a) {
             this.d[0].Jb() == a && this.d[0].K(Ie, 80);
             this.dispatchEvent(new CatchItemEvent(a, b))
@@ -3350,7 +3694,7 @@ var minutes = 6E4;
         if (2 > a.ma.length) {
             var c = a.d[0].F;
             0 < a.ma.length && (c = a.ma[a.ma.length - 1]);
-            if ((1 == c || 2 == c) && (3 == b || 4 == b) || (1 == b || 2 == b) && (3 == c || 4 == c)) a.ma.push(b), c = 3 == bf.getInstance().$.get([c, b]) ? Le : Me, a.d[0].K(c, 80)
+            if ((1 == c || 2 == c) && (3 == b || 4 == b) || (1 == b || 2 == b) && (3 == c || 4 == c)) a.ma.push(b), c = 3 == DirectionManager.getInstance().transformMap.get([c, b]) ? Le : Me, a.d[0].K(c, 80)
         }
     },
     Ce = function (a) {
@@ -3358,10 +3702,10 @@ var minutes = 6E4;
         a.d[b].getElement().show(true);
         for (var c = a.d[b - 1].qa(), d = b - 1; 1 < d; d--) {
             a.d[d].a = a.d[d - 1].a;
-            Sprite.setZIndex(a.d[d].a, 16 - d);
+            a.d[d].a.setZIndex(16 - d);
         }
         a.d[1].a = c;
-        Sprite.setZIndex(a.d[1].a, 15);
+        a.d[1].a.setZIndex(15);
         cf(a.d[0], a.ba);
         cf(a.d[1]);
         cf(a.d[b])
@@ -3372,7 +3716,6 @@ var minutes = 6E4;
         a.Gb = c;
         a.Ab = a.Fb * a.Gb
     }
-    boostFunction = Ae;
 
     Fe.prototype.h = function () {
         ArrayUtils.forEach(this.d, function (a) {
@@ -3389,6 +3732,345 @@ var minutes = 6E4;
         return this.d[0].Ta()
     };
 
+    /**
+     * SnakeController
+     * - Manages the chain of segments (this.segments)
+     * - Advances the snake forward, handles movement interpolation, catches items, and pattern-matching.
+     * - Dispatches events: "catch item" and "match pattern" (use earlier CustomEvent classes).
+     */
+    class SnakeController extends EventDispatcher {
+        constructor(containerElement) {
+            super();
+
+            // segments array (head is segments[0])
+            this.segments = [];
+
+            // visual "head" alternate sprite used when head matches next segment
+            this.headSprite = null;
+
+            // queued direction inputs (ma in original)
+            this.directionQueue = [];
+
+            // current audio/visual frame (ba)
+            this.ba = Ee; // default frame constant from original
+
+            this.container = containerElement;
+            this.lastUpdateTime = getTime();
+
+            // timing helpers & state
+            this.lastMatchTime = null;       // qc
+            this.lastCatchTime = null;       // oc
+            this.moveProgress = 0;           // Z (0..1)
+            this.moveDuration = ObjectRegistry[1].V; // Ab (base duration from registry)
+            this.baseDuration = ObjectRegistry[1].V;  // Fb (base)
+            this.speedMultiplier = 1;        // Gb
+            this.stepPixel = 20;             // used for pixel computations
+            this.currentStepFrame = 0;       // ed cached step frame
+            this.patternManager = GridPatternManager.getInstance();
+
+            // helpers for certain display/cache
+            this.cachedLastActive = null;
+        }
+
+        /**
+         * Initialize the snake segments and head sprite.
+         * Builds 15 segments arranged on the right side as in original.
+         */
+        init() {
+            // starting column index in original code was 22, and they fill 15 segments
+            let col = 22;
+            let previous = null;
+
+            for (let i = 0; i < 15; i++) {
+                // construction: new Te(direction, orientation?, col, row, index, prevSegment, container)
+                // original used (3, 0==c ? 0 : 14==c ? 2 : 1, a, 7, c, b, this.v)
+                const orientation = (i === 0) ? 0 : (i === 14 ? 2 : 1);
+                const seg = new SnakeSegment(3, orientation, col, 7, i, previous, this.container);
+                seg.a.show(false);                 // mirror: hide initially
+                this.segments.push(seg);
+                this.patternManager.markCell(161 + col, true); // original marking
+                previous = seg;
+
+                // increment column wrapping at 23
+                col++;
+                if (col >= 23) col -= 23;
+            }
+
+            // create the alternate head sprite used for special display
+            this.headSprite = createSprite(qc, 15, this.container);
+        }
+
+        /**
+         * Advance the snake forward one logical step:
+         * - Move each segment to its predecessor's position (or compute new position for head)
+         * - Mark the newly occupied cell and update cell usage bookkeeping
+         */
+        forward() {
+            // index of last cell before the step (for releasing)
+            const releasingIndex = this.segments[this.segments.length - 1].Jb();
+
+            // move segments backwards
+            ArrayUtils.forEachReverse(this.segments, seg => {
+                if (seg.parent) {
+                    // if a link to previous exists, follow it
+                    seg.k = seg.parent.k;
+                    seg.o = seg.parent.o;
+                } else if (seg.W === 0) {
+                    // default movement by orientation F
+                    seg.k += (seg.F === 3 ? -1 : seg.F === 4 ? 1 : 0);
+                    seg.o += (seg.F === 1 ? -1 : seg.F === 2 ? 1 : 0);
+                    seg.k = (seg.k + 23) % 23;
+                    seg.o = (seg.o + 9) % 9;
+                }
+            });
+
+            // mark the newly occupied cell of head
+            this.patternManager.markCell(this.segments[0].Jb(), true);
+
+            // update cell usage for the releasing cell (original 'oe')
+            updateCellUsage(this.patternManager, releasingIndex, true);
+
+            // pop a queued direction if present and apply to segments
+            let queued = null;
+            if (this.directionQueue.length) queued = this.directionQueue.shift();
+
+            ArrayUtils.forEachReverse(this.segments, seg => {
+                const d = queued;
+                seg.oa = seg.F; // store old facing
+                // choose new F based on segment type
+                seg.F = (seg.W === 0) ? (d ? d : seg.F) : (seg.W === 2 ? seg.parent.parent.F : seg.parent.F);
+            });
+        }
+
+        /**
+         * Top-level move method called every frame/tick.
+         * @param {number} now    - current timestamp in ms
+         */
+        move(now) {
+            // auto-reset speed if idle too long
+            if (this.lastCatchTime && (now - this.lastCatchTime) > 5000) {
+                this.resetSpeed(now);
+            }
+
+            // if an input or forced forward occurred, process forward step
+            if (this.moveProgress >= 1) {
+                this.forward();
+
+                // attempt pattern match periodically (every ~5s)
+                if ((this.lastMatchTime ? now - this.lastMatchTime : 5000) >= 5000) {
+                    const pattern = this.patternManager.match();
+                    if (pattern !== "") {
+                        // dispatch match event (Ve)
+                        this.dispatchEvent(new CatchItemEvent(pattern, now));
+                        this.lastMatchTime = now;
+                        // head K animation (originally Ge)
+                        this.segments[0].K(Ge, 80, 500);
+                    }
+                }
+
+                // handle catches and other per-step checks
+                this.handleCatchAndItems(now);
+                this.updateVisualsAfterStep();
+                this.moveProgress = 0;
+            }
+
+            // interpolate rendering and movement between steps
+            this.updateInterpolation(now);
+
+            // remember last timestamp
+            this.lastUpdateTime = now;
+        }
+
+        /**
+         * updateInterpolation — equivalent to original Xe
+         * Interpolates movement progress into a small integer frame (ed),
+         * updates head or trailing segment positions and rotations.
+         */
+        updateInterpolation(now) {
+            // cap delta to 100ms like original
+            const delta = Math.min(now - this.lastUpdateTime, 100);
+            this.moveProgress += delta / this.moveDuration;
+            this.moveProgress = Math.min(this.moveProgress, 1);
+
+            // compute an integer animation frame used to index some sprite map:
+            let frame = Math.floor(this.stepPixel * this.moveProgress); // 20 * Z
+            frame = (frame % 2) ? frame + 1 : frame; // ensure it's odd/even pattern as original
+
+            if (this.currentStepFrame !== frame) {
+                // helper for positioning/rotation used by head and tail rendering
+                const placeSprite = (x, y, angle, frameVal, sprite, flip) => {
+                    // Original logic did transform of rotation and setPosition depending on flip
+                    // We replicate the same math but express clearly:
+                    const d = flip ? frameVal : (20 - frameVal);
+                    const rot = flip ? angle : (angle + 180) % 360;
+                    // If rotated, adjust anchor offsets differently:
+                    if (rot === 180) x += 20 - d;
+                    if (rot === 270) y += 20 - d;
+
+                    if (flip) sprite.rotate(rot);
+                    if (rot === 180 || rot === 0) {
+                        // setWidth/Height adjustments (nc/oc logic converted)
+                        nc(sprite, d + 1);
+                        if (rot === 180) x -= 2;
+                    } else {
+                        oc(sprite, d + 1);
+                        if (rot === 270) y -= 2;
+                    }
+
+                    Sprite.setPosition(sprite, x, y);
+                };
+
+                // If head and its follower face same direction, use special head sprite
+                if (this.segments[0].F === this.segments[1].F) {
+                    const headAngle = this.segments[0].qa().Na(); // Na() returned rotation in original
+                    this.headSprite.show(true);
+                    const headPixelX = 20 * this.getColumn();
+                    const headPixelY = 20 * this.getRow();
+                    placeSprite(headPixelX, headPixelY, headAngle, frame, this.headSprite, true);
+                    this.segments[0].move(this.moveProgress);
+                } else {
+                    // hide alternate head and animate default head
+                    this.headSprite.show(false);
+                    Ye(this.segments[0], this.moveProgress);
+                }
+
+                // tail handling (depending on Ze checks)
+                const lastIndex = this.segments.length - 1;
+                if (Ze(this.segments[lastIndex - 1])) {
+                    // special tail case: hide last sprite, animate previous
+                    this.segments[lastIndex].qa().show(false);
+                    Ye(this.segments[lastIndex - 1], this.moveProgress);
+                } else {
+                    // normal tail interpolation
+                    this.segments[lastIndex].move(this.moveProgress);
+                    const prevSprite = this.segments[lastIndex - 1].qa();
+                    const px = 20 * this.segments[lastIndex - 1].Sa();
+                    const py = 20 * this.segments[lastIndex - 1].Ta();
+                    const rot = prevSprite.Na();
+                    placeSprite(px, py, rot, frame, prevSprite, false);
+                }
+
+                this.currentStepFrame = frame;
+            }
+        }
+
+        /**
+         * handleCatchAndItems - equivalent to original We
+         * Checks active linked cells and emits catch events, or triggers head animation if none.
+         */
+        handleCatchAndItems(now) {
+            const activeLinked = getActiveLinkedCells(this.patternManager);
+            if (activeLinked.length) {
+                ArrayUtils.forEach(activeLinked, idx => {
+                    // if head occupies same cell, trigger short animation
+                    if (this.segments[0].Jb() === idx) {
+                    this.segments[0].K(Ie, 80);
+                    }
+                    // dispatch catch event (custom $e)
+                    this.dispatchEvent(new CatchItemEvent(idx, now));
+                }, this);
+
+                this.lastCatchTime = now;
+            } else {
+                // if no active linked cells for >5s, nudge head (original He)
+                if ((now - (this.lastCatchTime || 0)) > 5000) {
+                    this.lastCatchTime = now;
+                    this.segments[0].K(He, 80);
+                }
+            }
+        }
+
+        /**
+         * resetSpeed — equivalent to original Ue
+         * Resets to default phase, speed and timing.
+         */
+        resetSpeed(now) {
+            this.ba = Ee; // reset frame
+            this.segments[0].K(Ne, 80, 100);
+            this.moveDuration = this.baseDuration;
+            this.speedMultiplier = 1;
+            this.lastUpdateTime = now;
+            this.lastMatchTime = null;
+        }
+
+        /**
+         * enqueueDirection — original ze
+         * Adds a direction into the direction queue if valid and triggers animation on head.
+         * Keeps at most two queued directions.
+         */
+        enqueueDirection(directionInput, externalFlag) {
+            // original called xb(b) in some cases; allow mapping if required
+            if (this.Hb != null) directionInput = xb(directionInput);
+
+            if (this.directionQueue.length < 2) {
+                let currentFacing = this.segments[0].F;
+                if (this.directionQueue.length) currentFacing = this.directionQueue[this.directionQueue.length - 1];
+
+                // only allow orthogonal turns (1/2 vs 3/4 cross)
+                if (((currentFacing === 1 || currentFacing === 2) && (directionInput === 3 || directionInput === 4)) || ((directionInput === 1 || directionInput === 2) && (currentFacing === 3 || currentFacing === 4))) {
+                    this.directionQueue.push(directionInput);
+                    // choose a quick animation depending on transform map result
+                    const transform = DirectionManager.getInstance().transformMap.get([currentFacing, directionInput]);
+                    const anim = (transform === 3) ? Le : Me;
+                    this.segments[0].K(anim, 80);
+                }
+            }
+        }
+
+        /**
+         * updateVisualsAfterStep — equivalent to original Ce
+         * Reassigns sprite frames down the chain and ensures correct z-index and visuals.
+         */
+        updateVisualsAfterStep() {
+            const lastIndex = this.segments.length - 1;
+
+            // ensure last segment element visible
+            this.segments[lastIndex].getElement().show(true);
+
+            // cascade frame references from head to tail (preserving ordering)
+            for (let i = lastIndex - 1; i > 1; i--) {
+                this.segments[i].a = this.segments[i - 1].a;
+                this.segments[i].a.setZIndex(16 - i);
+            }
+
+            // second element uses previous sprite instance
+            this.segments[1].a = this.segments[lastIndex - 1].qa();
+            this.segments[1].a.setZIndex(15);
+
+            // refresh visuals for head, second, tail
+            cf(this.segments[0], this.ba);
+            cf(this.segments[1]);
+            cf(this.segments[lastIndex]);
+        }
+
+        /**
+         * setSpeedParameters — equivalent to original Ae
+         * For debugging, sets IB (some timer), speed multiplier Gb and derived duration Ab.
+         */
+        setSpeedParameters(secs, speed) {
+            console.log(`obj: ${this} | secs: ${secs} | speed: ${speed}`);
+            this.lastCatchTime = secs;
+            this.speedMultiplier = speed;
+            this.moveDuration = this.baseDuration * this.speedMultiplier;
+        }
+
+        // shorthand helpers to expose head coordinates like Sa / Ta
+        Sa() { return this.segments[0].Sa(); }
+        Ta() { return this.segments[0].Ta(); }
+
+        // cleanup
+        dispose() {
+            ArrayUtils.forEach(this.segments, seg => seg.dispose());
+            this.directionQueue = null;
+            this.headSprite.dispose();
+            super.dispose();
+        }
+
+        // convenience getters used in original code
+        getRow() { return this.Ta(); }
+        getColumn() { return this.Sa(); }
+    }
+
     class CatchItemEvent extends CustomEvent {
         constructor(a, b) {
             super("catch item");
@@ -3404,118 +4086,220 @@ var minutes = 6E4;
         }
     }
 
-    var Te = function (a, b, c, d, e, f, n) {
-        this.oa = this.F = a;
-        this.W = b;
-        this.k = c;
-        this.o = d;
-        this.Pa = f;
-        this.a = createSprite(qc, 16 - e, n);
-        this.a.show(true);
-        this.A = null;
-        if (0 == this.W || 2 == this.W) this.A = createSprite(df[this.W], 16 - e, n);
-        cf(this)
+    // Sprite frame sets for each segment type
+    const SegmentFrames = {
+        0: Cc,  // Head
+        1: qc,  // Body
+        2: Bc   // Tail
     };
-    inherit(Te, CustomEvent);
-    var df = {
-        "0": Cc,
-        1: qc,
-        2: Bc
-    };
-    Te.prototype.move = function (a) {
-        var b = this.k + (3 == this.F ? -1 : 4 == this.F ? 1 : 0) * a;
-        a = this.o + (1 == this.F ? -1 : 2 == this.F ? 1 : 0) * a;
-        if ((22 < b || 0 > b || 8 < a || 0 > a) && this.A) {
-            var c = 22 < b ? b - 23 : 0 > b ? b + 23 : b,
-                d = 8 < a ? a - 9 : 0 > a ? a + 9 : a,
-                e = this.a.Na();
-            180 == e ? xc(this.A) : this.A.rotate(e);
-            uc(this.A, c, d);
-            this.A.show(true)
+
+    /**
+     * SnakeSegment class
+     * Represents a single segment of the snake.
+     */
+    class SnakeSegment extends CustomEvent {
+        /**
+         * @param {number} direction - Current facing direction (1–4).
+         * @param {number} type - Segment type (0=head, 1=body, 2=tail).
+         * @param {number} gridX - X position on grid.
+         * @param {number} gridY - Y position on grid.
+         * @param {number} index - Segment index (used for frame offset).
+         * @param {SnakeSegment|null} parentSegment - Previous segment in chain.
+         * @param {HTMLElement} container - The sprite layer/container.
+         */
+        constructor(direction, type, gridX, gridY, index, parentSegment, container) {
+            super();
+
+            // Movement and direction
+            this.baseDirection = this.currentDirection = direction; // current + previous direction
+            this.entityType = type;                                 // 0=head, 1=body, 2=tail
+            this.gridX = gridX;                                     // grid X
+            this.gridY = gridY;                                     // grid Y
+            this.parent = parentSegment;                            // previous segment
+
+            // Sprite for this segment
+            this.mainSprite = createSprite(qc, 16 - index, container); // base sprite
+            this.mainSprite.show(true);
+
+            // Secondary sprite (for head/tail overlays)
+            this.shadowSprite = null;
+            if (this.entityType === 0 || this.entityType === 2) {
+                this.shadowSprite = createSprite(SegmentFrames[this.entityType], 16 - index, container);
+            }
+
+            // Initial frame setup
+            updateSegmentSprite(this);
         }
-        uc(this.a, b, a)
-    };
-    var Ze = function (a) {
-        a = a.a.Ua();
-        var b = -1 < Oe.indexOf(a) || -1 < Pe.indexOf(a),
-            c = -1 < Qe.indexOf(a) || -1 < Re.indexOf(a);
-        return a == pc || b || c
-    },
-    cf = function (a, b) {
-        var c = df[a.W];
-        0 == a.W && (c = b || c);
-        var d = bf.getInstance(), e = d.Na(a.oa);
-        1 == a.W && (a.oa && a.F != a.oa) && (c = pc, e = d.ga.get([a.F, a.oa]));
-        if (!a.a.X || !a.a.X.isPlaying()) Q(a.a, c), a.A && Q(a.A, c);
-        0 == a.W && 180 == e ? xc(a.a) : a.a.rotate(e);
-        a.A && a.A.show(false);
-        uc(a.a, a.k, a.o)
-    },
-    Ye = function (a, b) {
-        var c = a.a.Ua();
-        if (!(-1 < Je.indexOf(c) || -1 < Ke.indexOf(c))) {
-            var c = Math.min(Math.floor(5 * b), 4),
-                d = bf.getInstance(),
-                e;
-            0 == a.W ?
-                (e = d.wc.get([a.oa, a.F]), e = 3 == e ? Oe : Pe) : (e = d.$.get([a.oa, a.F]), e = 3 == e ? Qe : Re, a.a.rotate(d.Na(a.oa)));
-            stopAllAnimations(a.a);
-            Q(a.a, e[c])
+
+        /**
+         * Move this segment by interpolating along its direction.
+         * @param {number} progress - 0 to 1 progress within the current move step.
+         */
+        move(progress) {
+            let x = this.gridX + (this.baseDirection === 3 ? -1 : this.baseDirection === 4 ? 1 : 0) * progress;
+            let y = this.gridY + (this.baseDirection === 1 ? -1 : this.baseDirection === 2 ? 1 : 0) * progress;
+
+            // Handle wrap-around on grid edges
+            if ((x > 22 || x < 0 || y > 8 || y < 0) && this.shadowSprite) {
+                const wrappedX = x > 22 ? x - 23 : x < 0 ? x + 23 : x;
+                const wrappedY = y > 8 ? y - 9 : y < 0 ? y + 9 : y;
+                const rotation = this.mainSprite.Na();
+
+                if (rotation === 180) this.shadowSprite.flip();
+                else this.shadowSprite.rotate(rotation);
+
+                Sprite.moveToGrid(this.shadowSprite, wrappedX, wrappedY);
+                this.shadowSprite.show(true);
+            }
+
+            Sprite.moveToGrid(this.mainSprite, x, y);
         }
-    };
-    m = Te.prototype;
-    m.K = function (a, b, c, d, e) {
-        Ze(this) && a != nulle || (b = Math.min(b, 500), this.a.K(a, b, c, d, e), this.A && this.A.K(a, b, c, d, e))
-    };
-    m.h = function () {
-        this.a.C();
-        this.A && this.A.C();
-        Te.I.h.call(this)
-    };
-    m.qa = function () {
-        return this.a
-    };
-    m.Sa = function () {
-        return this.k
-    };
-    m.Ta = function () {
-        return this.o
-    };
-    m.Jb = function () {
-        return 23 * this.o + this.k
-    };
-    var bf = function () {
-        this.ga = new MapEx;
-        this.ga.set([1, 3], 180);
-        this.ga.set([1, 4], 90);
-        this.ga.set([2, 3], 270);
-        this.ga.set([2, 4], 0);
-        this.ga.set([3, 1], 0);
-        this.ga.set([3, 2], 90);
-        this.ga.set([4, 1], 270);
-        this.ga.set([4, 2], 180);
-        this.g = new MapEx;
-        this.g.set(1, 270);
-        this.g.set(2, 90);
-        this.g.set(3, 180);
-        this.g.set(4, 0);
-        this.$ = new MapEx;
-        this.$.set([3, 1], 4);
-        this.$.set([3, 2], 3);
-        this.$.set([4, 1], 3);
-        this.$.set([4, 2], 4);
-        this.$.set([2, 3], 4);
-        this.$.set([2, 4], 3);
-        this.$.set([1, 3], 3);
-        this.$.set([1, 4], 4);
-        this.wc = this.$.clone();
-        this.wc.set([3, 1], 3);
-        this.wc.set([3, 2], 4)
-    };
-    defineSingleton(bf);
-    bf.prototype.Na = function (a) {
-        return this.g.get(a)
-    };
+
+        /**
+         * Play an animation on the segment.
+         */
+        playAnimation(anim, duration, delay, loop, callback) {
+            if (!isSpecialFrame(this) || anim == null) {
+                duration = Math.min(duration, 500);
+                this.mainSprite.K(anim, duration, delay, loop, callback);
+                if (this.shadowSprite) this.shadowSprite.K(anim, duration, delay, loop, callback);
+            }
+        }
+
+        /**
+         * Cleanup sprite resources.
+         */
+        dispose() {
+            this.mainSprite.dispose();
+            if (this.shadowSprite) this.shadowSprite.dispose();
+            super.dispose();
+        }
+
+        /** @returns {Sprite} The main sprite object. */
+        getSprite() { return this.mainSprite; }
+
+        /** @returns {number} Grid X coordinate. */
+        getX() { return this.gridX; }
+
+        /** @returns {number} Grid Y coordinate. */
+        getY() { return this.gridY; }
+
+        /** @returns {number} Flattened cell index (Y * 23 + X). */
+        getCellIndex() { return 23 * this.gridY + this.gridX; }
+    }
+
+    /**
+     * Determines if a segment’s current frame is special (turn/corner).
+     */
+    function isSpecialFrame(segment) {
+        const frameId = segment.a.Ua();
+        const isTurnA = Oe.includes(frameId) || Pe.includes(frameId);
+        const isTurnB = Qe.includes(frameId) || Re.includes(frameId);
+        return frameId === pc || isTurnA || isTurnB;
+    }
+
+    /**
+     * Sets the correct frame, rotation, and position for a segment.
+     */
+    function updateSegmentSprite(segment, overrideFrame) {
+        let frameSet = SegmentFrames[segment.W];
+        if (segment.W === 0) frameSet = overrideFrame || frameSet;
+
+        const directionMgr = DirectionManager.getInstance();
+        let angle = directionMgr.getBaseAngle(segment.oa);
+
+        if (segment.W === 1 && segment.oa && segment.F !== segment.oa) {
+            frameSet = pc;
+            angle = directionMgr.rotationMap.get([segment.F, segment.oa]);
+        }
+
+        if (!segment.a.X || !segment.a.X.isPlaying()) {
+            Sprite.setFrame(segment.a, frameSet);
+            if (segment.A) Sprite.setFrame(segment.A, frameSet);
+        }
+
+        if (segment.W === 0 && angle === 180) segment.a.flip();
+        else segment.a.rotate(angle);
+
+        if (segment.A) segment.A.show(false);
+        Sprite.moveToGrid(segment.a, segment.k, segment.o);
+    }
+
+    /**
+     * Updates transition frames for turning animation.
+     */
+    function animateSegmentTurn(segment, progress) {
+        const frameId = segment.a.Ua();
+        if (Je.includes(frameId) || Ke.includes(frameId)) return;
+
+        const frameIndex = Math.min(Math.floor(5 * progress), 4);
+        const directionMgr = DirectionManager.getInstance();
+        let frameSet;
+
+        if (segment.W === 0) {
+            const mapType = directionMgr.alternateTransform.get([segment.oa, segment.F]);
+            frameSet = mapType === 3 ? Oe : Pe;
+        } else {
+            const mapType = directionMgr.transformMap.get([segment.oa, segment.F]);
+            frameSet = mapType === 3 ? Qe : Re;
+            segment.a.rotate(directionMgr.getBaseAngle(segment.oa));
+        }
+
+        stopAllAnimations(segment.a);
+        Sprite.setFrame(segment.a, frameSet[frameIndex]);
+    }
+
+    /**
+     * DirectionManager handles rotation and direction mapping between entities.
+     * It defines angle relationships and direction transforms.
+     */
+    class DirectionManager {
+        constructor() {
+            // Rotation angles between directional pairs [from, to]
+            this.rotationMap = new MapEx(); //ga
+            this.rotationMap.set([1, 3], 180);
+            this.rotationMap.set([1, 4], 90);
+            this.rotationMap.set([2, 3], 270);
+            this.rotationMap.set([2, 4], 0);
+            this.rotationMap.set([3, 1], 0);
+            this.rotationMap.set([3, 2], 90);
+            this.rotationMap.set([4, 1], 270);
+            this.rotationMap.set([4, 2], 180);
+
+            // Base facing direction angles
+            this.baseDirection = new MapEx(); //g
+            this.baseDirection.set(1, 270);
+            this.baseDirection.set(2, 90);
+            this.baseDirection.set(3, 180);
+            this.baseDirection.set(4, 0);
+
+            // Directional transformation table
+            this.transformMap = new MapEx(); //$
+            this.transformMap.set([3, 1], 4);
+            this.transformMap.set([3, 2], 3);
+            this.transformMap.set([4, 1], 3);
+            this.transformMap.set([4, 2], 4);
+            this.transformMap.set([2, 3], 4);
+            this.transformMap.set([2, 4], 3);
+            this.transformMap.set([1, 3], 3);
+            this.transformMap.set([1, 4], 4);
+
+            // Alternate transformation variant (a clone with small overrides)
+            this.alternateTransform = this.transformMap.clone(); //wc
+            this.alternateTransform.set([3, 1], 3);
+            this.alternateTransform.set([3, 2], 4);
+        }
+
+        /**
+         * Get base direction angle.
+         * @param {number} dir - Direction index (1–4)
+         * @returns {number} - Angle in degrees
+         */
+        getBaseAngle(dir) { //Na
+            return this.baseDirection.get(dir);
+        }
+    }
+    defineSingleton(DirectionManager);
 
     var $ = function (rootElement) {
         this.root = rootElement;
@@ -3526,48 +4310,53 @@ var minutes = 6E4;
         setPosition(this.gridContainer, START_POS.x, START_POS.y);
 
         this.lastUpdateTime = 0;
-        this.i = "unstarted";
+        this.state = "unstarted";
         this.startTime = getTime();
         this.remainingTime = minutes;
-        this.za = null;
-        this.z = 0; // score
-        this.$b = {};
-        this.ya = null;
+
+        this.score = 0; // score
+        this.comboData = {};
         this.hc = this.Aa = this.Db = this.Cb = null;
         this.Ma = [];
         this.TileSpawner = TileSpawner.getInstance();
         gridClass = this.TileSpawner;
         this.TileSpawner.init(this.gridContainer);
-        this.N = new Fe(this.gridContainer);
-        snakeClass = this.N;
-        this.InputController = new InputController(this.root, true);
-        this.B = new EventHandler(this);
-        this.bb = ObjectPoolManager.getInstance();
-        this.ca = new ClickableElement(12, Z.x, Z.y, this.root, 101);
-        this.ca.show(false);
-        this.La = new ClickableElement(90, kf.x, kf.y, this.root, 100);
-        this.La.show(false);
-        this.Ka = true;
+        this.snake = new SnakeController(this.gridContainer);
+        snakeClass = this.snake;
+
+        this.input = new InputController(this.root, true);
+        this.eventHandler = new EventHandler(this);
+        this.objectPool = ObjectPoolManager.getInstance();
+
+        this.playButton = new ClickableElement(12, START_BUTTON.x, START_BUTTON.y, this.root, 101);
+        this.playButton.show(false);
+
+        this.soundButton = new ClickableElement(90, SOUND_BUTTON.x, SOUND_BUTTON.y, this.root, 100);
+        this.soundButton.show(false);
+
         this.music = new AudioPlayer(["./snakeyear/snake"], this.root);
-        this.cb = new SpriteGroup(31, lf.x, lf.y, this.root, 100);
-        this.cb.show(false);
+
+        this.mainSprite = new SpriteGroup(31, MAIN_SPR_POS.x, MAIN_SPR_POS.y, this.root, 100);
+        this.mainSprite.show(false);
+
         this.fb = null;
         this.eb = [];
         this.ec = this.fc = this.dc = null;
-        this.bd = false;
         this.gc = this.$c = 0;
 
         this.visibilityTimer = new VisibilityTimer(3E4, this.$d.bind(this), this.ae.bind(this));
-        this.bd = !(!rootElement || !rootElement.standalone);
         window.isAnimationPaused = false;
-        new SpriteGroup(19, mf.x, mf.y, this.root, 100);
-        this.Cb = new SpriteGroup(36, nf.x + 99, nf.y, this.root, -1);
-        this.Db = new SpriteGroup(53, of.x - 99, of.y, this.root, -1);
-        this.Cb.show(false);
-        this.Db.show(false);
-        this.za = new Bd(pf.x, pf.y, this.root);
-        this.za.show(false);
-        this.ya = new xd(qf, this.root);
+
+        new SpriteGroup(19, BG_LEFT.x, BG_LEFT.y, this.root, 100);
+        this.leftFrame = new SpriteGroup(36, FRAME_LEFT.x + 99, FRAME_LEFT.y, this.root, -1);
+        this.rightFrame = new SpriteGroup(53, FRAME_RIGHT.x - 99, FRAME_RIGHT.y, this.root, -1);
+        this.leftFrame.show(false);
+        this.rightFrame.show(false);
+
+        this.timerDisplay = new TimerDisplay(TIMER_POS.x, TIMER_POS.y, this.root);
+        this.timerDisplay.show(false);
+
+        this.scoreDisplay = new ScoreDisplay(qf, this.root);
 
         this.icons = [];
         for (let i = 0; i < SIDE_ICONS.length; i++) {
@@ -3579,30 +4368,30 @@ var minutes = 6E4;
             this.icons.push(sprite);
         }
 
-        // this.B.listen(this.InputController, "a", this.Xd);
-        // this.B.listen(this.N, "catch item", this.Yd);
-        // this.B.listen(this.N, "match pattern", this.Zd);
-        // this.B.listen(this.La, "click", this.Wd);
+        this.eventHandler.listen(this.input, "a", this.Xd);
+        this.eventHandler.listen(this.snake, "catch item", this.Yd);
+        this.eventHandler.listen(this.snake, "match pattern", this.Zd);
+        this.eventHandler.listen(this.soundButton, "click", this.Wd);
 
-        this.N.init();
+        this.snake.init();
         this.dd()
     };
     inherit($, Disposable);
-    var Z = new Point(309, 79),
-        kf = new Point(625, 125),
-        lf = new Point(256, 46),
+    var START_BUTTON = new Point(309, 79),
+        SOUND_BUTTON = new Point(625, 125),
+        MAIN_SPR_POS = new Point(256, 46),
         sf = new Point(164, 36),
         vf = new Point(425, 110),
         wf = new Point(212, 80),
         xf = [91, 92, 93],
         yf = [new Point(415, 82), new Point(397, 82), new Point(379, 82)],
-        mf = new Point(96, 6),
+        BG_LEFT = new Point(96, 6),
         START_POS = new Point(110, 20),
-        nf = new Point(4, 46),
-        of = new Point(577, 46),
-        pf = new Point(43, 103),
+        FRAME_LEFT = new Point(4, 46),
+        FRAME_RIGHT = new Point(577, 46),
+        TIMER_POS = new Point(43, 103),
         qf = [new Point(640, 103), new Point(629, 103), new Point(618, 103), new Point(607, 103), new Point(596, 103), new Point(585, 103)],
-        rf = [new Point(6, 127), new Point(6, 143), new Point(22, 143), new Point(5, 159), new Point(22, 159), new Point(38, 159)],
+        SIDE_ICONS = [new Point(6, 127), new Point(6, 143), new Point(22, 143), new Point(5, 159), new Point(22, 159), new Point(38, 159)],
         zf = new Point(294, 44),
         Af = [new Point(387, 81), new Point(387, 115), new Point(353, 115), new Point(420, 115)],
         Bf = [
@@ -3613,133 +4402,200 @@ var minutes = 6E4;
         ],
         Cf = [12, 13, 14, 15, 16, 17, 18],
         Ff = [51, 50],
-        If = [51, 52],
-        Kf = function (a, b, c, d) {
-            return function () {
-                var e = new AnimationSequence();
-                ArrayUtils.forEach(b, function (b) {
-                    e.addStep(function () {
-                        Q(a, b);
-                        O(a, c.x, c.y + d - a.getHeight())
-                    });
-                    addPauseStep(e, 80);
+        If = [51, 52];
+
+    /**
+     * Updates the current game state per frame.
+     * 
+     * @param {Object} game - The main game controller.
+     * @param {number} deltaTime - Time passed since last frame.
+     * @param {number} currentTime - Current game time.
+     */
+    function updateGameState(game, deltaTime, currentTime) {
+        // Update managers
+        game.ka.update(currentTime);
+        game.N.move(currentTime);
+        game.ya.update(currentTime);
+        game.za.update(Math.floor(game.ea / 1000));
+
+        // Countdown timer
+        game.ea -= deltaTime;
+
+        // Check for phase transitions
+        if (he === 1 && game.ea < 40000) {
+            switchGamePhase(game, 2);
+        } else if (he === 2 && game.ea < 20000) {
+            switchGamePhase(game, 3);
+        }
+
+        // Time over condition
+        if (game.ea < 0 && game.state === "running") {
+            game.state = "stop";
+            stopGame(game);
+
+            game.za.show(false);
+            resetDisplay(game.ya);
+
+            ArrayUtils.forEach(game.yb, sprite => sprite.show(false));
+
+            game.la.load(false);
+        }
+    }
+
+    /**
+     * Switches the game to a new phase/level.
+     * 
+     * @param {Object} game - The game instance.
+     * @param {number} phaseId - The new phase index.
+     */
+    function switchGamePhase(game, phaseId) {
+        he = phaseId;
+
+        // Reset object counters for this phase
+        initializeObjectCounter(ObjectPoolManager.getInstance(), phaseId);
+
+        // Update entity parameters from registry
+        const entity = game.N;
+        entity.Fb = ObjectRegistry[phaseId].V;
+        entity.Ab = entity.Fb * entity.Gb;
+        game.ka.vc = ObjectRegistry[phaseId].U;
+    }
+
+    /**
+     * Plays the game's intro animation sequence.
+     * 
+     * @param {Object} game - The game controller.
+     */
+    function playIntroSequence(game) {
+        const seq = new AnimationSequence();
+        game.dc = seq;
+
+        // Animate entity 38 times with short pauses
+        for (let i = 1; i < 39; i++) {
+            seq.addStep(bind(De, game, game.N));
+            addPauseStep(seq, 150);
+        }
+
+        // Fade in secondary sprite
+        addPauseStep(seq, 200);
+        seq.addStep(function () {
+            this.cb.show(true);
+            Sprite.animateOpacity(this.cb, 400, 0, 1);
+        });
+
+        // Move main sprite (`ca`)
+        addPauseStep(seq, 600);
+        seq.addStep(function () {
+            Sprite.setPosition(this.ca, Z.x, Z.y - 80);
+            this.ca.show(true);
+        });
+
+        // Bounce animation 1
+        seq.addStep(function (t) {
+            Sprite.setPosition(this.ca, Z.x, Z.y - 80 * (1 - t * t));
+        }, 700);
+
+        // Bounce animation 2
+        seq.addStep(function (t) {
+            Sprite.setPosition(this.ca, Z.x, Z.y - 80 * (0.25 - (0.5 - t) * (0.5 - t)));
+        }, 700);
+
+        // Run "ready" callback
+        seq.addStep(function () {
+            this.rd();
+        });
+
+        // Add click handler
+        seq.addStep(function () {
+            addListener(this.eventHandler, this.ca, "mousedown", this.De);
+        });
+
+        seq.play();
+    }
+
+    function createFrameAnimation(sprite, frames, position, offsetY) {
+        return function () {
+            const anim = new AnimationSequence();
+            frames.forEach(frame => {
+                anim.addStep(() => {
+                    Sprite.setFrame(sprite, frame);
+                    Sprite.setPosition(sprite, position.x, position.y + offsetY - sprite.getHeight());
                 });
-                e.play()
-            }
-        },
-        Nf = function (a) {
-            Ue(a.N, getTime());
-            a.i = "running";
-            a.ea = minutes;
-            Lf(a, 1);
-            a.za.update(Math.floor(a.ea / 1E3));
-            a.za.show(true);
-            a.z = 0;
-            a.ya.update(a.z);
-            a.ya.reset();
-            Mf(a);
-            Ud = 0;
-            Td = [];
-            U = true;
-            ArrayUtils.forEach(a.yb, function (a) {
-                a.show(false)
+                addPauseStep(anim, 80);
             });
-            a.La.show(true);
-            a.la.play();
-            a.la.H.muted = !a.Ka;
-            a.$c++;
-            a.gc = 0
+            anim.play();
         };
+    }
+
+    var Nf = function (a) {
+        Ue(a.N, getTime());
+        a.i = "running";
+        a.ea = minutes;
+        switchGamePhase(a, 1);
+        a.za.update(Math.floor(a.ea / 1E3));
+        a.za.show(true);
+        a.z = 0;
+        a.ya.update(a.z);
+        a.ya.reset();
+        Mf(a);
+        Td = [];
+        U = true;
+        ArrayUtils.forEach(a.yb, function (a) {
+            a.show(false)
+        });
+        a.La.show(true);
+        a.la.play();
+        a.la.H.muted = !a.Ka;
+        a.$c++;
+        a.gc = 0
+    };
     $.prototype.$d = function () {
-        if ("running" == this.i) {
+        if ("running" == this.state) {
             this.music.pause();
-            var a = this.N;
+            var a = this.snake;
             a.ba = Yc;
-            Q(a.d[0].qa(), a.ba);
+            Sprite.setFrame(a.d[0].qa(), a.ba);
             Of(this)
         }
     };
     $.prototype.ae = function () {
-        if ("tutorial_start" == this.i || "tutorial_end" == this.i) {
+        if ("tutorial_start" == this.state || "tutorial_end" == this.state) {
             this.music.play();
-            var a = this.N;
+            var a = this.snake;
             a.ba = Ee;
-            Q(a.d[0].qa(), a.ba);
-            this.i = "running";
+            Sprite.setFrame(a.d[0].qa(), a.ba);
+            this.state = "running";
             Pf(this);
             minutes == this.remainingTime && Nf(this)
         }
     };
     var Mf = function (a) {
         getObjectKeys(ItemDefinitions).forEach(function (a) {
-            this.$b[a] = 0
+            this.comboData[a] = 0
         }, a);
-    },
-    Qf = function (a) {
-        var b = new AnimationSequence();
-        a.dc = b;
-        for (var c = 1; 39 > c; c++) b.addStep(bind(De, a, a.N)), addPauseStep(b, 150);
-        addPauseStep(b, 200);
-        b.addStep(bind(function () {
-            this.cb.show(true);
-            yc(this.cb, 400, 0, 1)
-        }, a));
-        addPauseStep(b, 600);
-        b.addStep(bind(function () {
-            O(this.ca, Z.x, Z.y - 80);
-            this.ca.show(true)
-        }, a));
-        b.addStep(bind(function (a) {
-            O(this.ca, Z.x, Z.y - 80 * (1 - a * a))
-        }, a), 700);
-        b.addStep(bind(function (a) {
-            O(this.ca, Z.x, Z.y - 80 * (0.25 - (0.5 - a) * (0.5 - a)))
-        }, a), 700);
-        b.addStep(bind(function () {
-            this.rd()
-        }, a));
-        b.addStep(bind(function () {
-            sb(this.B, this.ca, "mousedown", this.De)
-        }, a))
-        b.play()
     };
     $.prototype.rd = function () {
-        "init" == this.i && (this.ca.K(Cf, 80), setTimeout(bind(this.rd, this), 3E3))
+        if ("init" == this.state) {
+            this.playButton.K(Cf, 80);
+            setTimeout(this.rd, 3E3);
+        }
     };
-    var Sf = function (a, b, c) {
-        a.ka.jb(c);
-        a.N.move(b, c);
-        a.ya.jb(c);
-        a.za.update(Math.floor(a.ea / 1E3));
-        a.ea -= b;
-        1 == he && 4E4 > a.ea ? Lf(a, 2) : 2 == he && 2E4 > a.ea && Lf(a, 3);
-        0 > a.ea && "running" == a.i && (a.i = "stop", Rf(a), a.za.show(false), zd(a.ya), ArrayUtils.forEach(a.yb, function (a) {
-            a.show(false)
-        }), a.la.load(false))
-    },
-    Lf = function (a, b) {
-        he = b;
-        initializeObjectCounter(ObjectPoolManager.getInstance(), b);
-        var c = a.N;
-        c.Fb = ObjectRegistry[b].V;
-        c.Ab = c.Fb * c.Gb;
-        a.ka.vc = ObjectRegistry[b].U
-    };
+
     $.prototype.Yd = function (a) {
         var b = this.TileSpawner.getItem(a.item);
         if (b != null)
             if (1 == b.i || b.cc < b.a.getHeight()) {
                 var c = b.getName();
-                this.$b[c]++;
+                this.comboData[c]++;
                 console.log("Snake eaten " + c);
-                this.z += b.z;
-                this.z = Math.min(this.z, 999);
+                this.score += b.z;
+                this.score = Math.min(this.score, 999);
                 switch (c) {
                     case "mushroom":
                     case "firecraker":
                     case "medicine":
                     case "tea":
-                        c = this.N;
+                        c = this.snake;
                         a = a.gb;
                         c.d[0].K(Ge, 80, 500);
                         boostFunction(c, a, .1);
@@ -3756,7 +4612,6 @@ var minutes = 6E4;
                                         a.push(c);
                                         Td = [];
                                         U = true;
-                                        Ud++;
                                         a = a.join("");
                                         break a
                                     }
@@ -3766,119 +4621,143 @@ var minutes = 6E4;
                         }
                         if (a) {
                             for (var c = this.TileSpawner, d = a.length, e = 0; e < d; e++) {
-                                ue(c, createItem("steamer"), ne(c.g));
+                                spawnItem(c, createItem("steamer"), find2x2Block(c.g));
                             }
-                            6 == a.length && ve(this.TileSpawner, a[random(a.length)])
+                            6 == a.length && fillGridWithItems(this.TileSpawner, a[random(a.length)])
                         }
                         Tf(this)
                 }
                 b.Ia();
-                this.ya.update(this.z)
+                this.scoreDisplay.update(this.score)
             } else {
                 b.J.show(false);
-                Sprite.setZIndex(b.a, 1);
+                b.a.setZIndex(1);
             }
     };
     $.prototype.Zd = function (a) {
         a = a.pattern;
-        "" != a && (ve(this.TileSpawner, a), this.gc++)
+        "" != a && (fillGridWithItems(this.TileSpawner, a), this.gc++)
     };
     var Tf = function (a) {
         ArrayUtils.forEach(a.yb, function (a, c) {
-            c < Td.length ? (Q(a, sd[Td[c]]), a.show(true)) : a.show(false)
+            if (c < Td.length) {
+                Sprite.setFrame(a, sd[Td[c]]);
+                a.show(true);
+            } else a.show(false);
         })
-    },
-    Rf = function (a) {
+    };
+    function stopGame(a) {
         isOver = true;
         if (a.Aa) {
             setOpacity(a.fa, 0.3);
-            Q(a.hc, xf[(80 > a.z ? 1 : 150 > a.z ? 2 : 3) - 1]);
-            var b = yd(a.z, vd);
+            Sprite.setFrame(a.hc, xf[(80 > a.z ? 1 : 150 > a.z ? 2 : 3) - 1]);
+            var b = createDigitSprites(a.z, vd);
             a.Aa.show(true);
-            for (var c in b) b[c] != null ? (a.Ma[c].show(true), Q(a.Ma[c], b[c])) : a.Ma[c].show(false)
+            for (var c in b) {
+                if (b[c] != null) {
+                    a.Ma[c].show(true);
+                    Sprite.setFrame(a.Ma[c], b[c]);
+                } else a.Ma[c].show(false);
+            }
         } else {
             a.Aa = new SpriteGroup(61, sf.x, sf.y, a.v, 100);
             if (!a.bd) {
                 var q = new ClickableElement(52, vf.x, vf.y, a.v, 101);
-                a.B.listen(q, "click", a.ze);
-                a.B.listen(q, "mouseover", Kf(q, Ff, vf, 28));
-                a.B.listen(q, "mouseout", Kf(q, If, vf, 28));
+                a.eventHandler.listen(q, "click", a.ze);
+                a.eventHandler.listen(q, "mouseover", createFrameAnimation(q, Ff, vf, 28));
+                a.eventHandler.listen(q, "mouseout", createFrameAnimation(q, If, vf, 28));
                 a.Aa.add(q)
             }
             a.hc = new SpriteGroup(xf[(80 > a.z ? 1 : 150 > a.z ? 2 : 3) - 1], wf.x, wf.y, a.v, 101);
             a.Aa.add(a.hc);
-            var b = yd(a.z, vd),
-                r;
-            for (r in b) c = b[r], a.Ma[r] = new SpriteGroup(c == null ? td[0] : c, yf[r].x, yf[r].y, a.v, 101), c == null && a.Ma[r].show(false), a.Aa.add(a.Ma[r]);
+            for (var r in createDigitSprites(a.z, vd)) {
+                c = b[r];
+                a.Ma[r] = new SpriteGroup(c == null ? td[0] : c, yf[r].x, yf[r].y, a.v, 101)
+                if (c == null) {
+                    a.Ma[r].show(false);
+                    a.Aa.add(a.Ma[r]);
+                }
+            }
             setOpacity(a.fa, 0.3)
         }
     };
     $.prototype.Xd = function (a) {
         this.visibilityTimer.resetTimer();
-        "tutorial_end" == this.i ? (Pf(this), Nf(this)) : "running" == this.i && ze(this.snake, a.Ie)
+        if ("tutorial_end" == this.state) {
+            Pf(this);
+            Nf(this);
+        } else if ("running" == this.state) {
+            ze(this.snake, a.Ie)
+        }
     };
     $.prototype.De = function () {
         this.music.load(false);
         this.visibilityTimer.resetTimer();
         var a = new AnimationSequence();
         this.ec = a;
-        a.addStep(bind(function () {
-            zc(this.cb)
-        }, this));
-        a.addStep(bind(function (a) {
-            O(this.ca, Z.x, Z.y + 80 * a * a);
+        a.addStep(function () {
+            Sprite.fadeOut(this.cb)
+        });
+        a.addStep(function (a) {
+            Sprite.setPosition(this.ca, Z.x, Z.y + 80 * a * a);
             setOpacity(this.ca.aa(), 1 - a * a)
-        }, this), 700);
+        }, 700);
         addPauseStep(a, 200);
-        a.addStep(bind(function () {
+        a.addStep(function () {
             this.cb.show(false);
             this.ca.show(false);
             setOpacity(this.fa, 1)
-        }, this));
-        a.addStep(bind(function () {
+        });
+        a.addStep(function () {
             this.Cb.show(true);
             this.Db.show(true)
-        }, this));
-        a.addStep(bind(function (a) {
-            O(this.Cb, nf.x + 99 * (1 - a), nf.y);
-            O(this.Db, of.x - 99 * (1 - a), of.y)
-        }, this), 1E3);
-        a.addStep(bind(function () {
-            yc(this.La, 500, 0, 1);
-            this.La.show(true)
-        }, this));
-        a.addStep(bind(function () {
+        });
+        a.addStep(function (a) {
+            Sprite.setPosition(this.Cb, nf.x + 99 * (1 - a), nf.y);
+            Sprite.setPosition(this.Db, of.x - 99 * (1 - a), of.y)
+        }, 1E3);
+        a.addStep(function () {
+            Sprite.animateOpacity(this.La, 500, 0, 1);
+            this.soundButton.show(true)
+        });
+        a.addStep(function () {
             Of(this)
-        }, this));
+        });
         a.play()
     };
     var Of = function (a) {
         a.fb = new ClickableElement(94, zf.x, zf.y, a.v, 100);
-        for (var b in Bf) a.eb[b] = new ClickableElement(Bf[b][0], Af[b].x, Af[b].y, a.v, 101), a.B.listen(a.eb[b], "click", a.td), a.fb.add(a.eb[b]);
-        a.i = "tutorial_start";
+        for (var b in Bf) {
+            a.eb[b] = new ClickableElement(Bf[b][0], Af[b].x, Af[b].y, a.v, 101);
+            a.eventHandler.listen(a.eb[b], "click", a.td), a.fb.add(a.eb[b]);
+        }
+        a.state = "tutorial_start";
         a.eventHandler.listen(a.fb, "click", a.td);
         a.sd()
     };
     $.prototype.td = function () {
         this.visibilityTimer.resetTimer();
-        "tutorial_end" == this.i && (Pf(this), Nf(this))
+        "tutorial_end" == this.state && (Pf(this), Nf(this))
     };
     $.prototype.sd = function () {
-        if ("tutorial_start" == this.i || "tutorial_end" == this.i) {
+        if ("tutorial_start" == this.state || "tutorial_end" == this.state) {
             var a = new AnimationSequence();
             this.fc = a;
-            for (var b in Bf) a.addStep(Kf(this.eb[b], Bf[b], Af[b], 29)), addPauseStep(a, 300);
-            a.addStep(bind(function () {
-                "tutorial_start" == this.i && (this.i = "tutorial_end")
-            }, this));
+            for (var b in Bf) {
+                a.addStep(createFrameAnimation(this.eb[b], Bf[b], Af[b], 29));
+                addPauseStep(a, 300);
+            }
+            a.addStep(function () {
+                if ("tutorial_start" == this.state) this.state = "tutorial_end";
+            });
             a.play();
-            setTimeout(bind(this.sd, this), 3E3)
+            setTimeout(this.sd, 3E3)
         }
     };
     var Pf = function (a) {
-        zc(a.fb);
+        Sprite.fadeOut(a.fb);
         ArrayUtils.forEach(a.eb, function (a) {
-            zc(a)
+            Sprite.fadeOut(a)
         });
         a.fb.show(false)
     };
@@ -3886,8 +4765,8 @@ var minutes = 6E4;
     m.Wd = function () {
         this.visibilityTimer.resetTimer();
         this.Ka = !this.Ka;
-        Q(this.La, this.Ka ? 90 : 89);
-        this.la.H.muted = this.Ka ? false : true
+        Sprite.setFrame(this.La, this.Ka ? 90 : 89);
+        this.soundButton.H.muted = this.Ka ? false : true
     };
     m.ze = function () {
         setOpacity(this.fa, 1);
@@ -3895,30 +4774,34 @@ var minutes = 6E4;
         Nf(this);
     };
     m.dd = function () {
-        var a = getTime(),
-            b = a - this.lastUpdateTime,
-            b = Math.min(50, b);
-        "running" == this.i ? Sf(this, b, a) : "unstarted" == this.i && 1500 < a - this.startTime && (this.i = "init", Qf(this));
-        b = bind(this.dd, this);
-        requestAnimFrame(b);
+        var a = getTime();
+        var b = a - this.lastUpdateTime;
+        var b = Math.min(50, b);
+        if ("running" == this.state) {
+            updateGameState(this, b, a)
+        } else if ("unstarted" == this.state && 1500 < a - this.startTime) {
+            this.state = "init";
+            playIntroSequence(this);
+        }
+        requestAnimFrame(this.dd);
         this.lastUpdateTime = a
     };
-    m.h = function () {
-        this.i = "stop";
-        safeDispose(this.B);
+    m.dispose = function () {
+        this.state = "stop";
+        safeDispose(this.eventHandler);
         this.dc && this.dc.stop();
         this.fc && this.fc.stop();
         this.ec && this.ec.stop();
         window.isAnimationPaused = true;
-        this.$b = this.B = null;
-        this.za.C();
-        this.ya.C();
-        this.ka.C();
-        this.N.C();
-        this.Zc.C();
-        this.la.C();
-        this.Ja.C();
-        $.I.h.call(this)
+        this.comboData = this.eventHandler = null;
+        this.timerDisplay.dispose();
+        this.scoreDisplay.dispose();
+        this.TileSpawner.dispose();
+        this.snake.dispose();
+        this.input.dispose();
+        this.soundButton.dispose();
+        this.visibilityTimer.dispose();
+        super.dispose();
     };
 
     var logoElement = null;
@@ -3961,46 +4844,45 @@ var minutes = 6E4;
             otherSet.set(md, true);
             sc = otherSet;
 
-
             // Build level / wave presets (W)
-            var keyEnum = LootTable;   // Zd appears to be an enum/object of item keys
+            var keyEnum = LootTable;
             var configObj;
 
             configObj = {};
-            configObj[keyEnum.ta] = 10;
+            configObj[keyEnum.firecraker] = 10;
             configObj[keyEnum.Da] = 20;
             configObj[keyEnum.Kb] = 20;
-            configObj[keyEnum.Va] = 20;
+            configObj[keyEnum.envelope] = 20;
             configObj[keyEnum.Fa] = 10;
             configObj[keyEnum.ha] = 40;
             configObj[keyEnum.Ea] = 20;
             ObjectRegistry[1] = { data: configObj, V: 200, U: 1 };
 
             configObj = {};
-            configObj[keyEnum.ta] = 10;
+            configObj[keyEnum.firecraker] = 10;
             configObj[keyEnum.Fa] = 10;
             configObj[keyEnum.Kb] = 10;
             configObj[keyEnum.nb] = 10;
-            configObj[keyEnum.lb] = 50;
+            configObj[keyEnum.lantern] = 50;
             ObjectRegistry[2] = { data: configObj, V: 180, U: 0.85 };
 
             configObj = {};
             configObj[keyEnum.nb] = 30;
             configObj[keyEnum.Fa] = 20;
             configObj[keyEnum.mb] = 20;
-            configObj[keyEnum.ta] = 30;
-            configObj[keyEnum.lb] = 30;
+            configObj[keyEnum.firecraker] = 30;
+            configObj[keyEnum.lantern] = 30;
             ObjectRegistry[3] = { data: configObj, V: 160, U: 0.6 };
 
             // Some named presets
             configObj = {};
-            configObj[keyEnum.ta] = 20;
+            configObj[keyEnum.firecraker] = 20;
             configObj[keyEnum.Da] = 30;
             configObj[keyEnum.ha] = 50;
             ObjectRegistry.O = { data: configObj, V: 200, U: 1 };
 
             configObj = {};
-            configObj[keyEnum.ta] = 40;
+            configObj[keyEnum.firecraker] = 40;
             configObj[keyEnum.Da] = 10;
             configObj[keyEnum.ha] = 50;
             ObjectRegistry.O2 = { data: configObj, V: 200, U: 1 };
@@ -4031,25 +4913,25 @@ var minutes = 6E4;
             for (enumKey in enumObj) {
                 reverseMap[enumObj[enumKey]] = T;
             }
-            reverseMap[enumObj.ta] = Nd;
-            reverseMap[enumObj.Da] = Od;
-            reverseMap[enumObj.ob] = Pd;
-            reverseMap[enumObj.nb] = Rd;
-            reverseMap[enumObj.Va] = Qd;
-            reverseMap[enumObj.lb] = Sd;
+            reverseMap[enumObj.firecraker] = AnimatedFallingEntity;
+            reverseMap[enumObj.Da] = StaticVariantEntity;
+            reverseMap[enumObj.ob] = ShadowedEntity;
+            reverseMap[enumObj.nb] = RandomMovingEntity;
+            reverseMap[enumObj.envelope] = MovingEntity;
+            reverseMap[enumObj.lantern] = LanternEntity;
             ItemClasses = reverseMap;
 
             // Build item definitions (Wd)
             var itemDefs = {};
-            itemDefs[enumObj.ta] = new Item([R.pe], enumObj.ta, 5000); // rarer item?
+            itemDefs[enumObj.firecraker] = new Item([R.pe], enumObj.firecraker, 5000);
             itemDefs[enumObj.Da] = new Item([R.ne, R.oe], enumObj.Da, 7000, 2);
             itemDefs[enumObj.ob] = new Item([R.ob], enumObj.ob, 7000, 10);
             itemDefs[enumObj.Kb] = new Item([R.we, R.xe], enumObj.Kb, 6000, 2, true);
             itemDefs[enumObj.Fa] = new Item([R.Fa], enumObj.Fa, 6000, 2, false);
             itemDefs[enumObj.nb] = new Item([R.qe, R.le], enumObj.nb, 6000, 5);
-            itemDefs[enumObj.Va] = new Item([R.Va], enumObj.Va, 7000, 2);
+            itemDefs[enumObj.envelope] = new Item([R.envelope], enumObj.envelope, 7000, 2);
             itemDefs[enumObj.mb] = new Item([R.mb], enumObj.mb, 7000, 1, false);
-            itemDefs[enumObj.lb] = new Item([R.se, R.ve, R.ue, R.re], enumObj.lb, 8000, 2);
+            itemDefs[enumObj.lantern] = new Item([R.se, R.ve, R.ue, R.re], enumObj.lantern, 8000, 2);
             itemDefs[enumObj.ha] = new Item([R.ha], enumObj.ha, 10000, 1);
             itemDefs[enumObj.Ea] = new Item([R.Ea], enumObj.Ea, 5000, 5);
             console.log(itemDefs);
@@ -4063,6 +4945,6 @@ var minutes = 6E4;
         }
     }, function cleanup() {
         // cleanup callback — release controller if present
-        logoController && logoController.C();
+        if (logoController) logoController.C();
     });
 })();
