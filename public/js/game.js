@@ -8,8 +8,6 @@ var snakeClass = null;
 var minutes = 6E4;
 
 (function () {
-    var m = this
-
     /**
      * Returns or assigns a unique ID to the given object.
      * Used to differentiate between objects in maps or sets.
@@ -41,40 +39,6 @@ var minutes = 6E4;
         };
     }
 
-    /**
-     * Sets up inheritance between two constructor functions.
-     * Equivalent to: `a` extends `b`.
-     *
-     * @param {Function} childCtor - The constructor function of the child class.
-     * @param {Function} parentCtor - The constructor function of the parent class.
-     */
-    function inherit(childCtor, parentCtor) {
-        function TempConstructor() {}
-        TempConstructor.prototype = parentCtor.prototype;
-        
-        // Keep a reference to the parent’s prototype
-        childCtor.superClass_ = parentCtor.prototype;
-        
-        // Set up the prototype chain
-        childCtor.prototype = new TempConstructor();
-    }
-
-    function typeOf(value) {
-        if (value === null) return "null";
-        if (value instanceof Array) return "array";
-        if (value instanceof Function) return "function";
-        if (value instanceof Object) return "object";
-        return typeof value;
-    }
-
-    Function.prototype.bind = Function.prototype.bind || function (a, b) {
-        if (1 < arguments.length) {
-            var c = Array.prototype.slice.call(arguments, 1);
-            c.unshift(this, a);
-            return bind.apply(null, c)
-        }
-        return bind(this, a)
-    };
 
     /**
      * Base class for disposable or finalizable objects.
@@ -118,28 +82,27 @@ var minutes = 6E4;
         }
     }
 
-    /** ---------------------------
-     * Event Class
-     * --------------------------- */
-    class CustomEvent {
+    class BaseEvent {
         constructor(type, target) {
             this.type = type;
             this.target = this.currentTarget = target;
 
-            this.handled = false;
             this.defaultPrevented = false;
-            this.cancelable = true;
+            this.propagationEnabled = true;
+
+            // Old browser/engine flag — not used in modern code
+            this._internalFlag = false;
         }
 
-        // Placeholder for subclasses or handlers
-        init() { }
+        // Called on event cleanup (no-op)
+        onDispose() {}
 
-        // Cleanup or release resources
-        destroy() { }
+        // Framework dispose hook
+        dispose() {}
 
         preventDefault() {
             this.defaultPrevented = true;
-            this.cancelable = false;
+            this.propagationEnabled = false;
         }
     }
 
@@ -303,416 +266,231 @@ var minutes = 6E4;
 
     const supportsDOM9 = !isIE || (isIE && docMode >= 9);
 
-    class CustomBrowserEvent extends CustomEvent {
-        constructor(event, currentTarget) {
-            super(event?.type || "generic");
-            if (event) this.init(event, currentTarget);
+    class NormalizedEvent extends BaseEvent {
+        constructor(nativeEvent = null, currentTarget = null) {
+            super(nativeEvent ? nativeEvent.type : "");
+            
+            // default fields
+            this.target = null;
+            this.relatedTarget = null;
+
+            this.offsetX = 0;
+            this.offsetY = 0;
+            this.clientX = 0;
+            this.clientY = 0;
+            this.screenX = 0;
+            this.screenY = 0;
+
+            this.button = 0;
+            this.keyCode = 0;
+            this.charCode = 0;
+
+            this.ctrlKey = false;
+            this.altKey = false;
+            this.shiftKey = false;
+            this.metaKey = false;
+
+            this.nativeEvent = null;
+
+            if (nativeEvent) this.init(nativeEvent, currentTarget);
+            delete this._internalFlag;
         }
 
         init(event, currentTarget) {
-            this.type = event.type;
-            this.target = event.target || event.srcElement;
+            const type = event.type;
+            this.type = type;
+            this.target = event.target || event.srcElement || null;
             this.currentTarget = currentTarget;
 
-            // relatedTarget normalization
+            // --- relatedTarget normalization ---
             let related = event.relatedTarget;
             if (!related) {
-                if (this.type === "mouseover") related = event.fromElement;
-                else if (this.type === "mouseout") related = event.toElement;
+                if (type === "mouseover") related = event.fromElement;
+                else if (type === "mouseout") related = event.toElement;
             }
-            this.relatedTarget = related;
+            this.relatedTarget = related || null;
 
-            // coordinate normalization
+            // --- position ---
             this.offsetX = event.offsetX ?? event.layerX ?? 0;
             this.offsetY = event.offsetY ?? event.layerY ?? 0;
+
             this.clientX = event.clientX ?? event.pageX ?? 0;
             this.clientY = event.clientY ?? event.pageY ?? 0;
+
             this.screenX = event.screenX || 0;
             this.screenY = event.screenY || 0;
 
-            // mouse and keyboard info
-            this.button = event.button || 0;
+            // --- mouse + keyboard ---
+            this.button = event.button;
             this.keyCode = event.keyCode || 0;
-            this.charCode = event.charCode || (this.type === "keypress" ? event.keyCode : 0);
+            this.charCode = event.charCode || (type === "keypress" ? event.keyCode : 0);
 
-            // modifier keys
+            // --- modifier keys ---
             this.ctrlKey = !!event.ctrlKey;
             this.altKey = !!event.altKey;
             this.shiftKey = !!event.shiftKey;
             this.metaKey = !!event.metaKey;
 
-            // state (for pointer events, etc.)
-            this.state = event.state || null;
+            this.state = event.state;
+            this.nativeEvent = event;
 
-            // store original DOM event
-            this.originalEvent = event;
-
-            // handle default prevention flag
+            // auto prevent-default if browser marks it
             if (event.defaultPrevented) this.preventDefault();
         }
 
         preventDefault() {
             super.preventDefault();
-            const e = this.originalEvent;
-            if (e?.preventDefault) {
-                e.preventDefault();
+
+            const event = this.nativeEvent;
+            if (!event) return;
+
+            if (event.preventDefault) {
+                event.preventDefault();
             } else {
-                e.returnValue = false;
+                // IE fallback
+                event.returnValue = false;
+
+                // special ctrl+F1–F12 hack for old browsers
                 try {
-                    // IE: disable function keys and Ctrl shortcuts
-                    if (e.ctrlKey || (e.keyCode >= 112 && e.keyCode <= 123))
-                        e.keyCode = -1;
-                } catch { }
-            }
-        }
-    }
-
-    // Listener class
-    var ListenerKeyCount = 0;
-    class Listener {
-        constructor(handler, target, type, capture, context) {
-            this.key = ++ListenerKeyCount;
-            this.handler = handler;
-            console.log(this.handler);
-            this.target = target;
-            this.type = type;
-            this.capture = capture;
-            this.context = context;
-            this.removed = false;
-            this.once = false;
-
-            this.callback = (event) => this.invoke(event);
-        }
-
-        invoke(event) {
-            if (this.removed) return false;
-            const result = this.handler.call(this.context || this.target, event);
-            if (this.once) unbindListener(this.key);
-            return result;
-        }
-    }
-
-    // Event listener registries
-    const listenerRegistry = {};
-    const eventTypeRegistry = {};
-    const nodeListeners = {};
-    const legacyEventNames = {};
-
-    // Add event listener
-    function addListener(target, type, handler, capture = false, context) {
-        if (Array.isArray(type)) {
-            type.forEach(t => {
-                console.log(t);
-                addListener(target, t, handler, capture, context)
-            });
-            return null;
-        }
-
-        const listener = registerListener(target, type, handler, false, capture, context);
-        console.log(listener);
-        listenerRegistry[listener.key] = listener;
-        return listener.key;
-    }
-
-    // Internal listener registration
-    function registerListener(target, type, handler, once, capture, context) {
-        if (!type) throw new Error("Invalid event type");
-        capture = !!capture;
-
-        // Track event types
-        if (!eventTypeRegistry[type]) eventTypeRegistry[type] = { captureCount: 0, bubbleCount: 0 };
-        const typeEntry = eventTypeRegistry[type];
-        if (!typeEntry[capture]) {
-            typeEntry[capture] = {};
-            typeEntry.captureCount++;
-        }
-
-        const captureEntry = typeEntry[capture];
-        const targetId = getNodeId(target);
-        let listeners = captureEntry[targetId];
-
-        if (listeners) {
-            for (const listener of listeners) {
-                if (listener.handler === handler && listener.context === context) {
-                    if (listener.removed) break;
-                    if (!once) listener.once = false;
-                    return listener;
-                }
-            }
-        } else {
-            listeners = captureEntry[targetId] = [];
-            captureEntry.captureCount++;
-        }
-
-        const listener = new Listener(handler, target, type, capture, context);
-        listener.once = once;
-        listeners.push(listener);
-
-        if (!nodeListeners[targetId]) nodeListeners[targetId] = [];
-        nodeListeners[targetId].push(listener);
-
-        const eventName = legacyEventNames[type] || (legacyEventNames[type] = "on" + type);
-        if (target.addEventListener)
-            target.addEventListener(type, listener.callback, capture);
-        else if (target.attachEvent)
-            target.attachEvent(eventName, listener.callback);
-
-        return listener;
-    }
-
-    // Remove listener
-    function removeListener(target, type, handler, capture, context) {
-        if (Array.isArray(type)) {
-            type.forEach(t => removeListener(target, t, handler, capture, context));
-            return;
-        }
-
-        capture = !!capture;
-        const typeEntry = eventTypeRegistry[type]?.[capture]?.[getNodeId(target)];
-        if (!typeEntry) return;
-
-        for (const listener of typeEntry) {
-            if (listener.handler === handler && listener.capture === capture && listener.context === context) {
-                unbindListener(listener.key);
-                break;
-            }
-        }
-    }
-
-    // Unbind listener by ID
-    function unbindListener(key) {
-        const listener = listenerRegistry[key];
-        if (!listener || listener.removed) return false;
-
-        const { target, type, capture, callback } = listener;
-        if (target.removeEventListener)
-            target.removeEventListener(type, callback, capture);
-        else if (target.detachEvent)
-            target.detachEvent(legacyEventNames[type], callback);
-
-        listener.removed = true;
-        delete listenerRegistry[key];
-        return true;
-    }
-
-    // Remove all listeners on target
-    function removeAllListeners(target) {
-        let count = 0;
-        if (target) {
-            const id = getNodeId(target);
-            if (nodeListeners[id]) {
-                for (const l of nodeListeners[id]) unbindListener(l.key), count++;
-            }
-        } else {
-            for (const key in listenerRegistry)
-                unbindListener(key), count++;
-        }
-        return count;
-    }
-
-    // Dispatch event manually
-    function dispatchEvent(target, event) {
-        const type = event.type || event;
-        const typeEntry = eventTypeRegistry[type];
-        if (!typeEntry) return false;
-
-        if (typeof event === "string")
-            event = new CustomEvent(type, { bubbles: true, cancelable: true });
-
-        event.target = event.target || target;
-        let result = true;
-
-        if (typeEntry[true]) {
-            for (let node = target; node; node = node.parentNode) {
-                result &= fireListeners(typeEntry[true], node, type, true, event);
-            }
-        }
-
-        if (typeEntry[false]) {
-            for (let node = target; node; node = node.parentNode) {
-                result &= fireListeners(typeEntry[false], node, type, false, event);
-            }
-        }
-
-        return !!result;
-    }
-
-    // Helper: fire listeners on a node
-    function fireListeners(entry, target, type, capture, event) {
-        const id = getNodeId(target);
-        const listeners = entry[id];
-        if (!listeners) return true;
-
-        let allGood = true;
-        for (const listener of listeners) {
-            if (!listener.removed) {
-                const result = listener.invoke(event);
-                if (result === false) allGood = false;
-            }
-        }
-        return allGood;
-    }
-
-    // Internal node ID map
-    let nodeIdCounter = 0;
-    const nodeIdMap = new WeakMap();
-    function getNodeId(node) {
-        if (!nodeIdMap.has(node)) nodeIdMap.set(node, ++nodeIdCounter);
-        return nodeIdMap.get(node);
-    }
-
-    function handleNativeEvent(listenerObj, nativeEvent) {
-        // If the listener is marked as removed or inactive, stop early
-        if (listenerObj.removed) return false;
-
-        const eventType = listenerObj.type;
-        const registry = eventMap; // originally `D`
-
-        // No listeners for this event type
-        if (!(eventType in registry)) return false;
-
-        const eventTypeData = registry[eventType];
-        let eventWrapper;
-
-        // Handle legacy browsers (no addEventListener)
-        if (!supportsDOM9) {
-            // Try to resolve event from window.event (IE)
-            if (!nativeEvent) {
-                let eventChain = ["window", "event"];
-                let obj = globalWindow; // originally `p`
-                let found;
-                while ((found = eventChain.shift())) {
-                    if (obj[found] != null) {
-                        obj = obj[found];
-                    } else {
-                        nativeEvent = undefined;
-                        break;
+                    if (event.ctrlKey || (event.keyCode >= 112 && event.keyCode <= 123)) {
+                        event.keyCode = -1;
                     }
-                }
-                nativeEvent = obj;
+                } catch (_) {}
             }
-
-            eventWrapper = nativeEvent;
-            const hasCapturePhase = true in eventTypeData;
-            const hasBubblePhase = false in eventTypeData;
-
-            // Some IE key event fixes
-            if (hasCapturePhase) {
-                if (eventWrapper.keyCode < 0 || eventWrapper.returnValue !== undefined)
-                    return false;
-                let fixed = false;
-                if (eventWrapper.keyCode === 0) {
-                    try {
-                        eventWrapper.keyCode = -1;
-                    } catch {
-                        fixed = true;
-                    }
-                }
-                if (fixed || eventWrapper.returnValue === undefined) {
-                    eventWrapper.returnValue = false;
-                }
-            }
-
-            const customEvent = new CustomBrowserEvent();
-            customEvent.init(eventWrapper, this);
-
-            let handled = false;
-
-            try {
-                if (hasCapturePhase) {
-                    // Build target path for capture phase
-                    const path = [];
-                    for (let target = customEvent.currentTarget; target; target = target.parentNode) {
-                        path.push(target);
-                    }
-
-                    let phaseHandlers = eventTypeData[true];
-                    phaseHandlers.activeCount = phaseHandlers.totalCount;
-
-                    // Capture phase (top-down)
-                    for (let i = path.length - 1; !customEvent.cancelled && i >= 0 && phaseHandlers.activeCount; i--) {
-                        customEvent.currentTarget = path[i];
-                        handled &= dispatchPhase(phaseHandlers, path[i], eventType, true, customEvent);
-                    }
-
-                    // Bubble phase (bottom-up)
-                    if (hasBubblePhase) {
-                        phaseHandlers = eventTypeData[false];
-                        phaseHandlers.activeCount = phaseHandlers.totalCount;
-                        for (let i = 0; !customEvent.cancelled && i < path.length && phaseHandlers.activeCount; i++) {
-                            customEvent.currentTarget = path[i];
-                            handled &= dispatchPhase(phaseHandlers, path[i], eventType, false, customEvent);
-                        }
-                    }
-                } else {
-                    handled = dispatchListener(listenerObj, customEvent);
-                }
-            } finally {
-                // Clean up event path array
-                if (path) path.length = 0;
-            }
-
-            return handled;
         }
 
-        // Modern browsers
-        const customEvent = new CustomBrowserEvent(nativeEvent, this);
-        return dispatchListener(listenerObj, customEvent);
+        // override for framework compatibility
+        dispose() {}
     }
 
     class EventHandler extends Disposable {
-        constructor(context) {
-            super();
-            this.context = context;
-            this.listeners = [];
+        constructor(opt_scope) {
+            super()
+            this.handler_ = opt_scope;
+            this.keys_ = {};
         }
 
-        listen(target, eventTypes, handler, capture = false, scope) {
-            if (!Array.isArray(eventTypes)) eventTypes = [eventTypes];
-            for (let type of eventTypes) {
-                const key = addListener(
-                    target,
-                    type,
-                    handler || this,
-                    capture,
-                    scope || this.context || this
-                );
-                this.listeners.push(key);
+        listen(src, type, opt_fn, opt_options) {
+            return this.listen_(src, type, opt_fn, opt_options);
+        }
+
+        listenWithScope(src, type, fn, options, scope) {
+            return this.listen_(src, type, fn, options, scope);
+        }
+
+        listen_(src, type, opt_fn, opt_options, opt_scope) {
+            if (!Array.isArray(type)) {
+                if (type) {
+                    EventHandler.typeArray_[0] = type.toString();
+                }
+                type = EventHandler.typeArray_;
             }
+            for (var i = 0; i < type.length; i++) {
+                var listenerObj = listen(src, type[i], opt_fn || this.handleEvent, opt_options || false, opt_scope || this.handler_ || this);
+                if (!listenerObj) {
+                    return this;
+                }
+
+                var key = listenerObj.key;
+                this.keys_[key] = listenerObj;
+            }
+
             return this;
         }
 
-        add(target, source, eventTypes, handler, capture = false, scope) {
-            if (Array.isArray(eventTypes)) {
-                for (let type of eventTypes) {
-                    this.add(target, source, type, handler, capture, scope);
-                }
-            } else {
-                const key = addCaptureListener(
-                    source,
-                    eventTypes,
-                    handler || target,
-                    capture,
-                    scope || target.context || target
-                );
-                this.listeners.push(key);
-            }
+        listenOnce(src, type, opt_fn, opt_options) {
+            return this.listenOnce_(src, type, opt_fn, opt_options);
+        }
+        listenOnceWithScope(src, type, fn, capture, scope) {
+            return this.listenOnce_(src, type, fn, capture, scope);
         }
 
-        clear() {
-            this.listeners.forEach(removeListener);
-            this.listeners.length = 0;
+        listenOnce_(src, type, opt_fn, opt_options, opt_scope) {
+            if (Array.isArray(type)) {
+                for (var i = 0; i < type.length; i++) {
+                    this.listenOnce_(src, type[i], opt_fn, opt_options, opt_scope);
+                }
+            } else {
+                var listenerObj = listenOnce(src, type, opt_fn || this.handleEvent, opt_options, opt_scope || this.handler_ || this);
+                if (!listenerObj) {
+                    return this;
+                }
+
+                var key = listenerObj.key;
+                this.keys_[key] = listenerObj;
+            }
+
+            return this;
+        }
+
+        listenWithWrapper(src, wrapper, listener, opt_capt) {
+            return this.listenWithWrapper_(src, wrapper, listener, opt_capt);
+        }
+
+        listenWithWrapperAndScope(src, wrapper, listener, capture, scope) {
+            return this.listenWithWrapper_(src, wrapper, listener, capture, scope);
+        }
+
+        listenWithWrapper_(src, wrapper, listener, opt_capt, opt_scope) {
+            wrapper.listen(src, listener, opt_capt, opt_scope || this.handler_ || this, this);
+            return this;
+        }
+
+        getListenerCount() {
+            var count = 0;
+            for (var key in this.keys_) {
+                if (this.keys_.hasOwnProperty(key)) {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        unlisten(src, type, opt_fn, opt_options, opt_scope) {
+            if (Array.isArray(type)) {
+                for (var i = 0; i < type.length; i++) {
+                    this.unlisten(src, type[i], opt_fn, opt_options, opt_scope);
+                }
+            } else {
+                var capture = isObject(opt_options) ? !!opt_options.capture : !!opt_options;
+                var listener = getListener(
+                    src, type, opt_fn || this.handleEvent, capture,
+                    opt_scope || this.handler_ || this);
+
+                if (listener) {
+                    unlistenByKey(listener);
+                    delete this.keys_[listener.key];
+                }
+            }
+
+            return this;
+        }
+
+        unlistenWithWrapper(src, wrapper, listener, opt_capt, opt_scope) {
+            wrapper.unlisten(src, listener, opt_capt, opt_scope || this.handler_ || this, this);
+            return this;
+        }
+
+        removeAll() {
+            Object.forEach(this.keys_, function (listenerObj, key) {
+                if (this.keys_.hasOwnProperty(key)) {
+                    unlistenByKey(listenerObj);
+                }
+            }, this);
+
+            this.keys_ = {};
         }
 
         dispose() {
             super.dispose();
-            this.clear();
+            this.removeAll();
         }
 
-        handleEvent() {
-            throw new Error("EventHandler.handleEvent not implemented");
+        handleEvent(_) {
+            throw new Error('EventHandler.handleEvent not implemented');
         }
     }
+    EventHandler.typeArray_ = [];
 
     class EventDispatcher extends Disposable {
         constructor() {
@@ -735,11 +513,11 @@ var minutes = 6E4;
 
             if (!(type in registry)) return true;
 
-            if (typeof event === "string") event = new CustomEvent(type, this);
-            else if (event instanceof CustomEvent) event.target ||= this;
+            if (typeof event === "string") event = new Event(type, this);
+            else if (event instanceof Event) event.target ||= this;
             else {
                 let temp = event;
-                event = new CustomEvent(type, this);
+                event = new Event(type, this);
                 Object.assign(event, temp);
             }
 
@@ -776,20 +554,19 @@ var minutes = 6E4;
             this.parent = null;
         }
     }
-
-    class InputController extends EventDispatcher {
+``
+    class InputController {
         constructor(element = document, preventDefault = false) {
-            super();
             this.element = element;
             this.handler = new EventHandler(this);
             this.preventDefault = preventDefault;
 
-            this.handler.listen(this.element, "keydown", this.onKeyDown.bind(this));
+            this.handler.listen(this.element, "keydown", this.onKeyDown);
 
             if (!isIE) {
-                window.addEventListener("deviceorientation", this.onMotion.bind(this), true);
-                window.addEventListener("MozOrientation", this.onMotion.bind(this), true);
-                window.addEventListener("devicemotion", this.onMotion.bind(this), true);
+                window.addEventListener("deviceorientation", this.onMotion, true);
+                window.addEventListener("MozOrientation", this.onMotion, true);
+                window.addEventListener("devicemotion", this.onMotion, true);
             }
 
             this.orientation = 0;
@@ -812,7 +589,7 @@ var minutes = 6E4;
                 let y = accel.y;
 
                 switch (orientation) {
-                    case 90:  x = -accel.y; y = accel.y; break;
+                    case 90: x = -accel.y; y = accel.y; break;
                     case -90: x = accel.y;  y = accel.y; break;
                     case 180: x = -accel.x; y = accel.y; break;
                 }
@@ -844,7 +621,7 @@ var minutes = 6E4;
                     }
 
                     if (intensity > 0 && direction) {
-                        this.dispatchEvent(new DirectionEvent(direction));
+                        dispatchEvent(new DirectionEvent(direction));
                     }
                 }
             }
@@ -853,7 +630,7 @@ var minutes = 6E4;
         onKeyDown(e) {
             let direction = vb[e.keyCode];
             if (direction) {
-                this.dispatchEvent(new DirectionEvent(direction));
+                dispatchEvent(new DirectionEvent(direction));
                 if (this.preventDefault && e.preventDefault) e.preventDefault();
             }
         }
@@ -868,7 +645,7 @@ var minutes = 6E4;
         }
     }
 
-    class DirectionEvent extends CustomEvent {
+    class DirectionEvent extends Event {
         constructor(direction) {
             super("input");
             this.direction = direction; // 1=up, 2=down, 3=left, 4=right
@@ -1013,7 +790,7 @@ var minutes = 6E4;
             this.stop();
             this.currentIndex = 0;
             this.startTime = getTime();
-            this.intervalId = window.setInterval(this.update.bind(this), 16); // ~60fps
+            this.intervalId = window.setInterval(this.update, 16); // ~60fps
             this.update();
         }
 
@@ -1057,11 +834,10 @@ var minutes = 6E4;
         addStep(callback, duration = 0) {
             this.steps.push({ duration, update: callback });
         }
-    }
 
-    // Helper
-    function addPauseStep(sequence, duration) {
-        sequence.addStep(() => {}, duration);
+        addPauseStep(duration) {
+            this.addStep(() => {}, duration);
+        }
     }
 
     /**
@@ -1090,6 +866,7 @@ var minutes = 6E4;
             this.timeoutMs = timeoutMs;    // How long to wait (in ms)
             this.onVisible = onVisible;    // Callback when the page becomes visible
             this.onHidden = onHidden;      // Callback when the page becomes hidden
+
             this.hasTriggered = false;
             this.isHidden = false;
             this.startTime = getTime();
@@ -1104,7 +881,7 @@ var minutes = 6E4;
             // Listen to document visibility changes
             if (this.visibilityChangeEvent) {
                 var listener = new EventHandler(this);
-                listener.listen(document, this.visibilityChangeEvent, listener);
+                listener.listen(document, this.visibilityChangeEvent);
             }
 
             // Start initial timer
@@ -1128,7 +905,7 @@ var minutes = 6E4;
         scheduleCheck() {
             if (this.timer) window.clearTimeout(this.timer);
             const remaining = Math.max(100, this.timeoutMs - (getTime() - this.startTime));
-            this.timer = window.setTimeout(this.checkVisibility.bind(this), remaining);
+            this.timer = window.setTimeout(this.checkVisibility, remaining);
         }
 
         // Called when visibility changes
@@ -1980,12 +1757,12 @@ var minutes = 6E4;
         }
 
         // Change frame
-        static setFrame(sprite, frameId) {
-            if (sprite.element) {
-                Sprite._updateSize(sprite, frameId);
-                if (sprite.frameId !== frameId) {
-                    sprite.frameId = frameId;
-                    Sprite._updateBackground(sprite);
+        setFrame(frameId) {
+            if (this.element) {
+                Sprite._updateSize(this, frameId);
+                if (this.frameId !== frameId) {
+                    this.frameId = frameId;
+                    Sprite._updateBackground(this);
                 }
             }
         }
@@ -2077,8 +1854,8 @@ var minutes = 6E4;
 
             for (let i = 0; i < repeatCount; i++) {
                 frames.forEach(frame => {
-                    this.transition.addStep(() => Sprite.setFrame(this, frame));
-                    addPauseStep(this.transition, delay);
+                    this.transition.addStep(() => this.setFrame(frame));
+                    this.transition.addPauseStep(delay);
                 });
             }
 
@@ -2368,7 +2145,7 @@ var minutes = 6E4;
          */
         reset() {
             for (let i in this.mainDigits) {
-                Sprite.setFrame(this.mainDigits[i], td[0]); // reset frame to 0 digit
+                this.mainDigits[i].setFrame(td[0]); // reset frame to 0 digit
             }
 
             this.currentScore = 0;
@@ -2428,7 +2205,7 @@ var minutes = 6E4;
                     const frame = overlayFrames[i];
 
                     if (frame != null) {
-                        Sprite.setFrame(this.overlayDigits[i], frame);
+                        this.overlayDigits[i].setFrame(frame);
                         Sprite.animateOpacity(this.overlayDigits[i], 300, 0, 1);
                     } else {
                         this.overlayDigits[i].s.style.opacity = 0;
@@ -2480,7 +2257,7 @@ var minutes = 6E4;
             this.pd = false;
         }
         reset() {
-            for (var a in this.M) Sprite.setFrame(this.M[a], td[0]);
+            for (var a in this.M) this.M[a].setFrame(td[0]);
             this.z = 0;
             this.M[0].show(true);
             this.P[0].s.style.opacity = 0;
@@ -2513,7 +2290,7 @@ var minutes = 6E4;
                 for (c in b) {
                     stopAllAnimations(this.P[c])
                     if (b[c] != null) {
-                        Sprite.setFrame(this.P[c], b[c]);
+                        this.P[c].setFrame(b[c]);
                         Sprite.animateOpacity(this.P[c], 300, 0, 1);
                     } else this.P[c].s.style.opacity = 0;
                 }
@@ -2610,7 +2387,7 @@ var minutes = 6E4;
 
         // Setup initial display state
         mainSprite.show(true);
-        Sprite.setFrame(mainSprite, frameIndex);
+        mainSprite.setFrame(frameIndex);
         Sprite.setPosition(mainSprite, startPos.x, startPos.y - 25);
 
         // Define animation step
@@ -2618,7 +2395,7 @@ var minutes = 6E4;
             if (progress === 1) {
                 // End of animation: show final sprite
                 Sprite.setPosition(targetSprite, startPos.x, startPos.y);
-                Sprite.setFrame(targetSprite, frameIndex);
+                targetSprite.setFrame(frameIndex);
                 mainSprite.show(false);
             } else {
                 // During animation: move sprites in opposite vertical directions
@@ -2653,7 +2430,7 @@ var minutes = 6E4;
             }
 
             // Optionally set colon or middle separator sprite
-            Sprite.setFrame(this.digits[1], 49);
+            this.digits[1].setFrame(49);
         }
 
         /**
@@ -2667,9 +2444,9 @@ var minutes = 6E4;
             const seconds = Math.floor(time % 60);
 
             if (minutes >= 0 && seconds >= 0) {
-                Sprite.setFrame(this.digits[0], td[minutes]);
-                Sprite.setFrame(this.digits[2], td[Math.floor(seconds / 10)]);
-                Sprite.setFrame(this.digits[3], td[seconds % 10]);
+                this.digits[0].setFrame(td[minutes]);
+                this.digits[2].setFrame(td[Math.floor(seconds / 10)]);
+                this.digits[3].setFrame(td[seconds % 10]);
                 this.lastValue = time;
             }
         }
@@ -2736,10 +2513,10 @@ var minutes = 6E4;
             this.eventHandler = new EventHandler(this);
 
             // Attach mouse event listeners
-            this.eventHandler.listen(this.element, "click", this.handleClick.bind(this));
-            this.eventHandler.listen(this.element, "mousedown", this.handleMouseDown.bind(this));
-            this.eventHandler.listen(this.element, "mouseover", this.handleMouseOver.bind(this));
-            this.eventHandler.listen(this.element, "mouseout", this.handleMouseOut.bind(this));
+            this.eventHandler.listen(this.element, "click", this.handleClick);
+            this.eventHandler.listen(this.element, "mousedown", this.handleMouseDown);
+            this.eventHandler.listen(this.element, "mouseover", this.handleMouseOver);
+            this.eventHandler.listen(this.element, "mouseout", this.handleMouseOut);
 
             // Indicate interactivity
             this.element.style.cursor = "pointer";
@@ -2754,19 +2531,19 @@ var minutes = 6E4;
 
         // Event Handlers
         handleClick() {
-            this.dispatchEvent("click");
+            dispatchEvent("click");
         }
 
         handleMouseDown() {
-            this.dispatchEvent("mousedown");
+            dispatchEvent("mousedown");
         }
 
         handleMouseOver() {
-            this.dispatchEvent("mouseover");
+            dispatchEvent("mouseover");
         }
 
         handleMouseOut() {
-            this.dispatchEvent("mouseout");
+            dispatchEvent("mouseout");
         }
     }
 
@@ -2802,13 +2579,13 @@ var minutes = 6E4;
 
             // --- Main sprite setup ---
             this.mainSprite = this.spritePool.get();
-            Sprite.setFrame(this.mainSprite, this.grid[0]);
+            this.mainSprite.setFrame(this.grid[0]);
             this.mainSprite.setZIndex(17);
             this.mainSprite.show(false);
 
             // --- Shadow sprite setup ---
             this.shadowSprite = this.spritePool.get();
-            Sprite.setFrame(this.shadowSprite, 57);
+            this.shadowSprite.setFrame(57);
             Sprite.animateOpacity(this.shadowSprite, 300, 0, 1);
             this.shadowSprite.setZIndex(0);
             this.shadowSprite.scale(0.7, 0.7);
@@ -2837,8 +2614,8 @@ var minutes = 6E4;
 
             // Behavior triggers
             this.behaviors = [
-                new ConditionalTrigger(this.onReady.bind(this), this.onDisappear.bind(this), true),
-                new ConditionalTrigger(this.onActive.bind(this), this.onFinish.bind(this), false, 400)
+                new ConditionalTrigger(this.onReady, this.onDisappear, true),
+                new ConditionalTrigger(this.onActive, this.onFinish, false, 400)
             ];
         }
 
@@ -2895,7 +2672,7 @@ var minutes = 6E4;
         cycleFrame() {
             let index = this.grid.indexOf(this.mainSprite.getFrame());
             index = (index + 1) % this.grid.length;
-            Sprite.setFrame(this.mainSprite, this.grid[index]);
+            this.mainSprite.setFrame(this.grid[index]);
         }
 
         isEndingSoon() {
@@ -3029,14 +2806,14 @@ var minutes = 6E4;
     class StaticVariantEntity extends GridEntity {
         constructor(config) {
             super(config);
-            if (random(2)) Sprite.setFrame(this.sprite, this.grid[1]);
+            if (random(2)) this.sprite.setFrame(this.grid[1]);
         }
     }
 
     class ShadowedEntity extends GridEntity {
         constructor(config) {
             super(config);
-            Sprite.setFrame(this.shadow, 11);
+            this.shadow.setFrame(11);
         }
 
         updatePosition() {
@@ -3061,7 +2838,7 @@ var minutes = 6E4;
     class RandomMovingEntity extends GridEntity {
         constructor(config) {
             super(config);
-            if (random(2)) Sprite.setFrame(this.sprite, this.grid[1]);
+            if (random(2)) this.sprite.setFrame(this.grid[1]);
             initMotion(this);
         }
     }
@@ -3070,7 +2847,7 @@ var minutes = 6E4;
         constructor(config) {
             super(config);
             const variant = random(4);
-            if (variant) Sprite.setFrame(this.sprite, this.grid[variant]);
+            if (variant) this.sprite.setFrame(this.grid[variant]);
             this.variantKey = "GOLE"[variant];
             initMotion(this);
         }
@@ -3586,57 +3363,73 @@ var minutes = 6E4;
         return sprite;
     }
 
-    var Fe = function (a) {
-        this.d = [];
-        this.A = null;
-        this.ma = [];
-        this.ba = Ee;
-        this.v = a;
-        this.jc = getTime();
-        this.oc = this.qc = null;
-        this.Ab = ObjectRegistry[1].V;
-        this.Fb = ObjectRegistry[1].V;
-        this.Gb = 1;
-        this.ed = this.Z = 0;
-        this.Yc = this.Hb = this.Ib = null;
-        this.g = GridPatternManager.getInstance()
-    };
-    inherit(Fe, EventDispatcher);
-
-    Fe.prototype.init = function () {
-        for (var a = 22, b = null, c = 0; 15 > c; c++) b = new Te(3, 0 == c ? 0 : 14 == c ? 2 : 1, a, 7, c, b, this.v), b.a.show(false), this.d.push(b), this.g.markCell(161 + a, true), a++, a = 23 <= a ? a - 23 : a;
-        this.A = createSprite(qc, 15, this.v)
-    };
-    Fe.prototype.forward = function () {
-        var a = this.d[this.d.length - 1].Jb();
-        ArrayUtils.forEachReverse(this.d, function (a) {
-            a.parent ? (a.k = a.parent.k, a.o = a.parent.o) : 0 == a.W && (a.k += 3 == a.F ? -1 : 4 == a.F ? 1 : 0, a.o += 1 == a.F ? -1 : 2 == a.F ? 1 : 0, a.k = (a.k + 23) % 23, a.o = (a.o + 9) % 9)
-        });
-        this.g.markCell(this.d[0].Jb(), true);
-        updateCellUsage(this.g, a, true);
-        var b = null;
-        this.ma.length && (b = this.ma.shift());
-        ArrayUtils.forEachReverse(this.d, function (a) {
-            var d = b;
-            a.oa = a.F;
-            a.F = 0 == a.W ? d ? d : a.F : 2 == a.W ? a.parent.parent.F : a.parent.F
-        })
-    };
-    Fe.prototype.move = function (a, b) {
-        this.Ib && 5E3 < b - this.Ib && Ue(this, b);
-        if (1 <= this.Z) {
-            this.forward();
-            if (5E3 <= (this.qc ? b - this.qc : 5E3)) {
-                var c = this.g.match();
-                "" != c && (this.dispatchEvent(new MatchPatternEvent(c, b)), this.qc = b, this.d[0].K(Ge, 80, 500))
-            }
-            We(this, b);
-            Ce(this);
-            this.Z = 0
+    class Fe extends EventDispatcher {
+        constructor(a) {
+            super();
+            this.d = [];
+            this.A = null;
+            this.ma = [];
+            this.ba = Ee;
+            this.v = a;
+            this.jc = getTime();
+            this.oc = this.qc = null;
+            this.Ab = ObjectRegistry[1].V;
+            this.Fb = ObjectRegistry[1].V;
+            this.Gb = 1;
+            this.ed = this.Z = 0;
+            this.Yc = this.Hb = this.Ib = null;
+            this.g = GridPatternManager.getInstance();
         }
-        Xe(this, b);
-        this.jc = b
-    };
+        init() {
+            for (var a = 22, b = null, c = 0; 15 > c; c++) b = new Te(3, 0 == c ? 0 : 14 == c ? 2 : 1, a, 7, c, b, this.v), b.a.show(false), this.d.push(b), this.g.markCell(161 + a, true), a++, a = 23 <= a ? a - 23 : a;
+            this.A = createSprite(qc, 15, this.v);
+        }
+        forward() {
+            var a = this.d[this.d.length - 1].Jb();
+            ArrayUtils.forEachReverse(this.d, function (a) {
+                a.parent ? (a.k = a.parent.k, a.o = a.parent.o) : 0 == a.W && (a.k += 3 == a.F ? -1 : 4 == a.F ? 1 : 0, a.o += 1 == a.F ? -1 : 2 == a.F ? 1 : 0, a.k = (a.k + 23) % 23, a.o = (a.o + 9) % 9);
+            });
+            this.g.markCell(this.d[0].Jb(), true);
+            updateCellUsage(this.g, a, true);
+            var b = null;
+            this.ma.length && (b = this.ma.shift());
+            ArrayUtils.forEachReverse(this.d, function (a) {
+                var d = b;
+                a.oa = a.F;
+                a.F = 0 == a.W ? d ? d : a.F : 2 == a.W ? a.parent.parent.F : a.parent.F;
+            });
+        }
+        move(b) {
+            this.Ib && 5E3 < b - this.Ib && Ue(this, b);
+            if (1 <= this.Z) {
+                this.forward();
+                if (5E3 <= (this.qc ? b - this.qc : 5E3)) {
+                    var c = this.g.match();
+                    "" != c && (dispatchEvent(new MatchPatternEvent(c, b)), this.qc = b, this.d[0].K(Ge, 80, 500));
+                }
+                We(this, b);
+                Ce(this);
+                this.Z = 0;
+            }
+            Xe(this, b);
+            this.jc = b;
+        }
+        dispose() {
+            ArrayUtils.forEach(this.d, function (a) {
+                a.C();
+            });
+            this.ma = null;
+            this.A.C();
+            super.dispose();
+        }
+        Sa() {
+            return this.d[0].Sa();
+        }
+        Ta() {
+            return this.d[0].Ta();
+        }
+    }
+
     var Xe = function (a, b) {
         var c = Math.min(b - a.jc, 100);
         a.Z += c / a.Ab;
@@ -3678,7 +3471,7 @@ var minutes = 6E4;
         var c = getActiveLinkedCells(a.g);
         c.length ? (ArrayUtils.forEach(c, function (a) {
             this.d[0].Jb() == a && this.d[0].K(Ie, 80);
-            this.dispatchEvent(new CatchItemEvent(a, b))
+            dispatchEvent(new CatchItemEvent(a, b))
         }, a), a.oc = b) : 5E3 < b - a.oc && (a.oc = b, a.d[0].K(He, 80))
     },
     Ue = function (a, b) {
@@ -3717,20 +3510,6 @@ var minutes = 6E4;
         a.Ab = a.Fb * a.Gb
     }
 
-    Fe.prototype.h = function () {
-        ArrayUtils.forEach(this.d, function (a) {
-            a.C()
-        });
-        this.ma = null;
-        this.A.C();
-        Fe.I.h.call(this)
-    };
-    Fe.prototype.Sa = function () {
-        return this.d[0].Sa()
-    };
-    Fe.prototype.Ta = function () {
-        return this.d[0].Ta()
-    };
 
     /**
      * SnakeController
@@ -3861,7 +3640,7 @@ var minutes = 6E4;
                     const pattern = this.patternManager.match();
                     if (pattern !== "") {
                         // dispatch match event (Ve)
-                        this.dispatchEvent(new CatchItemEvent(pattern, now));
+                        dispatchEvent(new CatchItemEvent(pattern, now));
                         this.lastMatchTime = now;
                         // head K animation (originally Ge)
                         this.segments[0].K(Ge, 80, 500);
@@ -3964,10 +3743,10 @@ var minutes = 6E4;
                 ArrayUtils.forEach(activeLinked, idx => {
                     // if head occupies same cell, trigger short animation
                     if (this.segments[0].Jb() === idx) {
-                    this.segments[0].K(Ie, 80);
+                        this.segments[0].K(Ie, 80);
                     }
                     // dispatch catch event (custom $e)
-                    this.dispatchEvent(new CatchItemEvent(idx, now));
+                    dispatchEvent(new CatchItemEvent(idx, now));
                 }, this);
 
                 this.lastCatchTime = now;
@@ -4071,14 +3850,14 @@ var minutes = 6E4;
         getColumn() { return this.Sa(); }
     }
 
-    class CatchItemEvent extends CustomEvent {
+    class CatchItemEvent extends Event {
         constructor(a, b) {
             super("catch item");
             this.item = a;
             this.gb = b;
         }
     }
-    class MatchPatternEvent extends CustomEvent {
+    class MatchPatternEvent extends Event {
         constructor(a, b) {
             super("match pattern");
             this.pattern = a;
@@ -4097,7 +3876,7 @@ var minutes = 6E4;
      * SnakeSegment class
      * Represents a single segment of the snake.
      */
-    class SnakeSegment extends CustomEvent {
+    class SnakeSegment extends Event {
         /**
          * @param {number} direction - Current facing direction (1–4).
          * @param {number} type - Segment type (0=head, 1=body, 2=tail).
@@ -4192,7 +3971,7 @@ var minutes = 6E4;
      * Determines if a segment’s current frame is special (turn/corner).
      */
     function isSpecialFrame(segment) {
-        const frameId = segment.a.Ua();
+        const frameId = segment.a.getFrameId();
         const isTurnA = Oe.includes(frameId) || Pe.includes(frameId);
         const isTurnB = Qe.includes(frameId) || Re.includes(frameId);
         return frameId === pc || isTurnA || isTurnB;
@@ -4214,8 +3993,8 @@ var minutes = 6E4;
         }
 
         if (!segment.a.X || !segment.a.X.isPlaying()) {
-            Sprite.setFrame(segment.a, frameSet);
-            if (segment.A) Sprite.setFrame(segment.A, frameSet);
+            segment.a.setFrame(frameSet);
+            if (segment.A) segment.A.setFrame(frameSet);
         }
 
         if (segment.W === 0 && angle === 180) segment.a.flip();
@@ -4246,7 +4025,7 @@ var minutes = 6E4;
         }
 
         stopAllAnimations(segment.a);
-        Sprite.setFrame(segment.a, frameSet[frameIndex]);
+        segment.a.setFrame(frameSet[frameIndex]);
     }
 
     /**
@@ -4301,82 +4080,279 @@ var minutes = 6E4;
     }
     defineSingleton(DirectionManager);
 
-    var $ = function (rootElement) {
-        this.root = rootElement;
+    class $ extends Disposable {
+        constructor(rootElement) {
+            super();
+            this.root = rootElement;
 
-        this.gridContainer = createDiv();
-        addClass(this.gridContainer, "grids");
-        this.root.appendChild(this.gridContainer);
-        setPosition(this.gridContainer, START_POS.x, START_POS.y);
+            this.gridContainer = createDiv();
+            addClass(this.gridContainer, "grids");
+            this.root.appendChild(this.gridContainer);
+            setPosition(this.gridContainer, START_POS.x, START_POS.y);
 
-        this.lastUpdateTime = 0;
-        this.state = "unstarted";
-        this.startTime = getTime();
-        this.remainingTime = minutes;
+            this.lastUpdateTime = 0;
+            this.state = "unstarted";
+            this.startTime = getTime();
+            this.remainingTime = minutes;
 
-        this.score = 0; // score
-        this.comboData = {};
-        this.hc = this.Aa = this.Db = this.Cb = null;
-        this.Ma = [];
-        this.TileSpawner = TileSpawner.getInstance();
-        gridClass = this.TileSpawner;
-        this.TileSpawner.init(this.gridContainer);
-        this.snake = new SnakeController(this.gridContainer);
-        snakeClass = this.snake;
+            this.score = 0; // score
+            this.comboData = {};
+            this.hc = this.Aa = this.Db = this.Cb = null;
+            this.Ma = [];
+            this.TileSpawner = TileSpawner.getInstance();
+            gridClass = this.TileSpawner;
+            this.TileSpawner.init(this.gridContainer);
+            this.snake = new SnakeController(this.gridContainer);
+            snakeClass = this.snake;
 
-        this.input = new InputController(this.root, true);
-        this.eventHandler = new EventHandler(this);
-        this.objectPool = ObjectPoolManager.getInstance();
+            this.input = new InputController(this.root, true);
+            this.eventHandler = new EventHandler(this);
+            this.objectPool = ObjectPoolManager.getInstance();
 
-        this.playButton = new ClickableElement(12, START_BUTTON.x, START_BUTTON.y, this.root, 101);
-        this.playButton.show(false);
+            this.playButton = new ClickableElement(12, START_BUTTON.x, START_BUTTON.y, this.root, 101);
+            this.playButton.show(false);
 
-        this.soundButton = new ClickableElement(90, SOUND_BUTTON.x, SOUND_BUTTON.y, this.root, 100);
-        this.soundButton.show(false);
+            this.soundButton = new ClickableElement(90, SOUND_BUTTON.x, SOUND_BUTTON.y, this.root, 100);
+            this.soundButton.show(false);
 
-        this.music = new AudioPlayer(["./snakeyear/snake"], this.root);
+            this.music = new AudioPlayer(["./resources/snake"], this.root);
 
-        this.mainSprite = new SpriteGroup(31, MAIN_SPR_POS.x, MAIN_SPR_POS.y, this.root, 100);
-        this.mainSprite.show(false);
+            this.mainSprite = new SpriteGroup(31, MAIN_SPR_POS.x, MAIN_SPR_POS.y, this.root, 100);
+            this.mainSprite.show(false);
 
-        this.fb = null;
-        this.eb = [];
-        this.ec = this.fc = this.dc = null;
-        this.gc = this.$c = 0;
+            this.fb = null;
+            this.eb = [];
 
-        this.visibilityTimer = new VisibilityTimer(3E4, this.$d.bind(this), this.ae.bind(this));
-        window.isAnimationPaused = false;
+            this.uiSeq = null;
+            this.tutSeq = null;
+            this.introSeq = null;
 
-        new SpriteGroup(19, BG_LEFT.x, BG_LEFT.y, this.root, 100);
-        this.leftFrame = new SpriteGroup(36, FRAME_LEFT.x + 99, FRAME_LEFT.y, this.root, -1);
-        this.rightFrame = new SpriteGroup(53, FRAME_RIGHT.x - 99, FRAME_RIGHT.y, this.root, -1);
-        this.leftFrame.show(false);
-        this.rightFrame.show(false);
+            this.gc = 0;
 
-        this.timerDisplay = new TimerDisplay(TIMER_POS.x, TIMER_POS.y, this.root);
-        this.timerDisplay.show(false);
+            this.visibilityTimer = new VisibilityTimer(3E4, this.$d, this.ae);
+            window.isAnimationPaused = false;
 
-        this.scoreDisplay = new ScoreDisplay(qf, this.root);
+            new SpriteGroup(19, BG_LEFT.x, BG_LEFT.y, this.root, 100);
+            this.leftFrame = new SpriteGroup(36, FRAME_LEFT.x + 99, FRAME_LEFT.y, this.root, -1);
+            this.rightFrame = new SpriteGroup(53, FRAME_RIGHT.x - 99, FRAME_RIGHT.y, this.root, -1);
+            this.leftFrame.show(false);
+            this.rightFrame.show(false);
 
-        this.icons = [];
-        for (let i = 0; i < SIDE_ICONS.length; i++) {
-            const pos = SIDE_ICONS[i];
-            const sprite = new Sprite(33);
-            sprite.show(false);
-            Sprite.setPosition(sprite, pos.x, pos.y);
-            this.root.appendChild(sprite.getElement());
-            this.icons.push(sprite);
+            this.timerDisplay = new TimerDisplay(TIMER_POS.x, TIMER_POS.y, this.root);
+            this.timerDisplay.show(false);
+
+            this.scoreDisplay = new ScoreDisplay(qf, this.root);
+
+            this.icons = [];
+            for (let i = 0; i < SIDE_ICONS.length; i++) {
+                const pos = SIDE_ICONS[i];
+                const sprite = new Sprite(33);
+                sprite.show(false);
+                Sprite.setPosition(sprite, pos.x, pos.y);
+                this.root.appendChild(sprite.getElement());
+                this.icons.push(sprite);
+            }
+
+            this.eventHandler.listen(this.input, "a", this.Xd);
+            this.eventHandler.listen(this.snake, "catch item", this.Yd);
+            this.eventHandler.listen(this.snake, "match pattern", this.Zd);
+            this.eventHandler.listen(this.soundButton, "click", this.Wd);
+
+            this.snake.init();
+            this.dd();
         }
+        $d() {
+            if ("running" == this.state) {
+                this.music.pause();
+                var a = this.snake;
+                a.ba = Yc;
+                a.d[0].qa().setFrame(a.ba);
+                Of(this);
+            }
+        }
+        ae() {
+            if ("tutorial_start" == this.state || "tutorial_end" == this.state) {
+                this.music.play();
+                var a = this.snake;
+                a.ba = Ee;
+                a.d[0].qa().setFrame(a.ba);
+                this.state = "running";
+                Pf(this);
+                minutes == this.remainingTime && Nf(this);
+            }
+        }
+        rd() {
+            if ("init" == this.state) {
+                this.playButton.K(Cf, 80);
+                setTimeout(this.rd, 3E3);
+            }
+        }
+        Yd(a) {
+            var b = this.TileSpawner.getItem(a.item);
+            if (b != null)
+                if (1 == b.i || b.cc < b.a.getHeight()) {
+                    var c = b.getName();
+                    this.comboData[c]++;
+                    console.log("Snake eaten " + c);
+                    this.score += b.z;
+                    this.score = Math.min(this.score, 999);
+                    switch (c) {
+                        case "mushroom":
+                        case "firecraker":
+                        case "medicine":
+                        case "tea":
+                            c = this.snake;
+                            a = a.gb;
+                            c.d[0].K(Ge, 80, 500);
+                            boostFunction(c, a, .1);
+                            c.ba = Vc;
+                            break;
+                        case "lantern":
+                            a: {
+                                a = Td;
+                                c = b.be;
+                                if (1 == a.length) c == a[0] ? U = true : a[0] == "GOOGLE"[0] && c == "GOOGLE"[1] ? U = false : (Td = [], U = true);
+                                else if (a.length)
+                                    if (U && c == a[0] || !U && c == "GOOGLE"[a.length]) {
+                                        if (U && 2 == a.length || !U && 5 == a.length) {
+                                            a.push(c);
+                                            Td = [];
+                                            U = true;
+                                            a = a.join("");
+                                            break a;
+                                        }
+                                    } else Td = [], U = true;
+                                Td.push(c);
+                                a = "";
+                            }
+                            if (a) {
+                                for (var c = this.TileSpawner, d = a.length, e = 0; e < d; e++) {
+                                    spawnItem(c, createItem("steamer"), find2x2Block(c.g));
+                                }
+                                6 == a.length && fillGridWithItems(this.TileSpawner, a[random(a.length)]);
+                            }
+                            Tf(this);
+                    }
+                    b.Ia();
+                    this.scoreDisplay.update(this.score);
+                } else {
+                    b.J.show(false);
+                    b.a.setZIndex(1);
+                }
+        }
+        Zd(a) {
+            a = a.pattern;
+            "" != a && (fillGridWithItems(this.TileSpawner, a), this.gc++);
+        }
+        Xd(a) {
+            this.visibilityTimer.resetTimer();
+            if ("tutorial_end" == this.state) {
+                Pf(this);
+                Nf(this);
+            } else if ("running" == this.state) {
+                ze(this.snake, a.Ie);
+            }
+        }
+        De() {
+            this.music.load(false);
+            this.visibilityTimer.resetTimer();
+            var seq = new AnimationSequence();
+            this.uiSeq = seq;
+            seq.addStep(function () {
+                Sprite.fadeOut(this.cb);
+            });
+            seq.addStep(function (a) {
+                Sprite.setPosition(this.ca, Z.x, Z.y + 80 * a * a);
+                setOpacity(this.ca.aa(), 1 - a * a);
+            }, 700);
+            seq.addPauseStep(200);
+            seq.addStep(function () {
+                this.cb.show(false);
+                this.ca.show(false);
+                setOpacity(this.fa, 1);
+            });
+            seq.addStep(function () {
+                this.Cb.show(true);
+                this.Db.show(true);
+            });
+            seq.addStep(function (a) {
+                Sprite.setPosition(this.Cb, FRAME_LEFT.x + 99 * (1 - a), FRAME_LEFT.y);
+                Sprite.setPosition(this.Db, FRAME_RIGHT.x - 99 * (1 - a), FRAME_RIGHT.y);
+            }, 1E3);
+            seq.addStep(function () {
+                Sprite.animateOpacity(this.La, 500, 0, 1);
+                this.soundButton.show(true);
+            });
+            seq.addStep(function () {
+                Of(this);
+            });
+            seq.play();
+        }
+        td() {
+            this.visibilityTimer.resetTimer();
+            if ("tutorial_end" == this.state) {
+                Pf(this);
+                Nf(this);
+            }
+        }
+        sd() {
+            if ("tutorial_start" == this.state || "tutorial_end" == this.state) {
+                var a = new AnimationSequence();
+                this.tutSeq = a;
+                for (var b in Bf) {
+                    a.addStep(createFrameAnimation(this.eb[b], Bf[b], Af[b], 29));
+                    a.addPauseStep(300);
+                }
+                a.addStep(function () {
+                    if ("tutorial_start" == this.state) this.state = "tutorial_end";
+                });
+                a.play();
+                setTimeout(this.sd, 3E3);
+            }
+        }
+        Wd() {
+            this.visibilityTimer.resetTimer();
+            this.Ka = !this.Ka;
+            this.La.setFrame(this.Ka ? 90 : 89);
+            this.soundButton.H.muted = this.Ka ? false : true;
+        }
+        ze() {
+            setOpacity(this.fa, 1);
+            this.Aa.show(false);
+            Nf(this);
+        }
+        dd() {
+            var a = getTime();
+            var b = a - this.lastUpdateTime;
+            var b = Math.min(50, b);
+            if ("running" == this.state) {
+                updateGameState(this, b, a);
+            } else if ("unstarted" == this.state && 1500 < a - this.startTime) {
+                this.state = "init";
+                playIntroSequence(this);
+            }
+            requestAnimFrame(this.dd);
+            this.lastUpdateTime = a;
+        }
+        dispose() {
+            this.state = "stop";
+            safeDispose(this.eventHandler);
+            if (this.introSeq) this.introSeq.stop();
+            if (this.tutSeq) this.tutSeq.stop();
+            if (this.uiSeq) this.uiSeq.stop();
+            window.isAnimationPaused = true;
+            this.comboData = null;
+            this.timerDisplay.dispose();
+            this.scoreDisplay.dispose();
+            this.TileSpawner.dispose();
+            this.snake.dispose();
+            this.input.dispose();
+            this.soundButton.dispose();
+            this.visibilityTimer.dispose();
+            super.dispose();
+        }
+    }
 
-        this.eventHandler.listen(this.input, "a", this.Xd);
-        this.eventHandler.listen(this.snake, "catch item", this.Yd);
-        this.eventHandler.listen(this.snake, "match pattern", this.Zd);
-        this.eventHandler.listen(this.soundButton, "click", this.Wd);
-
-        this.snake.init();
-        this.dd()
-    };
-    inherit($, Disposable);
     var START_BUTTON = new Point(309, 79),
         SOUND_BUTTON = new Point(625, 125),
         MAIN_SPR_POS = new Point(256, 46),
@@ -4385,13 +4361,13 @@ var minutes = 6E4;
         wf = new Point(212, 80),
         xf = [91, 92, 93],
         yf = [new Point(415, 82), new Point(397, 82), new Point(379, 82)],
-        BG_LEFT = new Point(96, 6),
-        START_POS = new Point(110, 20),
-        FRAME_LEFT = new Point(4, 46),
-        FRAME_RIGHT = new Point(577, 46),
-        TIMER_POS = new Point(43, 103),
+        BG_LEFT = new Point(96, 6), //mf
+        START_POS = new Point(110, 20), //jf
+        FRAME_LEFT = new Point(4, 46), //nf
+        FRAME_RIGHT = new Point(577, 46), //of
+        TIMER_POS = new Point(43, 103), //pf
         qf = [new Point(640, 103), new Point(629, 103), new Point(618, 103), new Point(607, 103), new Point(596, 103), new Point(585, 103)],
-        SIDE_ICONS = [new Point(6, 127), new Point(6, 143), new Point(22, 143), new Point(5, 159), new Point(22, 159), new Point(38, 159)],
+        SIDE_ICONS = [new Point(6, 127), new Point(6, 143), new Point(22, 143), new Point(5, 159), new Point(22, 159), new Point(38, 159)], //rf
         zf = new Point(294, 44),
         Af = [new Point(387, 81), new Point(387, 115), new Point(353, 115), new Point(420, 115)],
         Bf = [
@@ -4468,23 +4444,23 @@ var minutes = 6E4;
      */
     function playIntroSequence(game) {
         const seq = new AnimationSequence();
-        game.dc = seq;
+        game.seq = seq;
 
         // Animate entity 38 times with short pauses
         for (let i = 1; i < 39; i++) {
             seq.addStep(bind(De, game, game.N));
-            addPauseStep(seq, 150);
+            seq.addPauseStep(150);
         }
 
         // Fade in secondary sprite
-        addPauseStep(seq, 200);
+        seq.addPauseStep(200);
         seq.addStep(function () {
             this.cb.show(true);
             Sprite.animateOpacity(this.cb, 400, 0, 1);
         });
 
         // Move main sprite (`ca`)
-        addPauseStep(seq, 600);
+        seq.addPauseStep(600);
         seq.addStep(function () {
             Sprite.setPosition(this.ca, Z.x, Z.y - 80);
             this.ca.show(true);
@@ -4507,7 +4483,7 @@ var minutes = 6E4;
 
         // Add click handler
         seq.addStep(function () {
-            addListener(this.eventHandler, this.ca, "mousedown", this.De);
+            this.ca.addEventListener("mousedown", this.De)
         });
 
         seq.play();
@@ -4518,10 +4494,10 @@ var minutes = 6E4;
             const anim = new AnimationSequence();
             frames.forEach(frame => {
                 anim.addStep(() => {
-                    Sprite.setFrame(sprite, frame);
+                    sprite.setFrame(frame);
                     Sprite.setPosition(sprite, position.x, position.y + offsetY - sprite.getHeight());
                 });
-                addPauseStep(anim, 80);
+                anim.addPauseStep(80);
             });
             anim.play();
         };
@@ -4546,117 +4522,34 @@ var minutes = 6E4;
         a.La.show(true);
         a.la.play();
         a.la.H.muted = !a.Ka;
-        a.$c++;
         a.gc = 0
-    };
-    $.prototype.$d = function () {
-        if ("running" == this.state) {
-            this.music.pause();
-            var a = this.snake;
-            a.ba = Yc;
-            Sprite.setFrame(a.d[0].qa(), a.ba);
-            Of(this)
-        }
-    };
-    $.prototype.ae = function () {
-        if ("tutorial_start" == this.state || "tutorial_end" == this.state) {
-            this.music.play();
-            var a = this.snake;
-            a.ba = Ee;
-            Sprite.setFrame(a.d[0].qa(), a.ba);
-            this.state = "running";
-            Pf(this);
-            minutes == this.remainingTime && Nf(this)
-        }
     };
     var Mf = function (a) {
         getObjectKeys(ItemDefinitions).forEach(function (a) {
             this.comboData[a] = 0
         }, a);
     };
-    $.prototype.rd = function () {
-        if ("init" == this.state) {
-            this.playButton.K(Cf, 80);
-            setTimeout(this.rd, 3E3);
-        }
-    };
 
-    $.prototype.Yd = function (a) {
-        var b = this.TileSpawner.getItem(a.item);
-        if (b != null)
-            if (1 == b.i || b.cc < b.a.getHeight()) {
-                var c = b.getName();
-                this.comboData[c]++;
-                console.log("Snake eaten " + c);
-                this.score += b.z;
-                this.score = Math.min(this.score, 999);
-                switch (c) {
-                    case "mushroom":
-                    case "firecraker":
-                    case "medicine":
-                    case "tea":
-                        c = this.snake;
-                        a = a.gb;
-                        c.d[0].K(Ge, 80, 500);
-                        boostFunction(c, a, .1);
-                        c.ba = Vc;
-                        break;
-                    case "lantern":
-                        a: {
-                            a = Td;
-                            c = b.be;
-                            if (1 == a.length) c == a[0] ? U = true : a[0] == "GOOGLE"[0] && c == "GOOGLE"[1] ? U = false : (Td = [], U = true);
-                            else if (a.length)
-                                if (U && c == a[0] || !U && c == "GOOGLE"[a.length]) {
-                                    if (U && 2 == a.length || !U && 5 == a.length) {
-                                        a.push(c);
-                                        Td = [];
-                                        U = true;
-                                        a = a.join("");
-                                        break a
-                                    }
-                                } else Td = [], U = true;
-                            Td.push(c);
-                            a = ""
-                        }
-                        if (a) {
-                            for (var c = this.TileSpawner, d = a.length, e = 0; e < d; e++) {
-                                spawnItem(c, createItem("steamer"), find2x2Block(c.g));
-                            }
-                            6 == a.length && fillGridWithItems(this.TileSpawner, a[random(a.length)])
-                        }
-                        Tf(this)
-                }
-                b.Ia();
-                this.scoreDisplay.update(this.score)
-            } else {
-                b.J.show(false);
-                b.a.setZIndex(1);
-            }
-    };
-    $.prototype.Zd = function (a) {
-        a = a.pattern;
-        "" != a && (fillGridWithItems(this.TileSpawner, a), this.gc++)
-    };
     var Tf = function (a) {
         ArrayUtils.forEach(a.yb, function (a, c) {
             if (c < Td.length) {
-                Sprite.setFrame(a, sd[Td[c]]);
+                a.setFrame(sd[Td[c]]);
                 a.show(true);
             } else a.show(false);
         })
     };
+
     function stopGame(a) {
         isOver = true;
         if (a.Aa) {
             setOpacity(a.fa, 0.3);
-            Sprite.setFrame(a.hc, xf[(80 > a.z ? 1 : 150 > a.z ? 2 : 3) - 1]);
+            a.hc.setFrame(xf[(80 > a.z ? 1 : 150 > a.z ? 2 : 3) - 1]);
             var b = createDigitSprites(a.z, vd);
             a.Aa.show(true);
             for (var c in b) {
                 if (b[c] != null) {
                     a.Ma[c].show(true);
-                    Sprite.setFrame(a.Ma[c], b[c]);
+                    a.Ma[c].setFrame(b[c]);
                 } else a.Ma[c].show(false);
             }
         } else {
@@ -4666,7 +4559,7 @@ var minutes = 6E4;
                 a.eventHandler.listen(q, "click", a.ze);
                 a.eventHandler.listen(q, "mouseover", createFrameAnimation(q, Ff, vf, 28));
                 a.eventHandler.listen(q, "mouseout", createFrameAnimation(q, If, vf, 28));
-                a.Aa.add(q)
+                a.Aa.add(q);
             }
             a.hc = new SpriteGroup(xf[(80 > a.z ? 1 : 150 > a.z ? 2 : 3) - 1], wf.x, wf.y, a.v, 101);
             a.Aa.add(a.hc);
@@ -4681,78 +4574,16 @@ var minutes = 6E4;
             setOpacity(a.fa, 0.3)
         }
     };
-    $.prototype.Xd = function (a) {
-        this.visibilityTimer.resetTimer();
-        if ("tutorial_end" == this.state) {
-            Pf(this);
-            Nf(this);
-        } else if ("running" == this.state) {
-            ze(this.snake, a.Ie)
-        }
-    };
-    $.prototype.De = function () {
-        this.music.load(false);
-        this.visibilityTimer.resetTimer();
-        var a = new AnimationSequence();
-        this.ec = a;
-        a.addStep(function () {
-            Sprite.fadeOut(this.cb)
-        });
-        a.addStep(function (a) {
-            Sprite.setPosition(this.ca, Z.x, Z.y + 80 * a * a);
-            setOpacity(this.ca.aa(), 1 - a * a)
-        }, 700);
-        addPauseStep(a, 200);
-        a.addStep(function () {
-            this.cb.show(false);
-            this.ca.show(false);
-            setOpacity(this.fa, 1)
-        });
-        a.addStep(function () {
-            this.Cb.show(true);
-            this.Db.show(true)
-        });
-        a.addStep(function (a) {
-            Sprite.setPosition(this.Cb, nf.x + 99 * (1 - a), nf.y);
-            Sprite.setPosition(this.Db, of.x - 99 * (1 - a), of.y)
-        }, 1E3);
-        a.addStep(function () {
-            Sprite.animateOpacity(this.La, 500, 0, 1);
-            this.soundButton.show(true)
-        });
-        a.addStep(function () {
-            Of(this)
-        });
-        a.play()
-    };
     var Of = function (a) {
         a.fb = new ClickableElement(94, zf.x, zf.y, a.v, 100);
         for (var b in Bf) {
             a.eb[b] = new ClickableElement(Bf[b][0], Af[b].x, Af[b].y, a.v, 101);
-            a.eventHandler.listen(a.eb[b], "click", a.td), a.fb.add(a.eb[b]);
+            a.eventHandler.listen(a.eb[b], "click", a.td);
+            a.fb.add(a.eb[b]);
         }
         a.state = "tutorial_start";
         a.eventHandler.listen(a.fb, "click", a.td);
         a.sd()
-    };
-    $.prototype.td = function () {
-        this.visibilityTimer.resetTimer();
-        "tutorial_end" == this.state && (Pf(this), Nf(this))
-    };
-    $.prototype.sd = function () {
-        if ("tutorial_start" == this.state || "tutorial_end" == this.state) {
-            var a = new AnimationSequence();
-            this.fc = a;
-            for (var b in Bf) {
-                a.addStep(createFrameAnimation(this.eb[b], Bf[b], Af[b], 29));
-                addPauseStep(a, 300);
-            }
-            a.addStep(function () {
-                if ("tutorial_start" == this.state) this.state = "tutorial_end";
-            });
-            a.play();
-            setTimeout(this.sd, 3E3)
-        }
     };
     var Pf = function (a) {
         Sprite.fadeOut(a.fb);
@@ -4760,48 +4591,6 @@ var minutes = 6E4;
             Sprite.fadeOut(a)
         });
         a.fb.show(false)
-    };
-    m = $.prototype;
-    m.Wd = function () {
-        this.visibilityTimer.resetTimer();
-        this.Ka = !this.Ka;
-        Sprite.setFrame(this.La, this.Ka ? 90 : 89);
-        this.soundButton.H.muted = this.Ka ? false : true
-    };
-    m.ze = function () {
-        setOpacity(this.fa, 1);
-        this.Aa.show(false);
-        Nf(this);
-    };
-    m.dd = function () {
-        var a = getTime();
-        var b = a - this.lastUpdateTime;
-        var b = Math.min(50, b);
-        if ("running" == this.state) {
-            updateGameState(this, b, a)
-        } else if ("unstarted" == this.state && 1500 < a - this.startTime) {
-            this.state = "init";
-            playIntroSequence(this);
-        }
-        requestAnimFrame(this.dd);
-        this.lastUpdateTime = a
-    };
-    m.dispose = function () {
-        this.state = "stop";
-        safeDispose(this.eventHandler);
-        this.dc && this.dc.stop();
-        this.fc && this.fc.stop();
-        this.ec && this.ec.stop();
-        window.isAnimationPaused = true;
-        this.comboData = this.eventHandler = null;
-        this.timerDisplay.dispose();
-        this.scoreDisplay.dispose();
-        this.TileSpawner.dispose();
-        this.snake.dispose();
-        this.input.dispose();
-        this.soundButton.dispose();
-        this.visibilityTimer.dispose();
-        super.dispose();
     };
 
     var logoElement = null;
@@ -4811,7 +4600,7 @@ var minutes = 6E4;
     })(function init() {
         if (logoElement = document.getElementById("hplogo")) {
             // Sprite / resource loader for the doodle
-            SpriteManager = new SpriteSheet("./snakeyear/snakeyear-sprite.png", lc);
+            SpriteManager = new SpriteSheet("./resources/spritesheet.png", lc);
             SpriteManager.load();
 
             // Build a configuration set (rc) with many keys enabled
