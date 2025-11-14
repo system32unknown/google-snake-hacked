@@ -4895,7 +4895,11 @@ goog.events.EventHandler.typeArray_ = [];
     }
     spawnItem = spawnItem
 
-    var we, xe, ye = [
+    // Rename globals
+    let snakeStepIndex = 0;   // was: we
+    let snakeBodyVisible = 0; // was: xe
+
+    const tutorialSteps = [   // was: ye
         { point: [3, 7], dir: 1 },
         { point: [2, 6], dir: 4 },
         { point: [4, 5], dir: 2 },
@@ -4903,15 +4907,40 @@ goog.events.EventHandler.typeArray_ = [];
         { point: [3, 7], dir: 1 },
         { point: [2, 3], dir: 4 },
         { point: [4, 2], dir: 4 }
-    ],
-    De = function (a) {
-        var b = ye[we], c = b.point;
-        a.Ta() == c[1] && a.Sa() == c[0] && (ze(a, b.dir), we++, we == ye.length && (boostFunction(a, getTime(), Infinity), a.d[0].playFrameSequence(Be, 80)));
-        a.forward();
-        Ce(a);
-        if (15 > xe)
-            for (b = 0; 15 > b; b++) a.d[b].mainSprite.show(b <= xe + 1);
-        xe++
+    ];
+
+    // Rename function De → runTutorialStep
+    function runTutorialStep(snake) {
+        const step = tutorialSteps[snakeStepIndex];
+        console.log(step);
+        const point = step.point;
+
+        // snake.Ta() = snake.y , snake.Sa() = snake.x
+        if (snake.getRow() === point[1] && snake.getColumn() === point[0]) {
+            // ze(a, dir) → moveSnakeInDirection
+            moveSnakeInDirection(snake, step.dir);
+
+            snakeStepIndex++;
+
+            // If reached end of tutorial steps
+            if (snakeStepIndex === tutorialSteps.length) {
+                boostFunction(snake, getTime(), Infinity);
+                snake.d[0].playFrameSequence(Be, 80);
+            }
+        }
+
+        // Move forward and update animation
+        snake.forward();
+        updateSnakeGraphics(snake); // was: Ce(a)
+
+        // Gradually show more segments (max 15)
+        if (snakeBodyVisible < 15) {
+            for (let i = 0; i < 15; i++) {
+                snake.d[i].mainSprite.show(i <= snakeBodyVisible + 1);
+            }
+        }
+
+        snakeBodyVisible++;
     };
 
     var Ge = [Uc, Tc, Sc, Tc, Uc];
@@ -4978,7 +5007,7 @@ goog.events.EventHandler.typeArray_ = [];
     We = function (a, b) {
         var c = getActiveLinkedCells(a.g);
         c.length ? (ArrayUtils.forEach(c, function (a) {
-            this.d[0].Jb() == a && this.d[0].K(Ie, 80);
+            this.d[0].getCellIndex() == a && this.d[0].K(Ie, 80);
             dispatchEvent(new CatchItemEvent(a, b))
         }, a), a.oc = b) : 5E3 < b - a.oc && (a.oc = b, a.d[0].K(He, 80))
     },
@@ -5015,7 +5044,7 @@ goog.events.EventHandler.typeArray_ = [];
         updateSegmentSprite(a.d[1]);
         updateSegmentSprite(a.d[b])
     },
-    Ae = function(a, b, c) {
+    boostFunction = function(a, b, c) {
         console.log("obj: " + a + " | secs: " + b + " | speed: " + c);
         a.Ib = b;
         a.Gb = c;
@@ -5098,7 +5127,7 @@ goog.events.EventHandler.typeArray_ = [];
          */
         forward() {
             // index of last cell before the step (for releasing)
-            const releasingIndex = this.segments[this.segments.length - 1].Jb();
+            const releasingIndex = this.segments[this.segments.length - 1].getCellIndex();
 
             // move segments backwards
             ArrayUtils.forEachReverse(this.segments, seg => {
@@ -5116,7 +5145,7 @@ goog.events.EventHandler.typeArray_ = [];
             });
 
             // mark the newly occupied cell of head
-            this.patternManager.markCell(this.segments[0].Jb(), true);
+            this.patternManager.markCell(this.segments[0].getCellIndex(), true);
 
             // update cell usage for the releasing cell (original 'oe')
             updateCellUsage(this.patternManager, releasingIndex, true);
@@ -5152,7 +5181,7 @@ goog.events.EventHandler.typeArray_ = [];
                     const pattern = this.patternManager.match();
                     if (pattern !== "") {
                         // dispatch match event (Ve)
-                        dispatchEvent(new CatchItemEvent(pattern, now));
+                        this.dispatchEvent(new MatchPatternEvent(pattern, now));
                         this.lastMatchTime = now;
                         // head K animation (originally Ge)
                         this.segments[0].K(Ge, 80, 500);
@@ -5254,11 +5283,11 @@ goog.events.EventHandler.typeArray_ = [];
             if (activeLinked.length) {
                 ArrayUtils.forEach(activeLinked, idx => {
                     // if head occupies same cell, trigger short animation
-                    if (this.segments[0].Jb() === idx) {
+                    if (this.segments[0].getCellIndex() === idx) {
                         this.segments[0].K(Ie, 80);
                     }
                     // dispatch catch event (custom $e)
-                    dispatchEvent(new CatchItemEvent(idx, now));
+                    this.dispatchEvent(new CatchItemEvent(idx, now));
                 }, this);
 
                 this.lastCatchTime = now;
@@ -5346,8 +5375,8 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         // shorthand helpers to expose head coordinates like Sa / Ta
-        Sa() { return this.segments[0].Sa(); }
-        Ta() { return this.segments[0].Ta(); }
+        getX() { return this.segments[0].getX(); }
+        getY() { return this.segments[0].getY(); }
 
         // cleanup
         dispose() {
@@ -5358,8 +5387,8 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         // convenience getters used in original code
-        getRow() { return this.Ta(); }
-        getColumn() { return this.Sa(); }
+        getRow() { return this.getY(); }
+        getColumn() { return this.getX(); }
     }
 
     class CatchItemEvent extends goog.events.Event {
@@ -5593,6 +5622,7 @@ goog.events.EventHandler.typeArray_ = [];
     defineSingleton(DirectionManager);
 
     class GameController extends goog.Disposable {
+        lastUpdateTime = 0;
         constructor(rootElement) {
             super();
             this.root = rootElement;
@@ -5602,14 +5632,13 @@ goog.events.EventHandler.typeArray_ = [];
             this.root.appendChild(this.gridContainer);
             setPosition(this.gridContainer, START_POS.x, START_POS.y);
 
-            this.lastUpdateTime = 0; //cd
             this.state = "unstarted"; //i
             this.startTime = getTime(); //Vd
             this.remainingTime = minutes; //ea
 
             this.score = 0; // score (z)
             this.comboData = {}; // $b
-            this.hc = this.Aa = this.Db = this.Cb = null;
+            this.hc = this.Aa = null;
             this.Ma = [];
             this.TileSpawner = TileSpawner.getInstance();
             gridClass = this.TileSpawner;
@@ -5666,14 +5695,14 @@ goog.events.EventHandler.typeArray_ = [];
             }
 
             this.eventHandler.listen(this.input, "a", this.Xd);
-            this.eventHandler.listen(this.snake, "catch item", this.Yd);
+            this.eventHandler.listen(this.snake, "catch item", this.handleItemCollected);
             this.eventHandler.listen(this.snake, "match pattern", this.handlePatternMatch);
             this.eventHandler.listen(this.soundButton, "click", this.Wd);
 
             this.snake.init();
             this.updateLoop();
         }
-        $d() {
+        onVisibilityLost() {
             if ("running" == this.state) {
                 this.music.pause();
                 var a = this.snake;
@@ -5699,6 +5728,54 @@ goog.events.EventHandler.typeArray_ = [];
                 setTimeout(this.flashStartButton, 3E3);
             }
         }
+
+        handleItemCollected(evt) {
+            let itemData = this.TileSpawner.getItem(evt.item);
+            if (!itemData) return;
+
+            if (itemData.i === 1 || itemData.cc < itemData.mainSprite.getHeight()) {
+                let name = itemData.getName();
+
+                this.comboData[name]++;
+                console.log("Snake eaten " + name);
+
+                this.score = Math.min(this.score + itemData.score, 999);
+
+                switch (name) {
+                    case "mushroom":
+                    case "firecraker":
+                    case "medicine":
+                    case "tea":
+                        let snake = this.snake;
+                        let boostSrc = evt.gb;
+                        snake.segments[0].animate(Ge, 80, 500);
+                        boostFunction(snake, boostSrc, 0.1);
+                        snake.frameId = Vc;
+                        break;
+
+                    case "lantern":
+                        // Lantern combo logic (unchanged)
+                        let comboStr = processLanternCombo(itemData);
+                        if (comboStr) {
+                            let spawner = this.TileSpawner;
+                            for (let i = 0; i < comboStr.length; i++)
+                                spawnItem(spawner, createItem("steamer"), find2x2Block(spawner.grid));
+
+                            if (comboStr.length === 6)
+                                fillGridWithItems(spawner, comboStr[random(comboStr.length)]);
+                        }
+                        triggerLanternEffect(this);
+                        break;
+                }
+
+                itemData.destroy();
+                this.scoreDisplay.update(this.score);
+            } else {
+                itemData.shadowSprite.show(false);
+                itemData.mainSprite.setZIndex(1);
+            }
+        }
+
         Yd(a) {
             var b = this.TileSpawner.getItem(a.item);
             if (b != null)
@@ -5785,12 +5862,12 @@ goog.events.EventHandler.typeArray_ = [];
                 setOpacity(this.fa, 1);
             });
             seq.addStep(function () {
-                this.Cb.show(true);
-                this.Db.show(true);
+                this.leftFrame.show(true);
+                this.rightFrame.show(true);
             });
             seq.addStep(function (a) {
-                Sprite.setPosition(this.Cb, FRAME_LEFT.x + 99 * (1 - a), FRAME_LEFT.y);
-                Sprite.setPosition(this.Db, FRAME_RIGHT.x - 99 * (1 - a), FRAME_RIGHT.y);
+                Sprite.setPosition(this.leftFrame, FRAME_LEFT.x + 99 * (1 - a), FRAME_LEFT.y);
+                Sprite.setPosition(this.rightFrame, FRAME_RIGHT.x - 99 * (1 - a), FRAME_RIGHT.y);
             }, 1E3);
             seq.addStep(function () {
                 Sprite.animateOpacity(this.La, 500, 0, 1);
@@ -5834,8 +5911,8 @@ goog.events.EventHandler.typeArray_ = [];
             this.Aa.show(false);
             Nf(this);
         }
-        updateLoop() {
-            let now = getTime();
+        updateLoop = () => {
+            var now = getTime();
             let delta = Math.min(50, now - this.lastUpdateTime);
             if ("running" == this.state) {
                 updateGameState(this, delta, now);
@@ -5960,7 +6037,7 @@ goog.events.EventHandler.typeArray_ = [];
 
         // Animate entity 38 times with short pauses
         for (let i = 1; i < 39; i++) {
-            seq.addStep(bind(De, game, game.N));
+            seq.addStep(runTutorialStep(game.snake));
             seq.addPauseStep(150);
         }
 
