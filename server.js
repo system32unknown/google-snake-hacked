@@ -4,11 +4,21 @@ const app = express()
 
 const PORT = process.env.PORT || 3500;
 
-app.use('/path', express.static(__dirname + '/path'))
+// Middleware to parse JSON request bodies
+app.use(express.json());
 
-app.use('/', express.static(path.join(__dirname, '/public')));
+// Middleware to parse URL-encoded request bodies
+app.use(express.urlencoded({ extended: true }));
+
+// Middleware to serve static files from a directory
+app.use('/path', express.static(__dirname + '/path'))
+app.use(express.static(__dirname + '/public'));
+
 app.get('/', function (req, res) {
     res.sendFile(__dirname + '/views/index.html');
 });
+app.get('/boo', (req, res) => {
+    res.send("<h1>Boo</h1>");
+});
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`App listening at http://localhost:${PORT}`));
