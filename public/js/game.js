@@ -16,7 +16,6 @@ function defineSingleton(cls) {
     };
 }
 
-
 /** ---------------------------
  * Array Utilities
  * --------------------------- */
@@ -478,9 +477,7 @@ goog.userAgent.WINDOWS = goog.userAgent.PLATFORM_KNOWN_ ? goog.userAgent.ASSUME_
 goog.userAgent.LINUX = goog.userAgent.PLATFORM_KNOWN_ ? goog.userAgent.ASSUME_LINUX : goog.userAgent.detectedLinux_;
 goog.userAgent.X11 = goog.userAgent.PLATFORM_KNOWN_ ? goog.userAgent.ASSUME_X11 : goog.userAgent.detectedX11_;
 goog.userAgent.determineVersion_ = function () {
-    var a = "",
-        b;
-        
+    var a = "", b;        
     goog.userAgent.OPERA && document.opera ? (a = document.opera.version, a = "function" == typeof a ? a() : a) : (goog.userAgent.GECKO ? b = /rv\:([^\);]+)(\)|;)/ : goog.userAgent.IE ? b = /MSIE\s+([^\);]+)(\)|;)/ : goog.userAgent.WEBKIT && (b = /WebKit\/(\S+)/), b && (a = (a = b.exec(goog.userAgent.getUserAgentString())) ? a[1] : ""));
     return goog.userAgent.IE && (b = goog.userAgent.getDocumentMode_(), b > parseFloat(a)) ? "" + b : a
 };
@@ -2355,18 +2352,10 @@ goog.events.EventHandler.typeArray_ = [];
         }
     }
 
-    var xb = function (a) {
-        switch (a) {
-            case 1:
-                return 2;
-            case 2:
-                return 1;
-            case 3:
-                return 4;
-            case 4:
-                return 3
-        }
-    };
+    function swapDirection(dir) {
+        const map = { 1: 2, 2: 1, 3: 4, 4: 3 };
+        return map[dir] || dir;
+    }
 
     // Vendor prefixes commonly used by browsers
     const vendorPrefixes = ["Moz", "ms", "O", "webkit"];
@@ -2394,39 +2383,6 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         return null;
-    }
-
-    /**
-     * Finds the correct `requestAnimationFrame` implementation (with vendor prefixes),
-     * or falls back to `setTimeout` at ~60 FPS if unavailable.
-     */
-    function getRequestAnimationFrame() {
-        const names = [
-            "requestAnimationFrame",
-            "mozRequestAnimationFrame",
-            "msRequestAnimationFrame",
-            "oRequestAnimationFrame",
-            "webkitRequestAnimationFrame"
-        ];
-
-        for (let i = 0; i < names.length; i++) {
-            const raf = window[names[i]];
-            if (raf) return raf.bind(window);
-        }
-
-        // Fallback: emulate ~60fps (1000ms / 60 ≈ 16.7ms)
-        return function(callback) {
-            window.setTimeout(callback, 17);
-        };
-    }
-
-    /**
-     * Cross-browser animation frame wrapper.
-     * Once the first call determines the correct implementation, it replaces itself for speed.
-     */
-    function requestAnimFrame(callback) {
-        requestAnimFrame = getRequestAnimationFrame();
-        return requestAnimFrame(callback);
     }
 
     function getTime() {
@@ -2502,7 +2458,7 @@ goog.events.EventHandler.typeArray_ = [];
             if (this.intervalId) {
                 let step;
                 while ((step = this.steps[this.currentIndex++])) {
-                    step.update(1);
+                    if (step.update !== null) step.update(1);
                 }
                 window.clearInterval(this.intervalId);
                 this.intervalId = 0;
@@ -2510,7 +2466,7 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         // Called every frame
-        update() {
+        update = () => {
             const now = getTime();
 
             if (window.isAnimationPaused) return;
@@ -2524,7 +2480,7 @@ goog.events.EventHandler.typeArray_ = [];
                     return; // wait until next frame
                 }
 
-                step.update(1); // complete this step
+                if (step.update != undefined) step.update(1); // complete this step
                 if (step.duration > 0) this.startTime += step.duration;
 
                 this.currentIndex++;
@@ -2535,11 +2491,14 @@ goog.events.EventHandler.typeArray_ = [];
 
         // Add a step (duration in ms, update callback)
         addStep(callback, duration = 0) {
-            this.steps.push({ duration, update: callback });
+            this.steps.push({
+                duration: duration,
+                update: callback
+            });
         }
 
         addPauseStep(duration) {
-            this.addStep(() => {}, duration);
+            this.addStep(function() {}, duration);
         }
     }
 
@@ -2577,14 +2536,12 @@ goog.events.EventHandler.typeArray_ = [];
             this.visibilityStateProp = getVendorPropertyName("visibilityState");
 
             // Determine the visibility change event name
-            this.visibilityChangeEvent = this.visibilityStateProp
-                ? this.visibilityStateProp.replace(/state$/i, "change").toLowerCase()
-                : null;
+            this.visibilityChangeEvent = this.visibilityStateProp ? this.visibilityStateProp.replace(/state$/i, "change").toLowerCase() : null;
 
             // Listen to document visibility changes
             if (this.visibilityChangeEvent) {
                 var listener = new goog.events.EventHandler(this);
-                listener.listen(document, this.visibilityChangeEvent);
+                listener.listen(document, this.visibilityChangeEvent, this.onVisibilityChange);
             }
 
             // Start initial timer
@@ -2597,7 +2554,7 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         // Called when timer interval passes
-        checkVisibility() {
+        checkVisibility = () => {
             this.timer = null;
             // True if enough time has passed
             this.isHidden = getTime() - this.startTime >= this.timeoutMs;
@@ -2755,7 +2712,7 @@ goog.events.EventHandler.typeArray_ = [];
             this.onEnd = null;
         }
 
-        load(onReady, onEnd) {
+        load(onReady = true, onEnd = true) {
             this.onReady = onReady;
             this.onEnd = onEnd;
 
@@ -2843,7 +2800,7 @@ goog.events.EventHandler.typeArray_ = [];
                 this.image.src = this.src;
 
                 // Handle cases where image was cached
-                if (this.image.complete || document.readyState === "complete") {
+                if (this.image.complete || this.image.readyState === "complete") {
                     onLoad();
                 }
             }
@@ -2868,7 +2825,8 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         getWidth(index) {
-            return this.frames[index][2];
+            var w = this.frames[index];
+            return w[2];
         }
 
         getHeight(index) {
@@ -3025,7 +2983,7 @@ goog.events.EventHandler.typeArray_ = [];
         }
     }
 
-    var lc = [
+    const SPRITE_FRAMES = [
         [734, 138, 14, 23],
         [0, 255, 6, 23],
         [501, 559, 14, 23],
@@ -3447,9 +3405,10 @@ goog.events.EventHandler.typeArray_ = [];
                         sprite.pixelY -= c ? widthOffset : 0;
                         sprite.pixelX -= b ? 0 : heightOffset;
                 }
-                if (-1 < tc[0].indexOf(sprite.frameId) || -1 < tc[1].indexOf(sprite.frameId))
-                    sprite.pixelY += 180 == sprite.rotation ? 1 : 0 == sprite.rotation ? -1 : 0,
+                if (-1 < tc[0].indexOf(sprite.frameId) || -1 < tc[1].indexOf(sprite.frameId)) {
+                    sprite.pixelY += 180 == sprite.rotation ? 1 : 0 == sprite.rotation ? -1 : 0
                     sprite.pixelX += 270 == sprite.rotation ? 1 : 90 == sprite.rotation ? -1 : 0
+                }
             }
 
             Sprite.setPosition(sprite, sprite.pixelX, sprite.pixelY);
@@ -3461,12 +3420,12 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         // Change frame
-        setFrame(frameId) {
-            if (this.element) {
-                Sprite._updateSize(this, frameId);
-                if (this.frameId !== frameId) {
-                    this.frameId = frameId;
-                    Sprite._updateBackground(this);
+        static setFrame(sprite, frameId) {
+            if (sprite.element) {
+                Sprite._updateSize(sprite, frameId);
+                if (sprite.frameId !== frameId) {
+                    sprite.frameId = frameId;
+                    Sprite._updateBackground(sprite);
                 }
             }
         }
@@ -3558,7 +3517,9 @@ goog.events.EventHandler.typeArray_ = [];
 
             for (let i = 0; i < repeatCount; i++) {
                 frames.forEach(frame => {
-                    this.transition.addStep(() => this.setFrame(frame));
+                    this.transition.addStep(function () {
+                        Sprite.setFrame(this, frame);
+                    });
                     this.transition.addPauseStep(delay);
                 });
             }
@@ -3573,7 +3534,7 @@ goog.events.EventHandler.typeArray_ = [];
             const w = SpriteManager.getWidth(frameSource);
             const h = SpriteManager.getHeight(frameSource);
             sprite.width = w;
-            sprite.height = true;
+            sprite.height = h;
             sprite.element.style.width = `${w + 1}px`;
             sprite.element.style.height = `${h + 1}px`;
         }
@@ -3587,9 +3548,7 @@ goog.events.EventHandler.typeArray_ = [];
             target.timeouts.forEach(handle => clearTimeout(handle));
         }
 
-        if (target.ra) {
-            target.ra.stop();
-        }
+        if (target.animation) target.animation.stop();
     }
 
     var qc = [111, 114, 112, 113],
@@ -3813,79 +3772,103 @@ goog.events.EventHandler.typeArray_ = [];
     var sc = null;
 
     class ScoreDisplay extends goog.Disposable {
-        constructor(a, b) {
+        constructor(position, root) {
             super();
-            this.Nb = [];
-            this.z = 0;
-            this.M = [];
-            for (var d = 0; 3 > d; d++) {
-                this.Nb[d] = a[d];
-                this.M.push(createBackgroundTile(b, this.Nb[d].x, this.Nb[d].y));
+            this.digitPositions = []; // Nb
+            this.currentScore = 0; // z
+            this.digitSprites = []; // M
+            for (let i = 0; i < 3; i++) {
+                this.digitPositions[i] = position[i];
+                this.digitSprites.push(createBackgroundTile(root, position[i].x, position[i].y));
             }
-            this.A = createBackgroundTile(b, a[0].x, a[0].y);
-            this.Ga = null;
-            this.P = [];
-            for (d = 0; 2 > d; d++) {
-                this.P[d] = createBackgroundTile(b, a[d + 4].x, a[d + 4].y);
-                console.log(this.P[d]);
-                this.P[d].element.style.opacity = 0;
-                this.P[d].show(true);
+            this.backgroundSprite = createBackgroundTile(root, position[0].x, position[0].y); // A
+            this.effectSprites = []; // P
+            this.animation = null; // Ga
+            this.pendingScoreDiffs = []; // Mb
+            this.lastEffectTime = null; // Ob
+            this.hasTwoDigitEffect = false; // pd
+
+            for (let i = 0; i < 2; i++) {
+                const p = createBackgroundTile(root, position[i + 4].x, position[i + 4].y);
+                p.element.style.opacity = 0;
+                p.show(true);
+                this.effectSprites[i] = p;
             }
-            this.Mb = [];
-            this.Ob = null;
-            this.pd = false;
         }
+
         reset() {
-            for (var a in this.M) this.M[a].setFrame(td[0]);
-            this.z = 0;
-            this.M[0].show(true);
-            this.P[0].s.style.opacity = 0;
-            this.P[1].s.style.opacity = 0;
-            this.P[0].show(true);
-            this.P[1].show(true);
-            this.Mb = [];
+            for (let key in this.digitSprites) Sprite.setFrame(this.digitSprites[key], td[0]);
+            this.currentScore = 0;
+            this.digitSprites[0].show(true);
+            this.effectSprites[0].s.style.opacity = 0;
+            this.effectSprites[1].s.style.opacity = 0;
+            this.effectSprites[0].show(true);
+            this.effectSprites[1].show(true);
+            this.pendingScoreDiffs = [];
         }
-        update(a) {
-            if (!(999 < a || a == this.z)) {
-                var b = a - this.z;
-                this.z = a;
-                a = createDigitSprites(a);
-                for (var c in a) {
-                    var d = this.M[c];
-                    var e = a[c];
-                    var f = this.Nb[c];
-                    if (e != null) {
-                        d.show(true)
-                        if (d.getFrameId() != e) playSwapAnimation(this, f, d, e)
-                    } else d.show(false);
+
+        update(newScore) {
+            if (newScore > 999 || newScore === this.currentScore) return;
+
+            const diff = newScore - this.currentScore;
+            this.currentScore = newScore;
+
+            const digits = createDigitSprites(newScore);
+
+            for (let i in digits) {
+                const sprite = this.digitSprites[i];
+                const frame = digits[i];
+                const pos = this.digitPositions[i];
+
+                if (frame != null) {
+                    sprite.show(true);
+                    if (sprite.getFrameId() !== frame) {
+                        playSwapAnimation(this, pos, sprite, frame);
+                    }
+                } else {
+                    sprite.show(false);
                 }
-                this.Mb.push(b);
             }
+
+            // queue the numeric difference for the small pop effect
+            this.pendingScoreDiffs.push(diff);
         }
-        jb(a) {
-            if (this.Mb.length) {
-                var b = this.Mb.shift()
-                var b = createDigitSprites(b, ud, 2);
-                for (c in b) {
-                    stopAllAnimations(this.P[c])
-                    if (b[c] != null) {
-                        this.P[c].setFrame(b[c]);
-                        Sprite.animateOpacity(this.P[c], 300, 0, 1);
-                    } else this.P[c].s.style.opacity = 0;
+
+        /**
+         * Process any queued score-diff popup effects.
+         * Call inside your frame/tick loop with a current timestamp (ms).
+         *
+         * @param {number} timeNow - ms timestamp (getTime()).
+         */
+        processPendingEffects(timeNow) {
+            if (this.pendingScoreDiffs.length) {
+                const diff = this.pendingScoreDiffs.shift();
+                const effectFrames = createDigitSprites(diff, ud, 2);
+
+                for (let i in effectFrames) {
+                    stopAllAnimations(this.effectSprites[i]);
+                    const frame = effectFrames[i];
+                    if (frame != null) {
+                        Sprite.setFrame(this.effectSprites[i], frame);
+                        Sprite.animateOpacity(this.effectSprites[i], 300, 0, 1);
+                    } else {
+                        this.effectSprites[i].s.style.opacity = 0;
+                    }
                 }
-                this.Ob = a;
-                this.pd = b[1] != null;
+
+                this.lastEffectTime = timeNow;
+                this.hasTwoDigitEffect = effectFrames[1] != null;
             }
-            if (this.Ob && 1E3 < a - this.Ob) {
-                Sprite.fadeOut(this.P[0]);
-                if (this.pd) Sprite.fadeOut(this.P[1]);
-                this.Ob = null;
+
+            if (this.lastEffectTime && timeNow - this.lastEffectTime > 1000) {
+                Sprite.fadeOut(this.effectSprites[0]);
+                if (this.hasTwoDigitEffect) Sprite.fadeOut(this.effectSprites[1]);
+                this.lastEffectTime = null;
             }
         }
+
         dispose() {
-            this.M.forEach(function (a) {
-                a.C();
-            });
+            this.digitSprites.forEach(s => s.dispose());
             super.dispose();
         }
     }
@@ -3914,29 +3897,17 @@ goog.events.EventHandler.typeArray_ = [];
         return digits;
     }
 
-    /**
-     * Hides and resets visual elements of a display object.
-     * 
-     * @param {Object} obj - The target object containing display elements.
-     * Expected structure:
-     *   obj.M : map of sprites
-     *   obj.Ga : animation instance (optional)
-     *   obj.A : main sprite
-     *   obj.P : array of sprites (e.g., [left, right])
-     */
+    /** @param {ScoreDisplay} obj */
     function resetDisplay(obj) {
-        // Hide all mapped elements
-        for (const key in obj.M) {
-            obj.M[key].show(false);
-        }
+        Object.values(obj.digitSprites).forEach(child => child.show(false))
 
         // Stop active animation
-        if (obj.Ga) obj.Ga.stop();
+        if (obj.animation) obj.animation.stop();
 
         // Hide main and side elements
-        obj.A.show(false);
-        obj.P[0].show(false);
-        obj.P[1].show(false);
+        obj.backgroundSprite.show(false);
+        obj.effectSprites[0].show(false);
+        obj.effectSprites[1].show(false);
     }
 
     function createBackgroundTile(parent, x, y) {
@@ -3950,31 +3921,31 @@ goog.events.EventHandler.typeArray_ = [];
 
     /**
      * Plays a swap/transition animation between two sprites.
-     * @param {Object} ctx - The context containing sprite `A` and its animation state.
-     * @param {Object} startPos - Object with `{x, y}` representing the base position.
+     * @param {ScoreDisplay} ctx - The context containing sprite `A` and its animation state.
+     * @param {Point} startPos - Object with `{x, y}` representing the base position.
      * @param {Sprite} targetSprite - The sprite to animate towards.
      * @param {number} frameIndex - Frame index to display during animation.
      */
     function playSwapAnimation(ctx, startPos, targetSprite, frameIndex) {
-        const mainSprite = ctx.A;
+        const mainSprite = ctx.backgroundSprite;
 
         // Stop any ongoing animation
-        if (ctx.Ga) ctx.Ga.stop();
+        if (ctx.animation) ctx.animation.stop();
 
         // Create a new animation sequence
-        ctx.Ga = new AnimationSequence();
+        ctx.animation = new AnimationSequence();
 
         // Setup initial display state
         mainSprite.show(true);
-        mainSprite.setFrame(frameIndex);
+        Sprite.setFrame(mainSprite, frameIndex);
         Sprite.setPosition(mainSprite, startPos.x, startPos.y - 25);
 
         // Define animation step
-        ctx.Ga.addStep(progress => {
+        ctx.animation.addStep(progress => {
             if (progress === 1) {
                 // End of animation: show final sprite
                 Sprite.setPosition(targetSprite, startPos.x, startPos.y);
-                targetSprite.setFrame(frameIndex);
+                Sprite.setFrame(targetSprite, frameIndex);
                 mainSprite.show(false);
             } else {
                 // During animation: move sprites in opposite vertical directions
@@ -3984,7 +3955,7 @@ goog.events.EventHandler.typeArray_ = [];
         }, 400);
 
         // Play the sequence
-        ctx.Ga.play();
+        ctx.animation.play();
     }
 
     class TimerDisplay extends goog.Disposable {
@@ -4009,7 +3980,7 @@ goog.events.EventHandler.typeArray_ = [];
             }
 
             // Optionally set colon or middle separator sprite
-            this.digits[1].setFrame(49);
+            Sprite.setFrame(this.digits[1], 49);
         }
 
         /**
@@ -4023,9 +3994,9 @@ goog.events.EventHandler.typeArray_ = [];
             const seconds = Math.floor(time % 60);
 
             if (minutes >= 0 && seconds >= 0) {
-                this.digits[0].setFrame(td[minutes]);
-                this.digits[2].setFrame(td[Math.floor(seconds / 10)]);
-                this.digits[3].setFrame(td[seconds % 10]);
+                Sprite.setFrame(this.digits[0], td[minutes]);
+                Sprite.setFrame(this.digits[2], td[Math.floor(seconds / 10)]);
+                Sprite.setFrame(this.digits[3], td[seconds % 10]);
                 this.lastValue = time;
             }
         }
@@ -4086,8 +4057,8 @@ goog.events.EventHandler.typeArray_ = [];
 
     // Clickable UI Element Class
     class ClickableElement extends SpriteGroup {
-        constructor(id, width, height, parent, style) {
-            super(id, width, height, parent, style);
+        constructor(id, width, height, parent, zIndex) {
+            super(id, width, height, parent, zIndex);
 
             this.eventHandler = new goog.events.EventHandler(this);
 
@@ -4110,19 +4081,19 @@ goog.events.EventHandler.typeArray_ = [];
 
         // Event Handlers
         handleClick() {
-            dispatchEvent("click");
+            this.dispatchEvent("click");
         }
 
         handleMouseDown() {
-            dispatchEvent("mousedown");
+            this.dispatchEvent("mousedown");
         }
 
         handleMouseOver() {
-            dispatchEvent("mouseover");
+            this.dispatchEvent("mouseover");
         }
 
         handleMouseOut() {
-            dispatchEvent("mouseout");
+            this.dispatchEvent("mouseout");
         }
     }
 
@@ -4144,10 +4115,6 @@ goog.events.EventHandler.typeArray_ = [];
     }
     defineSingleton(SpritePool);
 
-    var T = function(params) {
-        
-    }
-
     class GridEntity extends goog.Disposable {
         constructor(config) {
             super();
@@ -4158,13 +4125,13 @@ goog.events.EventHandler.typeArray_ = [];
 
             // --- Main sprite setup ---
             this.mainSprite = this.spritePool.get();
-            this.mainSprite.setFrame(this.grid[0]);
+            Sprite.setFrame(this.mainSprite, this.grid[0]);
             this.mainSprite.setZIndex(17);
             this.mainSprite.show(false);
 
             // --- Shadow sprite setup ---
             this.shadowSprite = this.spritePool.get();
-            this.shadowSprite.setFrame(57);
+            Sprite.setFrame(this.shadowSprite, 57);
             Sprite.animateOpacity(this.shadowSprite, 300, 0, 1);
             this.shadowSprite.setZIndex(0);
             this.shadowSprite.scale(0.7, 0.7);
@@ -4179,7 +4146,7 @@ goog.events.EventHandler.typeArray_ = [];
             // Config metadata
             this.name = config.name;
             this.texture = config.texture;
-            this.extra = config.extra;
+            this.score = config.score;
             this.data = config.data;
 
             // Sprite positions
@@ -4251,7 +4218,7 @@ goog.events.EventHandler.typeArray_ = [];
         cycleFrame() {
             let index = this.grid.indexOf(this.mainSprite.getFrame());
             index = (index + 1) % this.grid.length;
-            this.mainSprite.setFrame(this.grid[index]);
+            Sprite.setFrame(this.mainSprite, this.grid[index]);
         }
 
         isEndingSoon() {
@@ -4300,8 +4267,7 @@ goog.events.EventHandler.typeArray_ = [];
         let offsetX = 0;
         const relativeScroll = scrollY - 200;
 
-        const SCROLL_LEVELS = [450, 900, 1350];
-        const [low, mid, high] = SCROLL_LEVELS;
+        const [low, mid, high] = [450, 900, 1350];
 
         if (scrollY > 200) {
             if (obj.sprite.style.display === "none") {
@@ -4352,17 +4318,17 @@ goog.events.EventHandler.typeArray_ = [];
     }
 
     function initMotion(a) {
-        a.enabled = true;
-        a.speed = this.enabled ? 2000 : 1400;
-        a.direction = Math.random() < 0.5 ? 1 : -1;
+        a.randomMove = true;
+        a.targetY = a.enabled ? 2000 : 1400;
+        a.direction = Math.random() < .5 ? 1 : -1;
     }
     function attachSpritesToContainer(entity, container) {
         container.appendChild(entity.mainSprite.getElement());
         container.appendChild(entity.shadowSprite.getElement());
     }
-    function setController(entity, controller) {
-        entity.controller = controller;
-        entity.refreshState();
+    function snapPos(entity, idx) {
+        entity.tileIndex = idx;
+        entity.renderPosition();
     }
     
     class AnimatedFallingEntity extends GridEntity {
@@ -4374,8 +4340,10 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         onImpact() {
-            this.sprite.playFrameSequence(Md, 400);
-            setTimeout(() => { this.state = 2; }, 500);
+            this.mainSprite.playFrameSequence(Md, 400);
+            setTimeout(() => {
+                this.state = 2;
+            }, 500);
         }
     }
 
@@ -4385,14 +4353,14 @@ goog.events.EventHandler.typeArray_ = [];
     class StaticVariantEntity extends GridEntity {
         constructor(config) {
             super(config);
-            if (random(2)) this.sprite.setFrame(this.grid[1]);
+            if (random(2)) Sprite.setFrame(this.mainSprite, this.grid[1]);
         }
     }
 
     class ShadowedEntity extends GridEntity {
         constructor(config) {
             super(config);
-            this.shadow.setFrame(11);
+            Sprite.setFrame(this.shadowSprite, 11);
         }
 
         updatePosition() {
@@ -4402,8 +4370,8 @@ goog.events.EventHandler.typeArray_ = [];
 
             this.hb = x - this.sprite.getWidth() / 4;
             this.ib = y - this.sprite.getHeight() / 4;
-            Sprite.setPosition(this.sprite, this.hb, this.ib);
-            Sprite.setPosition(this.shadow, x - this.shadow.getWidth() / 4, y + 5 - this.shadow.getHeight());
+            Sprite.setPosition(this.mainSprite, this.hb, this.ib);
+            Sprite.setPosition(this.shadowSprite, x - this.shadowSprite.getWidth() / 4, y + 5 - this.shadowSprite.getHeight());
         }
     }
 
@@ -4417,7 +4385,7 @@ goog.events.EventHandler.typeArray_ = [];
     class RandomMovingEntity extends GridEntity {
         constructor(config) {
             super(config);
-            if (random(2)) this.sprite.setFrame(this.grid[1]);
+            if (random(2)) Sprite.setFrame(this.mainSprite, this.grid[1]);
             initMotion(this);
         }
     }
@@ -4426,14 +4394,15 @@ goog.events.EventHandler.typeArray_ = [];
         constructor(config) {
             super(config);
             const variant = random(4);
-            if (variant) this.sprite.setFrame(this.grid[variant]);
+            if (variant) Sprite.setFrame(this.mainSprite, this.grid[variant]);
             this.variantKey = "GOLE"[variant];
             initMotion(this);
         }
     }
 
-    var Td = []
-    var U = true
+    var sequence = [];
+    var forward = true;
+    var matchCount = 0;
 
     class ObjectPoolManager {
         constructor() {
@@ -4443,18 +4412,16 @@ goog.events.EventHandler.typeArray_ = [];
     }
     defineSingleton(ObjectPoolManager);
 
-    // Registry of base item data
-    var ItemDefinitions = {};
-
-    // Registry mapping item names to their constructors
-    var ItemClasses = null; // example: { coin: CoinItem, gem: GemItem }
+    var ItemDefinitions = {}; // Registry of base item data
+    var ItemClasses = null; // Registry mapping item names to their constructors
 
     // Item factory
     function createItem(name) {
         if (!(name in ItemDefinitions) || !(name in ItemClasses))
-            return new T(ItemDefinitions.coin);
+            return new GridEntity(ItemDefinitions.coin);
         return new ItemClasses[name](ItemDefinitions[name]);
     }
+    createItem = createItem;
 
     // Weighted random loot generator
     function generateRandomItem(pool) {
@@ -4474,8 +4441,6 @@ goog.events.EventHandler.typeArray_ = [];
         return createItem(chosenKey);
     }
 
-    createItem = createItem;
-
     class Item {
         constructor(grid, name, texture, score = 0, data = null) {
             this.grid = grid;        // Reference to grid or item container
@@ -4488,9 +4453,7 @@ goog.events.EventHandler.typeArray_ = [];
 
     function initializeObjectCounter(target, typeId) {
         target.count = 0;
-        target.objects = (typeId in ObjectRegistry)
-            ? ObjectRegistry[typeId].data
-            : ObjectRegistry[1].data;
+        target.objects = (typeId in ObjectRegistry) ? ObjectRegistry[typeId].data : ObjectRegistry[1].data;
 
         forEachObject(target.objects, function (value) {
             this.count += value;
@@ -4502,15 +4465,14 @@ goog.events.EventHandler.typeArray_ = [];
         dumpling: "dumpling",
         steamer: "steamer",
         coin: "coin",
-        Ea: "ingot",
-        Kb: "tea",
-        Fa: "medicine",
-        mb: "mushroom",
-        nb: "papercut",
+        ingot: "ingot",
+        tea: "tea",
+        medicine: "medicine",
+        mushroom: "mushroom",
+        papercut: "papercut",
         envelope: "envelope",
         lantern: "lantern"
     };
-
     var LetterShapes = {
         G: [new Point(2, 3), new Point(3, 3), new Point(3, 4), new Point(3, 5), new Point(2, 5), new Point(1, 5), new Point(0, 5), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(0, 0), new Point(1, 0), new Point(2, 0), new Point(3, 0)],
         G1: [new Point(0, 4), new Point(1, 4), new Point(2, 4), new Point(3, 4), new Point(3, 3), new Point(3, 2), new Point(3, 1), new Point(3, 0), new Point(2, 0), new Point(1, 0), new Point(0, 0), new Point(0, 1), new Point(0, 2), new Point(1, 2), new Point(2, 2)],
@@ -4520,14 +4482,16 @@ goog.events.EventHandler.typeArray_ = [];
         E: [new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(0, 0), new Point(1, 0), new Point(1, 1), new Point(1, 2), new Point(1, 3), new Point(2, 3), new Point(3, 3)]
     };
 
-    var he, ObjectRegistry = {};
+    var phase, ObjectRegistry = {};
     class SetEx {
         constructor(values) {
             this._map = new MapEx();
             if (values) this.addAll(values);
         }
 
-        get size() { return this._map.size; }
+        get size() {
+            return this._map.size;
+        }
 
         _keyFor(value) {
             const type = typeof value;
@@ -4602,6 +4566,7 @@ goog.events.EventHandler.typeArray_ = [];
         }
         return true;
     }
+
     class GridPatternManager {
         constructor() {
             this.cellMap = null;  // Map of cell -> usage counters (g)
@@ -4610,13 +4575,14 @@ goog.events.EventHandler.typeArray_ = [];
 
             this.patterns = {}; // Predefined shape patterns (Kc)
         }
+
         init() {
             this.cellMap = new MapEx();
             getAllGridCells().forEach(function(a) {
                 this.cellMap.set(a, {
-                    usedCount: 0,
-                    specialCount: 0,
-                    totalCount: 0
+                    usedCount: 0, // Gc
+                    specialCount: 0, // Ic
+                    totalCount: 0 // Jc
                 })
             }, this);
 
@@ -4631,6 +4597,7 @@ goog.events.EventHandler.typeArray_ = [];
                 this.patterns[b] = c;
             }, this);
         }
+
         markCell(cellIndex, isSpecial) {
             this.availableCells.remove(cellIndex);
             const info = this.cellMap.get(cellIndex);
@@ -4643,6 +4610,7 @@ goog.events.EventHandler.typeArray_ = [];
                 info.usedCount++;
             }
         }
+
         match() {
             var a = new SetEx
             var b = getLowestActiveCellIndex(this);
@@ -4660,12 +4628,12 @@ goog.events.EventHandler.typeArray_ = [];
 
     /**
      * Finds a 2x2 block of available cells in the grid.
-     * @param {Object} gridManager - Object containing availableCells (with getValues method)
+     * @param {GridPatternManager} gridManager - Object containing availableCells (with values method)
      * @returns {Array|number} - Array of 4 cell indices or -1 if none found
      */
     function find2x2Block(gridManager) {
         // Get all available cell indices
-        const cells = gridManager.availableCells.getValues();
+        const cells = gridManager.availableCells.values();
 
         // Filter cells that can form a valid 2x2 block
         const validCells = cells.filter(index => {
@@ -4692,7 +4660,7 @@ goog.events.EventHandler.typeArray_ = [];
     /**
      * Selects a random available cell index from the grid.
      * 
-     * @param {Object} grid - The grid or cell manager.
+     * @param {GridPatternManager} grid - The grid or cell manager.
      * @returns {number} The selected cell index, or -1 if none available.
      */
     function selectRandomAvailableCell(grid) {
@@ -4705,7 +4673,7 @@ goog.events.EventHandler.typeArray_ = [];
     /**
      * Updates a specific cell's usage counters after an operation.
      * 
-     * @param {Object} grid - The grid or cell manager.
+     * @param {GridPatternManager} grid - The grid or cell manager.
      * @param {number} cellIndex - The target cell index.
      * @param {boolean} isActive - Whether the operation was active (true) or passive (false).
      */
@@ -4713,58 +4681,54 @@ goog.events.EventHandler.typeArray_ = [];
         const cell = grid.cellMap.get(cellIndex);
 
         // Decrease reference counters
-        cell.Jc--;
+        cell.totalCount--;
 
         // If cell is now unused and not blocked, mark it as available
-        if (cell.Jc === 0 && blockedCells.indexOf(cellIndex) === -1) {
+        if (cell.totalCount === 0 && blockedCells.indexOf(cellIndex) === -1) {
             grid.availableCells.add(cellIndex);
         }
 
         // Adjust active/passive counts
         if (isActive) {
-            cell.Ic--;
-            if (cell.Ic === 0) grid.activeCells.remove(cellIndex);
+            cell.specialCount--;
+            if (cell.specialCount === 0) grid.activeCells.remove(cellIndex);
         } else {
-            cell.Gc--;
+            cell.usedCount--;
         }
     }
 
     /**
      * Returns a list of currently active cells that still have active links.
      * 
-     * @param {Object} grid - The grid or cell manager.
+     * @param {GridPatternManager} grid - The grid or cell manager.
      * @returns {Array<number>} Active cell indices.
      */
     function getActiveLinkedCells(grid) {
         const result = new SetEx();
-
         forEachItem(grid.activeCells, function (cellIndex) {
-            if (this.g.get(cellIndex).Gc > 0) result.add(cellIndex);
+            if (grid.cellMap.get(cellIndex).usedCount > 0) result.add(cellIndex);
         }, grid);
-
         return result.values();
     }
 
     /**
      * Finds the smallest (earliest) active cell index.
      * 
-     * @param {Object} grid - The grid or cell manager.
+     * @param {GridPatternManager} grid - The grid or cell manager.
      * @returns {number} Minimum active cell index.
      */
     function getLowestActiveCellIndex(grid) {
         let min = Infinity;
-
         forEachItem(grid.activeCells, function (cellIndex) {
             if (cellIndex < min) min = cellIndex;
         });
-
         return min;
     }
 
     /**
      * Generates a pattern-based cell sequence starting from a random available cell.
      * 
-     * @param {Object} grid - The grid or cell manager.
+     * @param {GridPatternManager} grid - The grid or cell manager.
      * @param {string|number} patternId - The ID of the pattern to use.
      * @returns {Array<number>} Array of valid target cell indices.
      */
@@ -4785,70 +4749,95 @@ goog.events.EventHandler.typeArray_ = [];
     class TileSpawner extends goog.Disposable {
         constructor() {
             super();
-            this.Ca = this.Ra = this.v = null;
-            this.g = GridPatternManager.getInstance();
-            this.bb = ObjectPoolManager.getInstance();
-            this.Ec = null;
-            this.vc = 1;
-            this.ld  = null;
+
+            this.rootElement = null; // was: v
+            this.itemMap = null; // was: Ra (MapEx)
+            this.activeItems = null; // was: Ca (SetEx)
+            this.lastSpawnTime = null; // was: Ec
+            this.spawnScale = 1; // was: vc
+            this.extraData = null; // was: ld
+
+            this.gridManager = GridPatternManager.getInstance();  // was: g
+            this.objectPool = ObjectPoolManager.getInstance();    // was: bb
         }
-        init(a) {
-            this.v = a;
-            this.Ra = new MapEx;
-            this.Ca = new SetEx;
-            this.Ec = getTime();
+
+        init(parentElement) {
+            this.rootElement = parentElement;
+
+            this.itemMap = new MapEx();   // stores all items by ID
+            this.activeItems = new SetEx(); // stores active items
+
+            this.lastSpawnTime = getTime();
             this.spawnRate = 1;
-            this.spawnArea = new SpriteGroup(88, -3, -3, this.v);
+
+            this.spawnArea = new SpriteGroup(88, -3, -3, this.rootElement);
         }
-        jb(a) {
-            updateItems(this, a);
-            a = getTime();
-            var b = 8 - this.Ca.va();
-            if (2500 < a - this.Ec && 0 < b) {
-                for (var b = random(b) + 1, c = 0; c < b; c++) {
-                    var d = generateRandomItem(this.itemSource);
-                    e = -1;
-                    e = "steamer" == d.getName() ? find2x2Block(this.gridManager) : selectRandomAvailableCell(this.gridManager);
-                    if (-1 != e) spawnItem(this, d, e);
+
+        /** Original name: jb */
+        update(deltaTime) {
+            updateItems(this, deltaTime);
+
+            const now = getTime();
+
+            let missingItemCount = 8 - this.activeItems.va();
+
+            if (now - this.lastSpawnTime > 2500 && missingItemCount > 0) {
+                // number of items to spawn this tick
+                for (let i = 0; i < random(missingItemCount) + 1; i++) {
+                    const item = generateRandomItem(this.itemSource);
+
+                    // special logic for "steamer"
+                    let spawnCell = (item.getName() === "steamer") ? find2x2Block(this.gridManager) : selectRandomAvailableCell(this.gridManager);
+                    if (spawnCell !== -1) spawnItem(this, item, spawnCell);
                 }
-                this.Ec = a;
+
+                this.lastSpawnTime = now;
             }
         }
-        getItem(a) {
-            return this.Ra.get(a, null);
+
+        getItem(id) {
+            return this.itemMap.get(id, null);
         }
+
         dispose() {
-            forEachItem(this.Ca, function (a) {
-                a.C();
+            forEachItem(this.activeItems, item => {
+                item.dispose(); // dispose
             });
-            this.Ca.clear();
-            this.Ra.clear();
-            this.spawnArea.C();
+
+            this.activeItems.clear();
+            this.itemMap.clear();
+            this.spawnArea.dispose();
+
             super.dispose();
         }
     }
     defineSingleton(TileSpawner);
 
-    // Update items and remove inactive ones
+    /**
+     * Update items and remove inactive ones.
+     * @param {TileSpawner} obj 
+     * @param {number} currentTime 
+     * @returns 
+     */
     function updateItems(obj, currentTime) {
         if (currentTime - obj.lastUpdateTime <= 40) return;
 
         // Update each item in Ca
-        forEachItem(obj.Ca, function(item) {
+        forEachItem(obj.activeItems, function(item) {
             item.update(currentTime);
 
             // Remove items that are not in states 0 or 1
             if (item.i !== 0 && item.i !== 1) {
-                this.Ca.remove(item);
-                item.C();
+                obj.activeItems.remove(item);
+                item.dispose();
             }
         }, obj);
 
         // Update Ra cells
-        forEachItem(obj.Ra, function(cell, key) {
+        forEachItem(obj.itemMap, function(cell, key) {
             if (cell.Bc) {
-                updateCellUsage(this.g, key);
-                this.Ra.remove(key);
+                updateCellUsage(obj.gridManager, key);
+                obj.itemMap.remove(key);
             }
         }, obj);
 
@@ -4865,78 +4854,71 @@ goog.events.EventHandler.typeArray_ = [];
             spawnItem(this, randomItem, cell);
         }, obj);
 
-        initializeObjectCounter(obj.objectPool, he);
+        initializeObjectCounter(obj.objectPool, phase);
     }
 
     /**
      * Spawns an item into the grid at specified positions.
      * 
-     * @param {Object} tileSpawner - The TileSpawner instance managing the grid.
+     * @param {TileSpawner} tileSpawner - The TileSpawner instance managing the grid.
      * @param {Object} item - The item object to spawn.
      * @param {Point|Point[]} positions - Single position or array of positions to place the item.
      */
     function spawnItem(tileSpawner, item, positions) {
-        const addItemToGrid = (it, pos) => {
-            tileSpawner.Ra.set(pos, it);   // Map grid position → item
-            tileSpawner.Ca.add(it);        // Track active items
-            tileSpawner.g.markCell(pos);   // Mark cell as occupied
+        var addItemToGrid = (it, pos) => {
+            tileSpawner.itemMap.set(pos, it);   // Map grid position → item
+            tileSpawner.activeItems.add(it);        // Track active items
+            tileSpawner.gridManager.markCell(pos);   // Mark cell as occupied
         };
 
         if (Array.isArray(positions)) {
             positions.forEach(pos => addItemToGrid.call(tileSpawner, item, pos));
-            setController(item, positions[0]);
+            snapPos(item, positions[0]);
         } else {
             addItemToGrid.call(tileSpawner, item, positions);
-            setController(item, positions);
+            snapPos(item, positions);
         }
 
-        attachSpritesToContainer(item, tileSpawner.v);
+        attachSpritesToContainer(item, tileSpawner.rootElement);
         item.zb *= tileSpawner.spawnRate; // Apply spawn rate multiplier
     }
     spawnItem = spawnItem
 
-    // Rename globals
-    let snakeStepIndex = 0;   // was: we
-    let snakeBodyVisible = 0; // was: xe
-
-    const tutorialSteps = [   // was: ye
-        { point: [3, 7], dir: 1 },
-        { point: [2, 6], dir: 4 },
-        { point: [4, 5], dir: 2 },
-        { point: [5, 6], dir: 3 },
-        { point: [3, 7], dir: 1 },
-        { point: [2, 3], dir: 4 },
-        { point: [4, 2], dir: 4 }
+    var snakeStepIndex, snakeBodyVisible, tutorialSteps = [ // was: ye
+        {point: [3, 7], dir: 1},
+        {point: [2, 6], dir: 4},
+        {point: [4, 5], dir: 2},
+        {point: [5, 6], dir: 3},
+        {point: [3, 7], dir: 1},
+        {point: [2, 3], dir: 4},
+        {point: [4, 2], dir: 4}
     ];
 
-    // Rename function De → runTutorialStep
+    /** @param {SnakeController} snake */
     function runTutorialStep(snake) {
         const step = tutorialSteps[snakeStepIndex];
-        console.log(step);
         const point = step.point;
 
-        // snake.Ta() = snake.y , snake.Sa() = snake.x
         if (snake.getRow() === point[1] && snake.getColumn() === point[0]) {
-            // ze(a, dir) → moveSnakeInDirection
-            moveSnakeInDirection(snake, step.dir);
+            snake.enqueueDirection(step.dir);
 
             snakeStepIndex++;
 
             // If reached end of tutorial steps
             if (snakeStepIndex === tutorialSteps.length) {
-                boostFunction(snake, getTime(), Infinity);
-                snake.d[0].playFrameSequence(Be, 80);
+                snake.setSpeedParameters(getTime(), Infinity);
+                snake.segments[0].playAnimation(Be, 80);
             }
         }
 
         // Move forward and update animation
         snake.forward();
-        updateSnakeGraphics(snake); // was: Ce(a)
+        snake.updateVisualsAfterStep(); // was: Ce(a)
 
         // Gradually show more segments (max 15)
         if (snakeBodyVisible < 15) {
             for (let i = 0; i < 15; i++) {
-                snake.d[i].mainSprite.show(i <= snakeBodyVisible + 1);
+                snake.segments[i].mainSprite.show(i <= snakeBodyVisible + 1);
             }
         }
 
@@ -4958,99 +4940,14 @@ goog.events.EventHandler.typeArray_ = [];
         Re = tc[3],
         Ee = Cc;
 
-    function createSprite(spriteType, zIndex, parentElement) {
+    function createSprite(spriteType, zIndex, parent) {
         const sprite = new Sprite(spriteType);
         sprite.show(true);
         sprite.setZIndex(zIndex);
         sprite.isLooping = true; // 'Eb = h' looks like a boolean property
-        parentElement.appendChild(sprite.getElement()); // 'aa()' returns DOM element
+        parent.appendChild(sprite.getElement()); // 'aa()' returns DOM element
         return sprite;
     }
-
-    var Xe = function (a, b) {
-        var c = Math.min(b - a.jc, 100);
-        a.Z += c / a.Ab;
-        a.Z = Math.min(a.Z, 1);
-        c = Math.floor(20 * a.Z);
-        c = c % 2 ? c + 1 : c;
-        if (a.ed != c) {
-            var d = function (a, b, c, d, e, f) {
-                d = f ? d : 20 - d;
-                c = f ? c : (c + 180) % 360;
-                180 == c ? a += 20 - d : 270 == c && (b += 20 - d);
-                f && e.rotate(c);
-                180 == c || 0 == c ? (nc(e, d + 1), a -= 180 == c ? 2 : 0) : (oc(e, d + 1), b -= 270 == c ? 2 : 0);
-                Sprite.setPosition(e, a, b)
-            };
-            if (a.d[0].F == a.d[1].F) {
-                var e = a.d[0].qa().Na();
-                a.A.show(true);
-                var f = 20 * a.Sa(),
-                    n = 20 * a.Ta();
-                d(f, n, e, c, a.A, true);
-                a.d[0].move(a.Z)
-            } else a.A.show(false), animateSegmentTurn(a.d[0], a.Z);
-            e = a.d.length - 1;
-            if (isSpecialFrame(a.d[e - 1])) a.d[e].qa().show(false),
-                animateSegmentTurn(a.d[e - 1], a.Z);
-            else {
-                a.d[e].move(a.Z);
-                var q = a.d[e - 1].qa(),
-                    f = 20 * a.d[e - 1].Sa(),
-                    n = 20 * a.d[e - 1].Ta(),
-                    e = q.Na();
-                d(f, n, e, c, q, false)
-            }
-            a.ed = c
-        }
-    },
-    We = function (a, b) {
-        var c = getActiveLinkedCells(a.g);
-        c.length ? (ArrayUtils.forEach(c, function (a) {
-            this.d[0].getCellIndex() == a && this.d[0].K(Ie, 80);
-            dispatchEvent(new CatchItemEvent(a, b))
-        }, a), a.oc = b) : 5E3 < b - a.oc && (a.oc = b, a.d[0].K(He, 80))
-    },
-    Ue = function (a, b) {
-        a.ba = Ee;
-        a.d[0].K(Ne, 80, 100);
-        a.Ab = a.Fb;
-        a.Gb = 1;
-        a.jc = b;
-        a.Ib = null
-    },
-    ze = function (a, b) {
-        a.Hb != null && (b = xb(b));
-        if (2 > a.ma.length) {
-            var c = a.d[0].F;
-            0 < a.ma.length && (c = a.ma[a.ma.length - 1]);
-            if ((1 == c || 2 == c) && (3 == b || 4 == b) || (1 == b || 2 == b) && (3 == c || 4 == c)) {
-                a.ma.push(b);
-                c = 3 == DirectionManager.getInstance().transformMap.get([c, b]) ? Le : Me;
-                a.d[0].K(c, 80);
-            }
-        }
-    },
-    Ce = function (a) {
-        var b = a.d.length - 1;
-        a.d[b].getElement().show(true);
-        for (var c = a.d[b - 1].qa(), d = b - 1; 1 < d; d--) {
-            a.d[d].mainSprite = a.d[d - 1].a;
-            a.d[d].mainSprite.setZIndex(16 - d);
-        }
-        a.d[1].mainSprite = c;
-        a.d[1].mainSprite.setZIndex(15);
-        updateSegmentSprite(a.d[0], a.ba);
-        updateSegmentSprite(a.d[1]);
-        updateSegmentSprite(a.d[b])
-    },
-    boostFunction = function(a, b, c) {
-        console.log("obj: " + a + " | secs: " + b + " | speed: " + c);
-        a.Ib = b;
-        a.Gb = c;
-        a.Ab = a.Fb * a.Gb
-    }
-
 
     /**
      * SnakeController
@@ -5062,17 +4959,17 @@ goog.events.EventHandler.typeArray_ = [];
         constructor(containerElement) {
             super();
 
-            // segments array (head is segments[0])
+            // segments array (head is segments[0]) (d)
             this.segments = [];
 
-            // visual "head" alternate sprite used when head matches next segment
+            // visual "head" alternate sprite used when head matches next segment (A)
             this.headSprite = null;
 
-            // queued direction inputs (ma in original)
+            // queued direction inputs (ma)
             this.directionQueue = [];
 
             // current audio/visual frame (ba)
-            this.ba = Ee; // default frame constant from original
+            this.currentFrame = Ee; // default frame constant from original
 
             this.container = containerElement;
             this.lastUpdateTime = getTime();
@@ -5082,10 +4979,10 @@ goog.events.EventHandler.typeArray_ = [];
             this.lastCatchTime = null;       // oc
             this.moveProgress = 0;           // Z (0..1)
             this.moveDuration = ObjectRegistry[1].V; // Ab (base duration from registry)
-            this.baseDuration = ObjectRegistry[1].V;  // Fb (base)
-            this.speedMultiplier = 1;        // Gb
-            this.stepPixel = 20;             // used for pixel computations
-            this.currentStepFrame = 0;       // ed cached step frame
+            this.baseDuration = ObjectRegistry[1].V; // Fb (base)
+            this.speedMultiplier = 1; // Gb
+            this.stepPixel = 20; // used for pixel computations
+            this.currentStepFrame = 0; // ed cached step frame
             this.patternManager = GridPatternManager.getInstance();
 
             // helpers for certain display/cache
@@ -5104,7 +5001,7 @@ goog.events.EventHandler.typeArray_ = [];
             for (let i = 0; i < 15; i++) {
                 // construction: new Te(direction, orientation?, col, row, index, prevSegment, container)
                 // original used (3, 0==c ? 0 : 14==c ? 2 : 1, a, 7, c, b, this.v)
-                const orientation = (i === 0) ? 0 : (i === 14 ? 2 : 1);
+                const orientation = (i == 0) ? 0 : (i == 14 ? 2 : 1);
                 const seg = new SnakeSegment(3, orientation, col, 7, i, previous, this.container);
                 seg.mainSprite.show(false);                 // mirror: hide initially
                 this.segments.push(seg);
@@ -5133,14 +5030,14 @@ goog.events.EventHandler.typeArray_ = [];
             ArrayUtils.forEachReverse(this.segments, seg => {
                 if (seg.parent) {
                     // if a link to previous exists, follow it
-                    seg.k = seg.parent.k;
-                    seg.o = seg.parent.o;
-                } else if (seg.W === 0) {
+                    seg.gridX = seg.parent.gridX;
+                    seg.gridY = seg.parent.gridY;
+                } else if (seg.entityType === 0) {
                     // default movement by orientation F
-                    seg.k += (seg.F === 3 ? -1 : seg.F === 4 ? 1 : 0);
-                    seg.o += (seg.F === 1 ? -1 : seg.F === 2 ? 1 : 0);
-                    seg.k = (seg.k + 23) % 23;
-                    seg.o = (seg.o + 9) % 9;
+                    seg.gridX += (seg.currentDirection === 3 ? -1 : seg.currentDirection === 4 ? 1 : 0);
+                    seg.gridY += (seg.currentDirection === 1 ? -1 : seg.currentDirection === 2 ? 1 : 0);
+                    seg.gridX = (seg.gridX + 23) % 23;
+                    seg.gridY = (seg.gridY + 9) % 9;
                 }
             });
 
@@ -5156,9 +5053,9 @@ goog.events.EventHandler.typeArray_ = [];
 
             ArrayUtils.forEachReverse(this.segments, seg => {
                 const d = queued;
-                seg.oa = seg.F; // store old facing
-                // choose new F based on segment type
-                seg.F = (seg.W === 0) ? (d ? d : seg.F) : (seg.W === 2 ? seg.parent.parent.F : seg.parent.F);
+                seg.baseDirection = seg.currentDirection; // store old facing
+                // choose new current Direction based on segment type
+                seg.currentDirection = (seg.entityType === 0) ? (d ? d : seg.currentDirection) : (seg.entityType === 2 ? seg.parent.parent.currentDirection : seg.parent.currentDirection);
             });
         }
 
@@ -5184,7 +5081,7 @@ goog.events.EventHandler.typeArray_ = [];
                         this.dispatchEvent(new MatchPatternEvent(pattern, now));
                         this.lastMatchTime = now;
                         // head K animation (originally Ge)
-                        this.segments[0].K(Ge, 80, 500);
+                        this.segments[0].playAnimation(Ge, 80, 500);
                     }
                 }
 
@@ -5230,10 +5127,10 @@ goog.events.EventHandler.typeArray_ = [];
                     if (flip) sprite.rotate(rot);
                     if (rot === 180 || rot === 0) {
                         // setWidth/Height adjustments (nc/oc logic converted)
-                        nc(sprite, d + 1);
+                        sprite.getWidth(d + 1);
                         if (rot === 180) x -= 2;
                     } else {
-                        oc(sprite, d + 1);
+                        sprite.height(d + 1);
                         if (rot === 270) y -= 2;
                     }
 
@@ -5241,8 +5138,8 @@ goog.events.EventHandler.typeArray_ = [];
                 };
 
                 // If head and its follower face same direction, use special head sprite
-                if (this.segments[0].F === this.segments[1].F) {
-                    const headAngle = this.segments[0].qa().Na(); // Na() returned rotation in original
+                if (this.segments[0].currentDirection === this.segments[1].currentDirection) {
+                    const headAngle = this.segments[0].getSprite().getRotation();
                     this.headSprite.show(true);
                     const headPixelX = 20 * this.getColumn();
                     const headPixelY = 20 * this.getRow();
@@ -5251,22 +5148,22 @@ goog.events.EventHandler.typeArray_ = [];
                 } else {
                     // hide alternate head and animate default head
                     this.headSprite.show(false);
-                    Ye(this.segments[0], this.moveProgress);
+                    animateSegmentTurn(this.segments[0], this.moveProgress);
                 }
 
                 // tail handling (depending on Ze checks)
                 const lastIndex = this.segments.length - 1;
                 if (isSpecialFrame(this.segments[lastIndex - 1])) {
                     // special tail case: hide last sprite, animate previous
-                    this.segments[lastIndex].qa().show(false);
-                    Ye(this.segments[lastIndex - 1], this.moveProgress);
+                    this.segments[lastIndex].getSprite().show(false);
+                    animateSegmentTurn(this.segments[lastIndex - 1], this.moveProgress);
                 } else {
                     // normal tail interpolation
                     this.segments[lastIndex].move(this.moveProgress);
-                    const prevSprite = this.segments[lastIndex - 1].qa();
-                    const px = 20 * this.segments[lastIndex - 1].Sa();
-                    const py = 20 * this.segments[lastIndex - 1].Ta();
-                    const rot = prevSprite.Na();
+                    const prevSprite = this.segments[lastIndex - 1].getSprite();
+                    const px = 20 * this.segments[lastIndex - 1].getRow();
+                    const py = 20 * this.segments[lastIndex - 1].getRow();
+                    const rot = prevSprite.getRotation();
                     placeSprite(px, py, rot, frame, prevSprite, false);
                 }
 
@@ -5277,6 +5174,7 @@ goog.events.EventHandler.typeArray_ = [];
         /**
          * handleCatchAndItems - equivalent to original We
          * Checks active linked cells and emits catch events, or triggers head animation if none.
+         * @param {number} now 
          */
         handleCatchAndItems(now) {
             const activeLinked = getActiveLinkedCells(this.patternManager);
@@ -5284,7 +5182,7 @@ goog.events.EventHandler.typeArray_ = [];
                 ArrayUtils.forEach(activeLinked, idx => {
                     // if head occupies same cell, trigger short animation
                     if (this.segments[0].getCellIndex() === idx) {
-                        this.segments[0].K(Ie, 80);
+                        this.segments[0].playAnimation(Ie, 80);
                     }
                     // dispatch catch event (custom $e)
                     this.dispatchEvent(new CatchItemEvent(idx, now));
@@ -5295,7 +5193,7 @@ goog.events.EventHandler.typeArray_ = [];
                 // if no active linked cells for >5s, nudge head (original He)
                 if ((now - (this.lastCatchTime || 0)) > 5000) {
                     this.lastCatchTime = now;
-                    this.segments[0].K(He, 80);
+                    this.segments[0].playAnimation(He, 80);
                 }
             }
         }
@@ -5305,8 +5203,8 @@ goog.events.EventHandler.typeArray_ = [];
          * Resets to default phase, speed and timing.
          */
         resetSpeed(now) {
-            this.ba = Ee; // reset frame
-            this.segments[0].K(Ne, 80, 100);
+            this.currentFrame = Ee; // reset frame
+            this.segments[0].playAnimation(Ne, 80, 100);
             this.moveDuration = this.baseDuration;
             this.speedMultiplier = 1;
             this.lastUpdateTime = now;
@@ -5318,12 +5216,12 @@ goog.events.EventHandler.typeArray_ = [];
          * Adds a direction into the direction queue if valid and triggers animation on head.
          * Keeps at most two queued directions.
          */
-        enqueueDirection(directionInput, externalFlag) {
+        enqueueDirection(directionInput) {
             // original called xb(b) in some cases; allow mapping if required
-            if (this.Hb != null) directionInput = xb(directionInput);
+            if (this.Hb != null) directionInput = swapDirection(directionInput);
 
             if (this.directionQueue.length < 2) {
-                let currentFacing = this.segments[0].F;
+                var currentFacing = this.segments[0].currentDirection;
                 if (this.directionQueue.length) currentFacing = this.directionQueue[this.directionQueue.length - 1];
 
                 // only allow orthogonal turns (1/2 vs 3/4 cross)
@@ -5331,8 +5229,7 @@ goog.events.EventHandler.typeArray_ = [];
                     this.directionQueue.push(directionInput);
                     // choose a quick animation depending on transform map result
                     const transform = DirectionManager.getInstance().transformMap.get([currentFacing, directionInput]);
-                    const anim = (transform === 3) ? Le : Me;
-                    this.segments[0].K(anim, 80);
+                    this.segments[0].playAnimation((transform === 3) ? Le : Me, 80);
                 }
             }
         }
@@ -5345,22 +5242,22 @@ goog.events.EventHandler.typeArray_ = [];
             const lastIndex = this.segments.length - 1;
 
             // ensure last segment element visible
-            this.segments[lastIndex].getElement().show(true);
+            this.segments[lastIndex].getSprite().show(true);
 
             // cascade frame references from head to tail (preserving ordering)
-            for (let i = lastIndex - 1; i > 1; i--) {
-                this.segments[i].mainSprite = this.segments[i - 1].a;
+            for (var i = lastIndex - 1; i > 1; i--) {
+                this.segments[i].mainSprite = this.segments[i - 1].mainSprite;
                 this.segments[i].mainSprite.setZIndex(16 - i);
             }
 
             // second element uses previous sprite instance
-            this.segments[1].mainSprite = this.segments[lastIndex - 1].qa();
+            this.segments[1].mainSprite = this.segments[lastIndex - 1].getSprite();
             this.segments[1].mainSprite.setZIndex(15);
 
             // refresh visuals for head, second, tail
-            cf(this.segments[0], this.ba);
-            cf(this.segments[1]);
-            cf(this.segments[lastIndex]);
+            updateSegmentSprite(this.segments[0], this.currentFrame);
+            updateSegmentSprite(this.segments[1]);
+            updateSegmentSprite(this.segments[lastIndex]);
         }
 
         /**
@@ -5368,15 +5265,19 @@ goog.events.EventHandler.typeArray_ = [];
          * For debugging, sets IB (some timer), speed multiplier Gb and derived duration Ab.
          */
         setSpeedParameters(secs, speed) {
-            console.log(`obj: ${this} | secs: ${secs} | speed: ${speed}`);
+            console.log(`secs: ${secs} | speed: ${speed}`);
             this.lastCatchTime = secs;
             this.speedMultiplier = speed;
             this.moveDuration = this.baseDuration * this.speedMultiplier;
         }
 
         // shorthand helpers to expose head coordinates like Sa / Ta
-        getX() { return this.segments[0].getX(); }
-        getY() { return this.segments[0].getY(); }
+        getX() {
+            return this.segments[0].getX();
+        }
+        getY() {
+            return this.segments[0].getY();
+        }
 
         // cleanup
         dispose() {
@@ -5387,22 +5288,26 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         // convenience getters used in original code
-        getRow() { return this.getY(); }
-        getColumn() { return this.getX(); }
+        getRow() {
+            return this.getY();
+        }
+        getColumn() {
+            return this.getX();
+        }
     }
 
     class CatchItemEvent extends goog.events.Event {
         constructor(a, b) {
             super("catch item");
             this.item = a;
-            this.gb = b;
+            this.time = b;
         }
     }
     class MatchPatternEvent extends goog.events.Event {
         constructor(a, b) {
             super("match pattern");
             this.pattern = a;
-            this.gb = b;
+            this.time = b;
         }
     }
 
@@ -5463,7 +5368,7 @@ goog.events.EventHandler.typeArray_ = [];
             if ((x > 22 || x < 0 || y > 8 || y < 0) && this.shadowSprite) {
                 const wrappedX = x > 22 ? x - 23 : x < 0 ? x + 23 : x;
                 const wrappedY = y > 8 ? y - 9 : y < 0 ? y + 9 : y;
-                const rotation = this.mainSprite.Na();
+                const rotation = this.mainSprite.getRotation();
 
                 if (rotation === 180) this.shadowSprite.flip();
                 else this.shadowSprite.rotate(rotation);
@@ -5478,33 +5383,35 @@ goog.events.EventHandler.typeArray_ = [];
         /**
          * Play an animation on the segment.
          */
-        playAnimation(anim, duration, delay, loop, callback) {
+        playAnimation(anim, delay, repeatdelay, count, loop) { // K
             if (!isSpecialFrame(this) || anim == null) {
-                duration = Math.min(duration, 500);
-                this.mainSprite.K(anim, duration, delay, loop, callback);
-                if (this.shadowSprite) this.shadowSprite.K(anim, duration, delay, loop, callback);
+                delay = Math.min(delay, 500);
+                this.mainSprite.playFrameSequence(anim, delay, repeatdelay, count, loop);
+                if (this.shadowSprite) this.shadowSprite.playFrameSequence(anim, delay, repeatdelay, count, loop);
             }
         }
 
         /**
          * Cleanup sprite resources.
          */
-        dispose() {
+        dispose() { // h
             this.mainSprite.dispose();
             if (this.shadowSprite) this.shadowSprite.dispose();
             super.dispose();
         }
 
-        /** @returns {Sprite} The main sprite object. */
-        getSprite() { return this.mainSprite; }
+        /** @returns {Sprite} The main sprite object. (qa) */
+        getSprite() {
+            return this.mainSprite;
+        }
 
-        /** @returns {number} Grid X coordinate. */
+        /** @returns {number} Grid X coordinate. (Sa) */
         getX() { return this.gridX; }
 
-        /** @returns {number} Grid Y coordinate. */
+        /** @returns {number} Grid Y coordinate. (Ta) */
         getY() { return this.gridY; }
 
-        /** @returns {number} Flattened cell index (Y * 23 + X). */
+        /** @returns {number} Flattened cell index (Y * 23 + X). (Jb) */
         getCellIndex() { return 23 * this.gridY + this.gridX; }
     }
 
@@ -5520,6 +5427,7 @@ goog.events.EventHandler.typeArray_ = [];
 
     /**
      * Sets the correct frame, rotation, and position for a segment.
+     * @param {SnakeSegment} segment
      */
     function updateSegmentSprite(segment, overrideFrame) {
         let frameSet = SegmentFrames[segment.entityType];
@@ -5527,15 +5435,15 @@ goog.events.EventHandler.typeArray_ = [];
 
         const directionMgr = DirectionManager.getInstance();
         let angle = directionMgr.getBaseAngle(segment.baseDirection);
-
+        
         if (segment.entityType === 1 && segment.baseDirection && segment.currentDirection !== segment.baseDirection) {
             frameSet = pc;
             angle = directionMgr.rotationMap.get([segment.currentDirection, segment.baseDirection]);
         }
 
         if (!segment.mainSprite.animation || !segment.mainSprite.animation.isPlaying()) {
-            segment.mainSprite.setFrame(frameSet);
-            if (segment.shadowSprite) segment.shadowSprite.setFrame(frameSet);
+            Sprite.setFrame(segment.mainSprite, frameSet);
+            if (segment.shadowSprite) Sprite.setFrame(segment.shadowSprite, frameSet);
         }
 
         if (segment.entityType === 0 && angle === 180) segment.mainSprite.flip();
@@ -5556,7 +5464,7 @@ goog.events.EventHandler.typeArray_ = [];
         const directionMgr = DirectionManager.getInstance();
         let frameSet;
 
-        if (segment.W === 0) {
+        if (segment.entityType === 0) {
             const mapType = directionMgr.alternateTransform.get([segment.baseDirection, segment.currentDirection]);
             frameSet = mapType === 3 ? Oe : Pe;
         } else {
@@ -5566,7 +5474,7 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         stopAllAnimations(segment.mainSprite);
-        segment.mainSprite.setFrame(frameSet[frameIndex]);
+        Sprite.setFrame(segment.mainSprite, frameSet[frameIndex]);
     }
 
     /**
@@ -5623,108 +5531,164 @@ goog.events.EventHandler.typeArray_ = [];
 
     class GameController extends goog.Disposable {
         lastUpdateTime = 0;
+
+        /**
+         * @param {HTMLElement} rootElement 
+         */
         constructor(rootElement) {
             super();
             this.root = rootElement;
 
-            this.gridContainer = createDiv();
+            this.gridContainer = createDiv(); // fa
             addClass(this.gridContainer, "grids");
             this.root.appendChild(this.gridContainer);
             setPosition(this.gridContainer, START_POS.x, START_POS.y);
 
-            this.state = "unstarted"; //i
-            this.startTime = getTime(); //Vd
-            this.remainingTime = minutes; //ea
+            this.state = "unstarted"; // i
+            this.startTime = getTime(); // Vd
+            this.remainingTime = minutes; // ea
 
             this.score = 0; // score (z)
             this.comboData = {}; // $b
-            this.hc = this.Aa = null;
-            this.Ma = [];
-            this.TileSpawner = TileSpawner.getInstance();
+            this.medalGroup = null;
+            this.resultUI = null;
+            this.scoreDigits = [];
+
+            this.TileSpawner = TileSpawner.getInstance(); // ka
             gridClass = this.TileSpawner;
             this.TileSpawner.init(this.gridContainer);
-            this.snake = new SnakeController(this.gridContainer);
+            this.snake = new SnakeController(this.gridContainer); // N
             snakeClass = this.snake;
+            boostFunction = this.snake.setSpeedParameters;
 
-            this.input = new InputController();
-            this.eventHandler = new goog.events.EventHandler(this);
-            this.objectPool = ObjectPoolManager.getInstance();
+            this.input = new InputController(true); // Zc
+            this.eventHandler = new goog.events.EventHandler(this); // B
+            this.objectPool = ObjectPoolManager.getInstance(); // bb
 
-            this.playButton = new ClickableElement(12, START_BUTTON.x, START_BUTTON.y, this.root, 101);
+            this.playButton = new ClickableElement(12, START_BUTTON_POS.x, START_BUTTON_POS.y, this.root, 101); // ca
             this.playButton.show(false);
 
-            this.soundButton = new ClickableElement(90, SOUND_BUTTON.x, SOUND_BUTTON.y, this.root, 100);
+            this.soundButton = new ClickableElement(90, SOUND_BUTTON_POS.x, SOUND_BUTTON_POS.y, this.root, 100); // La
             this.soundButton.show(false);
 
-            this.music = new AudioPlayer(["./resources/snake"]);
+            this.muted = false; // Ka
+            this.music = new AudioPlayer(["./assets/snake"]); // la
 
-            this.mainSprite = new SpriteGroup(31, MAIN_SPR_POS.x, MAIN_SPR_POS.y, this.root, 100);
+            this.mainSprite = new SpriteGroup(31, MAIN_SPR_POS.x, MAIN_SPR_POS.y, this.root, 100); // cb
             this.mainSprite.show(false);
 
-            this.fb = null;
-            this.eb = [];
+            this.tutorialRoot = null;
+            this.tutorialButtons = [];
 
             this.uiSeq = null;
             this.tutSeq = null;
             this.introSeq = null;
 
-            this.gc = 0;
-
             this.visibilityTimer = new VisibilityTimer(3E4, this.onVisibilityLost, this.onVisibilityReturn);
             window.isAnimationPaused = false;
 
-            new SpriteGroup(19, BG_LEFT.x, BG_LEFT.y, this.root, 100);
-            this.leftFrame = new SpriteGroup(36, FRAME_LEFT.x + 99, FRAME_LEFT.y, this.root, -1);
-            this.rightFrame = new SpriteGroup(53, FRAME_RIGHT.x - 99, FRAME_RIGHT.y, this.root, -1);
+            new SpriteGroup(19, BG_LEFT_POS.x, BG_LEFT_POS.y, this.root, 100);
+            this.leftFrame = new SpriteGroup(36, FRAME_LEFT_POS.x + 99, FRAME_LEFT_POS.y, this.root, -1); // Cb
+            this.rightFrame = new SpriteGroup(53, FRAME_RIGHT_POS.x - 99, FRAME_RIGHT_POS.y, this.root, -1); // Db
             this.leftFrame.show(false);
             this.rightFrame.show(false);
 
-            this.timerDisplay = new TimerDisplay(TIMER_POS.x, TIMER_POS.y, this.root);
+            this.timerDisplay = new TimerDisplay(TIMER_POS.x, TIMER_POS.y, this.root); // za
             this.timerDisplay.show(false);
 
-            this.scoreDisplay = new ScoreDisplay(qf, this.root);
+            this.scoreDisplay = new ScoreDisplay(SCORE_DIGIT_POS, this.root); // ya
 
             this.icons = [];
-            for (let i = 0; i < SIDE_ICONS.length; i++) {
-                const pos = SIDE_ICONS[i];
+            SIDE_ICON_POS.forEach(icon => function() {
                 const sprite = new Sprite(33);
                 sprite.show(false);
-                Sprite.setPosition(sprite, pos.x, pos.y);
+                Sprite.setPosition(sprite, icon.x, icon.y);
                 this.root.appendChild(sprite.getElement());
                 this.icons.push(sprite);
-            }
+            });
 
-            this.eventHandler.listen(this.input, "a", this.Xd);
+            this.eventHandler.listen(this.input, "a", this.handleInput);
             this.eventHandler.listen(this.snake, "catch item", this.handleItemCollected);
             this.eventHandler.listen(this.snake, "match pattern", this.handlePatternMatch);
-            this.eventHandler.listen(this.soundButton, "click", this.Wd);
+            this.eventHandler.listen(this.soundButton, "click", this.toggleMute);
+
+            this.isStandalone = !!(rootElement && rootElement.standalone);
 
             this.snake.init();
-            this.updateLoop();
+            this.initialize();
         }
+
+        initialize() {
+            this.lastUpdateTime = getTime();
+            requestAnimationFrame(this.gameLoop.bind(this));
+        }
+
+        playIntroUISequence = () => {
+            this.music.load(false);
+            this.visibilityTimer.resetTimer();
+
+            let seq = new AnimationSequence();
+            this.uiSeq = seq;
+
+            seq.addStep(() => Sprite.fadeOut(this.mainSprite));
+            seq.addStep((t) => {
+                Sprite.setPosition(this.playButton, START_BUTTON_POS.x, START_BUTTON_POS.y + 80 * t * t);
+                setOpacity(this.playButton.getElement(), 1 - t * t);
+            }, 700);
+            seq.addPauseStep(200);
+
+            seq.addStep(() => {
+                this.mainSprite.show(false);
+                this.playButton.show(false);
+                setOpacity(this.gridContainer, 1);
+            });
+
+            seq.addStep(() => {
+                this.leftFrame.show(true);
+                this.rightFrame.show(true);
+            });
+
+            seq.addStep((t) => {
+                Sprite.setPosition(this.leftFrame, FRAME_LEFT_POS.x + 99 * (1 - t), FRAME_LEFT_POS.y);
+                Sprite.setPosition(this.rightFrame, FRAME_RIGHT_POS.x - 99 * (1 - t), FRAME_RIGHT_POS.y);
+            }, 1000);
+
+            seq.addStep(() => {
+                Sprite.animateOpacity(this.soundButton, 500, 0, 1);
+                this.soundButton.show(true);
+            });
+
+            seq.addStep(() => {
+                this.onVisibilityLost();
+            });
+
+            seq.play();
+        }
+
         onVisibilityLost() {
             if ("running" == this.state) {
                 this.music.pause();
-                var a = this.snake;
-                a.ba = Yc;
-                a.d[0].qa().setFrame(a.ba);
-                Of(this);
+                var snake = this.snake;
+                snake.currentFrame = Yc;
+                Sprite.setFrame(snake.segments[0].getSprite(), snake.currentFrame);
+                initTutorial(this);
             }
         }
         onVisibilityReturn() {
             if ("tutorial_start" == this.state || "tutorial_end" == this.state) {
                 this.music.play();
-                var a = this.snake;
-                a.ba = Ee;
-                a.d[0].qa().setFrame(a.ba);
+                var snake = this.snake;
+                snake.currentFrame = Ee;
+                Sprite.setFrame(snake.segments[0].getSprite(), snake.currentFrame);
                 this.state = "running";
-                Pf(this);
-                minutes == this.remainingTime && Nf(this);
+                hideTutorialUI(this);
+                if (this.remainingTime == minutes) ResetGame(this);
             }
         }
+
         flashStartButton() {
             if ("init" == this.state) {
-                this.playButton.K(Cf, 80);
+                this.playButton.playFrameSequence(playFrameAnim, 80);
                 setTimeout(this.flashStartButton, 3E3);
             }
         }
@@ -5747,9 +5711,9 @@ goog.events.EventHandler.typeArray_ = [];
                     case "medicine":
                     case "tea":
                         let snake = this.snake;
-                        let boostSrc = evt.gb;
+                        let boostSrc = evt.time;
                         snake.segments[0].animate(Ge, 80, 500);
-                        boostFunction(snake, boostSrc, 0.1);
+                        snake.setSpeedParameters(boostSrc, 0.1)
                         snake.frameId = Vc;
                         break;
 
@@ -5761,10 +5725,9 @@ goog.events.EventHandler.typeArray_ = [];
                             for (let i = 0; i < comboStr.length; i++)
                                 spawnItem(spawner, createItem("steamer"), find2x2Block(spawner.grid));
 
-                            if (comboStr.length === 6)
-                                fillGridWithItems(spawner, comboStr[random(comboStr.length)]);
+                            if (comboStr.length === 6) fillGridWithItems(spawner, comboStr[random(comboStr.length)]);
                         }
-                        triggerLanternEffect(this);
+                        updateIcons(this);
                         break;
                 }
 
@@ -5776,121 +5739,34 @@ goog.events.EventHandler.typeArray_ = [];
             }
         }
 
-        Yd(a) {
-            var b = this.TileSpawner.getItem(a.item);
-            if (b != null)
-                if (1 == b.i || b.cc < b.mainSprite.getHeight()) {
-                    var c = b.getName();
-                    this.comboData[c]++;
-                    console.log("Snake eaten " + c);
-                    this.score += b.z;
-                    this.score = Math.min(this.score, 999);
-                    switch (c) {
-                        case "mushroom":
-                        case "firecraker":
-                        case "medicine":
-                        case "tea":
-                            c = this.snake;
-                            a = a.gb;
-                            c.d[0].K(Ge, 80, 500);
-                            boostFunction(c, a, .1);
-                            c.ba = Vc;
-                            break;
-                        case "lantern":
-                            a: {
-                                a = Td;
-                                c = b.be;
-                                if (1 == a.length) c == a[0] ? U = true : a[0] == "GOOGLE"[0] && c == "GOOGLE"[1] ? U = false : (Td = [], U = true);
-                                else if (a.length)
-                                    if (U && c == a[0] || !U && c == "GOOGLE"[a.length]) {
-                                        if (U && 2 == a.length || !U && 5 == a.length) {
-                                            a.push(c);
-                                            Td = [];
-                                            U = true;
-                                            a = a.join("");
-                                            break a;
-                                        }
-                                    } else Td = [], U = true;
-                                Td.push(c);
-                                a = "";
-                            }
-                            if (a) {
-                                for (var c = this.TileSpawner, d = a.length, e = 0; e < d; e++) {
-                                    spawnItem(c, createItem("steamer"), find2x2Block(c.g));
-                                }
-                                6 == a.length && fillGridWithItems(this.TileSpawner, a[random(a.length)]);
-                            }
-                            Tf(this);
-                    }
-                    b.Ia();
-                    this.scoreDisplay.update(this.score);
-                } else {
-                    b.J.show(false);
-                    b.mainSprite.setZIndex(1);
-                }
-        }
-        handlePatternMatch(a) {
+        handlePatternMatch(evt) {
             const pattern = evt.pattern;
             if (pattern !== "") fillGridWithItems(this.TileSpawner, pattern);
-            this.gc++;
         }
-        Xd(a) {
+
+        handleInput(input) {
             this.visibilityTimer.resetTimer();
             if ("tutorial_end" == this.state) {
-                Pf(this);
-                Nf(this);
+                hideTutorialUI(this);
+                ResetGame(this);
             } else if ("running" == this.state) {
-                ze(this.snake, a.Ie);
+                this.snake.enqueueDirection(input.direction);
             }
         }
-        De() {
-            this.music.load(false);
-            this.visibilityTimer.resetTimer();
-            var seq = new AnimationSequence();
-            this.uiSeq = seq;
-            seq.addStep(function () {
-                Sprite.fadeOut(this.cb);
-            });
-            seq.addStep(function (a) {
-                Sprite.setPosition(this.playButton, Z.x, Z.y + 80 * a * a);
-                setOpacity(this.playButton.aa(), 1 - a * a);
-            }, 700);
-            seq.addPauseStep(200);
-            seq.addStep(function () {
-                this.cb.show(false);
-                this.playButton.show(false);
-                setOpacity(this.fa, 1);
-            });
-            seq.addStep(function () {
-                this.leftFrame.show(true);
-                this.rightFrame.show(true);
-            });
-            seq.addStep(function (a) {
-                Sprite.setPosition(this.leftFrame, FRAME_LEFT.x + 99 * (1 - a), FRAME_LEFT.y);
-                Sprite.setPosition(this.rightFrame, FRAME_RIGHT.x - 99 * (1 - a), FRAME_RIGHT.y);
-            }, 1E3);
-            seq.addStep(function () {
-                Sprite.animateOpacity(this.La, 500, 0, 1);
-                this.soundButton.show(true);
-            });
-            seq.addStep(function () {
-                Of(this);
-            });
-            seq.play();
-        }
+
         td() {
             this.visibilityTimer.resetTimer();
             if ("tutorial_end" == this.state) {
-                Pf(this);
-                Nf(this);
-            }
+                hideTutorialUI(this);
+                ResumeGame(this);
+            } 
         }
         playTutorialSequence() {
             if ("tutorial_start" == this.state || "tutorial_end" == this.state) {
                 var seq = new AnimationSequence();
                 this.tutSeq = seq;
-                for (var b in Bf) {
-                    seq.addStep(createFrameAnimation(this.eb[b], Bf[b], Af[b], 29));
+                for (var key in TUTORIAL_BUTTON_FRAMES) {
+                    seq.addStep(createFrameAnimation(this.tutorialButtons[key], TUTORIAL_BUTTON_FRAMES[key], TUTORIAL_BUTTON_POS[key], 29));
                     seq.addPauseStep(300);
                 }
                 seq.addStep(function () {
@@ -5900,32 +5776,79 @@ goog.events.EventHandler.typeArray_ = [];
                 setTimeout(this.playTutorialSequence, 3E3);
             }
         }
-        Wd() {
+        toggleMute() {
             this.visibilityTimer.resetTimer();
-            this.Ka = !this.Ka;
-            this.La.setFrame(this.Ka ? 90 : 89);
-            this.soundButton.H.muted = this.Ka ? false : true;
+            this.muted = !this.muted;
+            Sprite.setFrame(this.soundButton, this.muted ? 90 : 89);
+            this.music.audio.muted = this.muted ? false : true;
         }
-        ze() {
-            setOpacity(this.fa, 1);
-            this.Aa.show(false);
-            Nf(this);
+
+        showGameplayUI() {
+            setOpacity(this.gridContainer, 1);
+            this.resultUI.show(false);
+            ResetGame(this);
         }
-        updateLoop = () => {
-            var now = getTime();
-            let delta = Math.min(50, now - this.lastUpdateTime);
-            if ("running" == this.state) {
-                updateGameState(this, delta, now);
-            } else if ("unstarted" == this.state && 1500 < now - this.startTime) {
-                this.state = "init";
-                playIntroSequence(this);
+
+        gameLoop = () => {
+            var currentTime = getTime();
+            let deltaTime = Math.min(50, currentTime - this.lastUpdateTime);
+
+            switch (this.state) {
+                case "running":
+                    this.update(deltaTime, currentTime);
+                    break;
+                case "unstarted":
+                    if (currentTime - this.startTime > 1500) {
+                        this.state = "init";
+                        playIntroSequence(this);
+                    }
+                    break;
             }
-            requestAnimFrame(this.updateLoop);
-            this.lastUpdateTime = now;
+
+            this.lastUpdateTime = currentTime;
+            requestAnimationFrame(this.gameLoop);
         }
+
+        /**
+         * Updates the current game state per frame.
+         * 
+         * @param {GameController} game - The main game controller.
+         * @param {number} deltaTime - Time passed since last frame.
+         * @param {number} currentTime - Current game time.
+         */
+        update(deltaTime, currentTime) {
+            // Update managers
+            this.TileSpawner.update(currentTime);
+            this.snake.move(currentTime);
+            this.scoreDisplay.processPendingEffects(currentTime);
+            this.timerDisplay.update(Math.floor(game.remainingTime / 1000));
+
+            // Countdown timer
+            this.remainingTime -= deltaTime;
+
+            // Check for phase transitions
+            if (phase === 1 && this.remainingTime < 40000) {
+                switchGamePhase(this, 2);
+            } else if (phase === 2 && this.remainingTime < 20000) {
+                switchGamePhase(this, 3);
+            }
+
+            // Time over condition
+            if (this.remainingTime < 0 && this.state === "running") {
+                this.state = "stop";
+                stopGame(this);
+
+                this.remainingTime.show(false);
+                resetDisplay(this.scoreDisplay);
+
+                ArrayUtils.forEach(this.icons, sprite => sprite.show(false));
+                this.music.load(false);
+            }
+        }
+
         dispose() {
             this.state = "stop";
-            safeDispose(this.eventHandler);
+            this.eventHandler.dispose();
             if (this.introSeq) this.introSeq.stop();
             if (this.tutSeq) this.tutSeq.stop();
             if (this.uiSeq) this.uiSeq.stop();
@@ -5942,98 +5865,59 @@ goog.events.EventHandler.typeArray_ = [];
         }
     }
 
-    var START_BUTTON = new Point(309, 79),
-        SOUND_BUTTON = new Point(625, 125),
-        MAIN_SPR_POS = new Point(256, 46),
-        sf = new Point(164, 36),
-        vf = new Point(425, 110),
-        wf = new Point(212, 80),
-        xf = [91, 92, 93],
-        yf = [new Point(415, 82), new Point(397, 82), new Point(379, 82)],
-        BG_LEFT = new Point(96, 6), //mf
-        START_POS = new Point(110, 20), //jf
-        FRAME_LEFT = new Point(4, 46), //nf
-        FRAME_RIGHT = new Point(577, 46), //of
-        TIMER_POS = new Point(43, 103), //pf
-        qf = [new Point(640, 103), new Point(629, 103), new Point(618, 103), new Point(607, 103), new Point(596, 103), new Point(585, 103)],
-        SIDE_ICONS = [new Point(6, 127), new Point(6, 143), new Point(22, 143), new Point(5, 159), new Point(22, 159), new Point(38, 159)], //rf
-        zf = new Point(294, 44),
-        Af = [new Point(387, 81), new Point(387, 115), new Point(353, 115), new Point(420, 115)],
-        Bf = [
-            [98, 102, 106, 102, 98],
-            [95, 99, 103, 99, 95],
-            [96, 100, 104, 100, 96],
-            [97, 101, 105, 101, 97]
-        ],
-        Cf = [12, 13, 14, 15, 16, 17, 18],
-        Ff = [51, 50],
-        If = [51, 52];
-
-    /**
-     * Updates the current game state per frame.
-     * 
-     * @param {Object} game - The main game controller.
-     * @param {number} deltaTime - Time passed since last frame.
-     * @param {number} currentTime - Current game time.
-     */
-    function updateGameState(game, deltaTime, currentTime) {
-        // Update managers
-        game.ka.update(currentTime);
-        game.N.move(currentTime);
-        game.ya.update(currentTime);
-        game.za.update(Math.floor(game.ea / 1000));
-
-        // Countdown timer
-        game.ea -= deltaTime;
-
-        // Check for phase transitions
-        if (he === 1 && game.ea < 40000) {
-            switchGamePhase(game, 2);
-        } else if (he === 2 && game.ea < 20000) {
-            switchGamePhase(game, 3);
-        }
-
-        // Time over condition
-        if (game.ea < 0 && game.state === "running") {
-            game.state = "stop";
-            stopGame(game);
-
-            game.za.show(false);
-            resetDisplay(game.ya);
-
-            ArrayUtils.forEach(game.yb, sprite => sprite.show(false));
-
-            game.la.load(false);
-        }
-    }
+    const START_BUTTON_POS = new Point(309, 79);
+    const SOUND_BUTTON_POS = new Point(625, 125);
+    const MAIN_SPR_POS = new Point(256, 46);
+    const RESULT_POS = new Point(164, 36);
+    const REPLAY_POS = new Point(425, 110);
+    const MEDAL_POS = new Point(212, 80);
+    const RESULT_FRAMES = [91, 92, 93];
+    const SCORE_POS = [new Point(415, 82), new Point(397, 82), new Point(379, 82)]; // yf
+    const BG_LEFT_POS = new Point(96, 6); // mf
+    const START_POS = new Point(110, 20); // jf
+    const FRAME_LEFT_POS = new Point(4, 46); // nf
+    const FRAME_RIGHT_POS = new Point(577, 46); // of
+    const TIMER_POS = new Point(43, 103); // pf
+    const SCORE_DIGIT_POS = [new Point(640, 103), new Point(629, 103), new Point(618, 103), new Point(607, 103), new Point(596, 103), new Point(585, 103)];
+    const SIDE_ICON_POS = [new Point(6, 127), new Point(6, 143), new Point(22, 143), new Point(5, 159), new Point(22, 159), new Point(38, 159)]; //rf
+    const TUTORIAL_ROOT_POS = new Point(294, 44);
+    const TUTORIAL_BUTTON_POS = [new Point(387, 81), new Point(387, 115), new Point(353, 115), new Point(420, 115)];
+    const TUTORIAL_BUTTON_FRAMES = [
+        [98, 102, 106, 102, 98],
+        [95, 99, 103, 99, 95],
+        [96, 100, 104, 100, 96],
+        [97, 101, 105, 101, 97]
+    ];
+    const playFrameAnim = [12, 13, 14, 15, 16, 17, 18];
+    const HOVER_FRAMES = [51, 50];
+    const OUT_FRAMES = [51, 52];
 
     /**
      * Switches the game to a new phase/level.
      * 
-     * @param {Object} game - The game instance.
+     * @param {GameController} game - The game instance.
      * @param {number} phaseId - The new phase index.
      */
     function switchGamePhase(game, phaseId) {
-        he = phaseId;
+        phase = phaseId;
 
         // Reset object counters for this phase
         initializeObjectCounter(ObjectPoolManager.getInstance(), phaseId);
 
         // Update entity parameters from registry
-        const entity = game.N;
+        const entity = game.snake;
         entity.Fb = ObjectRegistry[phaseId].V;
         entity.Ab = entity.Fb * entity.Gb;
-        game.ka.vc = ObjectRegistry[phaseId].U;
+        game.TileSpawner.spawnScale = ObjectRegistry[phaseId].U;
     }
 
     /**
      * Plays the game's intro animation sequence.
-     * 
-     * @param {Object} game - The game controller.
+     * @param {GameController} game - The game controller.
      */
     function playIntroSequence(game) {
-        const seq = new AnimationSequence();
-        game.seq = seq;
+        var seq = new AnimationSequence();
+        game.uiSeq = seq;
 
         // Animate entity 38 times with short pauses
         for (let i = 1; i < 39; i++) {
@@ -6044,25 +5928,24 @@ goog.events.EventHandler.typeArray_ = [];
         // Fade in secondary sprite
         seq.addPauseStep(200);
         seq.addStep(function () {
-            this.cb.show(true);
-            Sprite.animateOpacity(this.cb, 400, 0, 1);
+            game.mainSprite.show(true);
+            Sprite.animateOpacity(game.mainSprite, 400, 0, 1);
         });
 
-        // Move main sprite (`ca`)
         seq.addPauseStep(600);
         seq.addStep(function () {
-            Sprite.setPosition(game.playButton, Z.x, Z.y - 80);
-            this.playButton.show(true);
+            Sprite.setPosition(game.playButton, START_BUTTON_POS.x, START_BUTTON_POS.y - 80);
+            game.playButton.show(true);
         });
 
         // Bounce animation 1
         seq.addStep(function (t) {
-            Sprite.setPosition(game.playButton, Z.x, Z.y - 80 * (1 - t * t));
+            Sprite.setPosition(game.playButton, START_BUTTON_POS.x, START_BUTTON_POS.y - 80 * (1 - t * t));
         }, 700);
 
         // Bounce animation 2
         seq.addStep(function (t) {
-            Sprite.setPosition(game.playButton, Z.x, Z.y - 80 * (0.25 - (0.5 - t) * (0.5 - t)));
+            Sprite.setPosition(game.playButton, START_BUTTON_POS.x, START_BUTTON_POS.y - 80 * (0.25 - (0.5 - t) * (0.5 - t)));
         }, 700);
 
         // Run "ready" callback
@@ -6072,18 +5955,23 @@ goog.events.EventHandler.typeArray_ = [];
 
         // Add click handler
         seq.addStep(function () {
-            game.playButton.addEventListener("mousedown", this.De)
+            game.playButton.addEventListener("mousedown", game.playIntroUISequence);
         });
-
         seq.play();
     }
 
+    /**
+     * @param {Sprite} sprite 
+     * @param {number[]|number} frames 
+     * @param {Point[]|Point} position 
+     * @param {number} offsetY 
+     */
     function createFrameAnimation(sprite, frames, position, offsetY) {
         return function () {
             const anim = new AnimationSequence();
             frames.forEach(frame => {
                 anim.addStep(() => {
-                    sprite.setFrame(frame);
+                    Sprite.setFrame(sprite, frame);
                     Sprite.setPosition(sprite, position.x, position.y + offsetY - sprite.getHeight());
                 });
                 anim.addPauseStep(80);
@@ -6092,104 +5980,122 @@ goog.events.EventHandler.typeArray_ = [];
         };
     }
 
-    var Nf = function (a) {
-        Ue(a.N, getTime());
-        a.i = "running";
-        a.ea = minutes;
-        switchGamePhase(a, 1);
-        a.za.update(Math.floor(a.ea / 1E3));
-        a.za.show(true);
-        a.z = 0;
-        a.ya.update(a.z);
-        a.ya.reset();
-        Mf(a);
-        Td = [];
-        U = true;
-        ArrayUtils.forEach(a.yb, function (a) {
-            a.show(false)
+    /** @param {GameController} game */
+    function ResetGame(game) {
+        game.snake.resetSpeed(getTime());
+        game.state = "running";
+        game.remainingTime = minutes;
+        switchGamePhase(game, 1);
+
+        game.timerDisplay.update(Math.floor(a.remainingTime / 1E3));
+        game.timerDisplay.show(true);
+
+        game.score = 0;
+        game.scoreDisplay.update(game.score);
+        game.scoreDisplay.reset();
+        resetComboData(game);
+
+        sequence = [];
+        forward = true;
+
+        game.icons.forEach(function (icon) {
+            icon.show(false)
         });
-        a.La.show(true);
-        a.la.play();
-        a.la.H.muted = !a.Ka;
-        a.gc = 0
-    };
-    var Mf = function (a) {
-        getObjectKeys(ItemDefinitions).forEach(function (a) {
-            this.comboData[a] = 0
-        }, a);
+        game.soundButton.show(true);
+        game.music.play();
+        game.music.audio.muted = !game.muted;
     };
 
-    var Tf = function (a) {
-        ArrayUtils.forEach(a.yb, function (a, c) {
-            if (c < Td.length) {
-                a.setFrame(sd[Td[c]]);
-                a.show(true);
-            } else a.show(false);
+    /**
+     * Resets combo counters for all item definitions.
+     * @param {GameController} game
+     */
+    function resetComboData(game) {
+        getObjectKeys(ItemDefinitions).forEach(function (key) {
+            this.comboData[key] = 0
+        }, game);
+    };
+
+    /**
+     * Updates the icon sprites to match the current sequence.
+     * @param {GameController} game
+     */
+    function updateIcons(game) {
+        game.icons.forEach(function(icon, index) {
+            if (index < sequence.length) {
+                Sprite.setFrame(icon, sd[sequence[index]]);
+                icon.show(true);
+            } else icon.show(false);
         })
-    };
+    }
 
-    function stopGame(a) {
-        isOver = true;
-        if (a.Aa) {
-            setOpacity(a.fa, 0.3);
-            a.hc.setFrame(xf[(80 > a.z ? 1 : 150 > a.z ? 2 : 3) - 1]);
-            var b = createDigitSprites(a.z, vd);
-            a.Aa.show(true);
-            for (var c in b) {
-                if (b[c] != null) {
-                    a.Ma[c].show(true);
-                    a.Ma[c].setFrame(b[c]);
-                } else a.Ma[c].show(false);
+    /** @param {GameController} game */
+    function stopGame(game) {
+        var digits = createDigitSprites(game.score, vd);
+        if (game.resultUI) {
+            setOpacity(game.gridContainer, .3);
+            Sprite.setFrame(game.medalGroup, RESULT_FRAMES[(80 > game.score ? 1 : 150 > game.score ? 2 : 3) - 1]);
+            game.resultUI.show(true);
+            for (var i in digits) {
+                if (digits[i] != null) {
+                    game.scoreDigits[i].show(true);
+                    Sprite.setFrame(game.scoreDigits[i], digits[i]);
+                } else game.scoreDigits[i].show(false);
             }
         } else {
-            a.Aa = new SpriteGroup(61, sf.x, sf.y, a.v, 100);
-            if (!a.bd) {
-                var q = new ClickableElement(52, vf.x, vf.y, a.v, 101);
-                a.eventHandler.listen(q, "click", a.ze);
-                a.eventHandler.listen(q, "mouseover", createFrameAnimation(q, Ff, vf, 28));
-                a.eventHandler.listen(q, "mouseout", createFrameAnimation(q, If, vf, 28));
-                a.Aa.add(q);
+            game.resultUI = new SpriteGroup(61, RESULT_POS.x, RESULT_POS.y, game.root, 100);
+            if (!game.isStandalone) {
+                var replayButton = new ClickableElement(52, REPLAY_POS.x, REPLAY_POS.y, game.root, 101);
+                game.eventHandler.listen(replayButton, "click", game.showGameplayUI);
+                game.eventHandler.listen(replayButton, "mouseover", createFrameAnimation(replayButton, HOVER_FRAMES, REPLAY_POS, 28));
+                game.eventHandler.listen(replayButton, "mouseout", createFrameAnimation(replayButton, OUT_FRAMES, REPLAY_POS, 28));
+                game.resultUI.add(replayButton);
             }
-            a.hc = new SpriteGroup(xf[(80 > a.z ? 1 : 150 > a.z ? 2 : 3) - 1], wf.x, wf.y, a.v, 101);
-            a.Aa.add(a.hc);
-            for (var r in createDigitSprites(a.z, vd)) {
-                c = b[r];
-                a.Ma[r] = new SpriteGroup(c == null ? td[0] : c, yf[r].x, yf[r].y, a.v, 101)
-                if (c == null) {
-                    a.Ma[r].show(false);
-                    a.Aa.add(a.Ma[r]);
+
+            game.medalGroup = new SpriteGroup(RESULT_FRAMES[(80 > game.score ? 1 : 150 > game.score ? 2 : 3) - 1], MEDAL_POS.x, MEDAL_POS.y, game.root, 101);
+            game.resultUI.add(game.medalGroup);
+            for (let i in createDigitSprites(game.score, vd)) {
+                const frame = digits[i];
+                game.scoreDigits[i] = new SpriteGroup(frame == null ? td[0] : frame, SCORE_POS[i].x, SCORE_POS[i].y, game.root, 101);
+                if (frame == null) {
+                    game.scoreDigits[i].show(false);
+                    game.resultUI.add(game.scoreDigits[i]);
                 }
             }
-            setOpacity(a.fa, 0.3)
+            setOpacity(game.gridContainer, .3)
         }
-    };
-    var Of = function (a) {
-        a.fb = new ClickableElement(94, zf.x, zf.y, a.v, 100);
-        for (var b in Bf) {
-            a.eb[b] = new ClickableElement(Bf[b][0], Af[b].x, Af[b].y, a.v, 101);
-            a.eventHandler.listen(a.eb[b], "click", a.td);
-            a.fb.add(a.eb[b]);
-        }
-        a.state = "tutorial_start";
-        a.eventHandler.listen(a.fb, "click", a.td);
-        a.sd()
-    };
-    var Pf = function (a) {
-        Sprite.fadeOut(a.fb);
-        ArrayUtils.forEach(a.eb, function (a) {
-            Sprite.fadeOut(a)
-        });
-        a.fb.show(false)
     };
 
-    var logoElement = null;
+    /** @param {GameController} game */
+    function initTutorial(game) {
+        game.tutorialRoot = new ClickableElement(94, TUTORIAL_ROOT_POS.x, TUTORIAL_ROOT_POS.y, game.v, 100);
+        for (var key in TUTORIAL_BUTTON_FRAMES) {
+            game.tutorialButtons[key] = new ClickableElement(TUTORIAL_BUTTON_FRAMES[key][0], TUTORIAL_BUTTON_POS[key].x, TUTORIAL_BUTTON_POS[key].y, game.root, 101);
+            game.eventHandler.listen(game.tutorialButtons[key], "click", game.td);
+            game.tutorialRoot.add(game.tutorialButtons[key]);
+        }
+        game.state = "tutorial_start";
+        game.eventHandler.listen(game.tutorialRoot, "click", game.td);
+        game.sd()
+    };
+
+    /** @param {GameController} game */
+    function hideTutorialUI (game) {
+        Sprite.fadeOut(game.tutorialRoot);
+        ArrayUtils.forEach(game.tutorialButtons, function (a) {
+            Sprite.fadeOut(game)
+        });
+        game.tutorialRoot.show(false)
+    };
+
+    var Logo = null;
     var gameController = null;
     (function(callInit){
         callInit();
     })(function init() {
-        if (logoElement = document.getElementById("hplogo")) {
+        if (Logo = document.getElementById("hplogo")) {
             // Sprite / resource loader for the doodle
-            SpriteManager = new SpriteSheet("./resources/spritesheet.png", lc);
+            SpriteManager = new SpriteSheet("./assets/spritesheet.png", SPRITE_FRAMES);
             SpriteManager.load();
 
             // Build a configuration set (rc) with many keys enabled
@@ -6229,25 +6135,25 @@ goog.events.EventHandler.typeArray_ = [];
             configObj = {};
             configObj[keyEnum.firecraker] = 10;
             configObj[keyEnum.dumpling] = 20;
-            configObj[keyEnum.Kb] = 20;
+            configObj[keyEnum.tea] = 20;
             configObj[keyEnum.envelope] = 20;
-            configObj[keyEnum.Fa] = 10;
+            configObj[keyEnum.medicine] = 10;
             configObj[keyEnum.coin] = 40;
-            configObj[keyEnum.Ea] = 20;
+            configObj[keyEnum.ingot] = 20;
             ObjectRegistry[1] = { data: configObj, V: 200, U: 1 };
 
             configObj = {};
             configObj[keyEnum.firecraker] = 10;
-            configObj[keyEnum.Fa] = 10;
-            configObj[keyEnum.Kb] = 10;
-            configObj[keyEnum.nb] = 10;
+            configObj[keyEnum.medicine] = 10;
+            configObj[keyEnum.tea] = 10;
+            configObj[keyEnum.papercut] = 10;
             configObj[keyEnum.lantern] = 50;
             ObjectRegistry[2] = { data: configObj, V: 180, U: 0.85 };
 
             configObj = {};
-            configObj[keyEnum.nb] = 30;
-            configObj[keyEnum.Fa] = 20;
-            configObj[keyEnum.mb] = 20;
+            configObj[keyEnum.papercut] = 30;
+            configObj[keyEnum.medicine] = 20;
+            configObj[keyEnum.mushroom] = 20;
             configObj[keyEnum.firecraker] = 30;
             configObj[keyEnum.lantern] = 30;
             ObjectRegistry[3] = { data: configObj, V: 160, U: 0.6 };
@@ -6268,19 +6174,19 @@ goog.events.EventHandler.typeArray_ = [];
             configObj = {};
             configObj[keyEnum.dumpling] = 30;
             configObj[keyEnum.coin] = 40;
-            configObj[keyEnum.Ea] = 30;
+            configObj[keyEnum.ingot] = 30;
             ObjectRegistry.G1 = { data: configObj, V: 200, U: 1 };
             ObjectRegistry.E = { data: configObj, V: 200, U: 1 };
             ObjectRegistry.L = { data: configObj, V: 200, U: 1 };
 
             configObj = {};
             configObj[keyEnum.coin] = 50;
-            configObj[keyEnum.Ea] = 50;
+            configObj[keyEnum.ingot] = 50;
             ObjectRegistry.G = { data: configObj, V: 200, U: 1 };
 
             // Some global flags / counters
-            he = 1;
-            xe = we = 0;
+            phase = 1;
+            snakeBodyVisible = snakeStepIndex = 0;
 
             GridPatternManager.getInstance().init();
 
@@ -6288,13 +6194,11 @@ goog.events.EventHandler.typeArray_ = [];
             var enumObj = LootTable;
             var reverseMap = {};
             var enumKey;
-            for (enumKey in enumObj) {
-                reverseMap[enumObj[enumKey]] = T;
-            }
+            for (enumKey in enumObj) reverseMap[enumObj[enumKey]] = GridEntity;
             reverseMap[enumObj.firecraker] = AnimatedFallingEntity;
             reverseMap[enumObj.dumpling] = StaticVariantEntity;
             reverseMap[enumObj.steamer] = ShadowedEntity;
-            reverseMap[enumObj.nb] = RandomMovingEntity;
+            reverseMap[enumObj.papercut] = RandomMovingEntity;
             reverseMap[enumObj.envelope] = MovingEntity;
             reverseMap[enumObj.lantern] = LanternEntity;
             ItemClasses = reverseMap;
@@ -6304,14 +6208,14 @@ goog.events.EventHandler.typeArray_ = [];
             itemDefs[enumObj.firecraker] = new Item([R.pe], enumObj.firecraker, 5000);
             itemDefs[enumObj.dumpling] = new Item([R.ne, R.oe], enumObj.dumpling, 7000, 2);
             itemDefs[enumObj.steamer] = new Item([R.ob], enumObj.steamer, 7000, 10);
-            itemDefs[enumObj.Kb] = new Item([R.we, R.xe], enumObj.Kb, 6000, 2, true);
-            itemDefs[enumObj.Fa] = new Item([R.Fa], enumObj.Fa, 6000, 2, false);
-            itemDefs[enumObj.nb] = new Item([R.qe, R.le], enumObj.nb, 6000, 5);
+            itemDefs[enumObj.tea] = new Item([R.we, R.xe], enumObj.tea, 6000, 2, true);
+            itemDefs[enumObj.medicine] = new Item([R.Fa], enumObj.medicine, 6000, 2, false);
+            itemDefs[enumObj.papercut] = new Item([R.qe, R.le], enumObj.papercut, 6000, 5);
             itemDefs[enumObj.envelope] = new Item([R.envelope], enumObj.envelope, 7000, 2);
-            itemDefs[enumObj.mb] = new Item([R.mb], enumObj.mb, 7000, 1, false);
+            itemDefs[enumObj.mushroom] = new Item([R.mb], enumObj.mushroom, 7000, 1, false);
             itemDefs[enumObj.lantern] = new Item([R.se, R.ve, R.ue, R.re], enumObj.lantern, 8000, 2);
             itemDefs[enumObj.coin] = new Item([R.coin], enumObj.coin, 10000, 1);
-            itemDefs[enumObj.Ea] = new Item([R.Ea], enumObj.Ea, 5000, 5);
+            itemDefs[enumObj.ingot] = new Item([R.ingot], enumObj.ingot, 5000, 5);
             console.log(itemDefs);
             ItemDefinitions = itemDefs;
 
@@ -6319,7 +6223,7 @@ goog.events.EventHandler.typeArray_ = [];
             initializeObjectCounter(ObjectPoolManager.getInstance(), 1);
 
             // Create controller/handler for the logo DOM element
-            gameController = new GameController(logoElement);
+            gameController = new GameController(Logo);
         }
     }, function cleanup() {
         // cleanup callback — release controller if present
