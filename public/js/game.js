@@ -7,6 +7,9 @@ var snakeClass = null;
 
 var minutes = 6E4;
 
+var ItemDefinitions = {}; // Registry of base item data
+var ItemClasses = null; // Registry mapping item names to their constructors
+
 function defineSingleton(cls) {
     cls.getInstance = function () {
         if (!cls._instance) {
@@ -137,6 +140,27 @@ goog.UID_PROPERTY_ = "closure_uid_" + Math.floor(2147483648 * Math.random()).toS
 goog.uidCounter_ = 0;
 goog.getHashCode = goog.getUid;
 goog.removeHashCode = goog.removeUid;
+goog.bindNative_ = function (a, b, c) {
+	return a.call.apply(a.bind, arguments)
+};
+goog.bindJs_ = function (a, b, c) {
+	var d = b || goog.global;
+	if (arguments.length > 2) {
+		var e = Array.prototype.slice.call(arguments, 2);
+		return function () {
+			var b = Array.prototype.slice.call(arguments);
+			Array.prototype.unshift.apply(b, e);
+			return a.apply(d, b)
+		}
+	}
+	return function () {
+		return a.apply(d, arguments)
+	}
+};
+goog.bind = function (a, b, c) {
+	goog.bind = Function.prototype.bind && Function.prototype.bind.toString().indexOf("native code") != -1 ? goog.bindNative_ : goog.bindJs_;
+	return goog.bind.apply(null, arguments)
+};
 
 goog.string = {};
 goog.string.Unicode = {
@@ -2449,7 +2473,7 @@ goog.events.EventHandler.typeArray_ = [];
             this.stop();
             this.currentIndex = 0;
             this.startTime = getTime();
-            this.intervalId = window.setInterval(this.update, 16); // ~60fps
+            this.intervalId = window.setInterval(goog.bind(this.update, this), 16); // ~60fps
             this.update();
         }
 
@@ -2541,7 +2565,7 @@ goog.events.EventHandler.typeArray_ = [];
             // Listen to document visibility changes
             if (this.visibilityChangeEvent) {
                 var listener = new goog.events.EventHandler(this);
-                listener.listen(document, this.visibilityChangeEvent, this.onVisibilityChange);
+                listener.listen(document, this.visibilityChangeEvent, goog.bind(this.onVisibilityChange, this));
             }
 
             // Start initial timer
@@ -2565,7 +2589,7 @@ goog.events.EventHandler.typeArray_ = [];
         scheduleCheck() {
             if (this.timer) window.clearTimeout(this.timer);
             const remaining = Math.max(100, this.timeoutMs - (getTime() - this.startTime));
-            this.timer = window.setTimeout(this.checkVisibility, remaining);
+            this.timer = window.setTimeout(goog.bind(this.checkVisibility, this), remaining);
         }
 
         // Called when visibility changes
@@ -2679,93 +2703,167 @@ goog.events.EventHandler.typeArray_ = [];
         else if ('filter' in s) s.filter = value === "" ? "" : `alpha(opacity=${value * 100})`;
     }
 
-    // Playlist base class
-    class Playlist {
+    class MediaSequence extends goog.Disposable {
         constructor() {
-            this.tracks = [];
-            this.index = 0;
-            this.ready = false;
-            this.playing = false;
+            super();
+
+            /** @type {string[]} */
+            this.items = [];            // pb
+            this.index = 0;             // ua
+            this.isLoaded = false;      // qb
+            this.isPlaying = false;     // ia
         }
 
-        reset() {
-            this.tracks = [];
+        disposeInternal() {
+            this.items = [];
             this.index = 0;
-            this.ready = this.playing = false;
+            this.isLoaded = false;
+            this.isPlaying = false;
+
+            super.disposeInternal();
         }
 
-        next(loop = false) {
+        /**
+         * Returns whether the item is currently playing.
+         */
+        isActive() {
+            return this.isPlaying;
+        }
+
+        /**
+         * Move to next item in sequence.
+         */
+        next(loop, onLoad, onEnd) {
             this.index++;
-            if (this.index >= this.tracks.length) this.index = loop ? 0 : this.tracks.length - 1;
-            this.load();
+            if (this.index >= this.items.length) {
+                this.index = loop ? 0 : this.items.length - 1;
+            }
+            this.load(loop, onLoad, onEnd);   // original "load()" call
         }
     }
 
     // HTML5 audio player subclass
-    class AudioPlayer extends Playlist {
-        constructor(tracks) {
+    class AudioSequencePlayer extends MediaSequence {
+        /**
+         * @param {string[]} audioPaths
+         * @param {HTMLElement=} parent
+         */
+        constructor(audioPaths, parent) {
             super();
-            this.tracks = tracks;
-            this.container = document.body;
-            this.audio = null;
-            this.onReady = null;
-            this.onEnd = null;
+
+            this.items = audioPaths;
+            this.audioElement = null;           // H
+            this.parent = parent || document.body;  // Dc
+            this.autoplay = false;              // Cc
+
+            this.onLoadedCallback = null;       // Lb
+            this.onPlayCallback = null;         // Wa
+            this.lastLoadedIndex = this.index;  // ud
         }
 
-        load(onReady = true, onEnd = true) {
-            this.onReady = onReady;
-            this.onEnd = onEnd;
+        disposeInternal() {
+            this.pause();
+            this.autoplay = false;
+            this.onPlayCallback = this.onLoadedCallback = null;
 
-            if (this.audio) this.container.removeChild(this.audio);
-
-            const audio = document.createElement("audio");
-            audio.preload = "auto";
-            audio.controls = false;
-            audio.style.display = "none";
-
-            const track = this.tracks[this.index];
-            for (const { vd, type } of [
-                { vd: ".mp3", type: "audio/mpeg" },
-                { vd: ".ogg", type: "audio/ogg" }
-            ]) {
-                const source = document.createElement("source");
-                source.src = track + vd;
-                source.type = type;
-                audio.appendChild(source);
+            if (this.audioElement) {
+                this.parent.removeChild(this.audioElement);
             }
 
-            goog.events.listen(audio, "canplay", () => {
-                this.ready = true;
-                if (this.onReady) this.onReady();
-            }, false, this);
-
-            goog.events.listen(audio, "ended", () => {
-                this.playing = false;
-                if (this.onEnd) this.onEnd();
-            });
-
-            this.container.appendChild(audio);
-            this.audio = audio;
+            super.disposeInternal();
         }
 
-        play() {
-            if (this.ready && !this.playing) {
-                this.audio.play();
-                this.playing = true;
+        /**
+         * Triggered when audio is ready to play.
+         */
+        handleCanPlay() {
+            this.isLoaded = true;
+            if (this.onLoadedCallback) this.onLoadedCallback();
+
+            if (this.autoplay && !this.isPlaying) {
+                this.play(this.onPlayCallback);
+            }
+        }
+
+        /**
+         * Triggered when audio ends.
+         */
+        handleEnded() {
+            this.isPlaying = false;
+            if (this.onPlayCallback) this.onPlayCallback();
+        }
+
+        /**
+         * Load the current audio item.
+         */
+        load(autoplay, onLoaded, onPlay) {
+            this.autoplay = autoplay;
+            this.onLoadedCallback = onLoaded || null;
+            this.onPlayCallback = onPlay || null;
+
+            // If we already loaded this track earlier
+            if (this.audioElement && this.lastLoadedIndex === this.index) {
+                if (this.isLoaded) {
+                    this.pause();
+                    this.audioElement.currentTime = 0;
+                    this.handleCanPlay();
+                }
+                return;
+            }
+
+            // Replace old audio element
+            if (this.audioElement) {
+                this.parent.removeChild(this.audioElement);
+            }
+
+            this.isLoaded = false;
+            this.audioElement = document.createElement("audio");
+            this.audioElement.setAttribute("controls", "false");
+            this.audioElement.setAttribute("preload", "auto");
+            this.audioElement.style.display = "none";
+
+            // Events
+            goog.events.listen(this.audioElement, "canplay", this.handleCanPlay, false, this);
+            goog.events.listen(this.audioElement, "ended", this.handleEnded, false, this);
+
+            // Build source list (.mp3, .ogg)
+            const basePath = this.items[this.index];
+
+            for (const info of AUDIO_FORMATS) {
+                const source = document.createElement("source");
+                source.setAttribute("src", basePath + info.extension);
+                source.setAttribute("type", info.type);
+                this.audioElement.appendChild(source);
+            }
+
+            this.parent.appendChild(this.audioElement);
+            this.lastLoadedIndex = this.index;
+        }
+
+        play(onPlay) {
+            if (this.isLoaded && !this.isPlaying) {
+                this.onPlayCallback = onPlay || null;
+                this.audioElement.play();
+                this.isPlaying = true;
             }
         }
 
         pause() {
-            if (this.playing) {
-                this.audio.pause();
-                this.playing = false;
+            if (this.isPlaying) {
+                this.audioElement.pause();
+                this.isPlaying = false;
             }
         }
 
-        currentTime() {
-            return this.playing ? this.audio.currentTime : 0;
+        getCurrentTime() {
+            return this.isPlaying ? this.audioElement.currentTime : 0;
         }
     }
+
+    const AUDIO_FORMATS = [
+        {extension: ".mp3", type: "audio/mpeg"},
+        {extension: ".ogg", type: "audio/ogg"}
+    ];
 
     /**
      * ImageLoader class — loads an image and notifies listeners when ready.
@@ -2786,7 +2884,7 @@ goog.events.EventHandler.typeArray_ = [];
         load() {
             // Only run if image hasn't been loaded yet
             if (!this.image.src) {
-                const onLoad = (() => {
+                var onLoad = goog.bind(() => {
                     if (!this.loaded) {
                         this.loaded = true;
                         // Call all queued callbacks
@@ -2794,7 +2892,7 @@ goog.events.EventHandler.typeArray_ = [];
                             callback();
                         }
                     }
-                });
+                }, this);
 
                 this.image.onload = onLoad;
                 this.image.src = this.src;
@@ -2806,7 +2904,6 @@ goog.events.EventHandler.typeArray_ = [];
             }
         }
     }
-
     function onImageLoaded(loader, callback) {
         loader.loaded ? callback() : loader.callbacks.push(callback)
     };
@@ -2819,9 +2916,9 @@ goog.events.EventHandler.typeArray_ = [];
             this.imageLoader = new ImageLoader(imageUrl);
             this.isReady = false;
 
-            onImageLoaded(this.imageLoader, () => {
+            onImageLoaded(this.imageLoader, goog.bind(() => {
                 this.isReady = true;
-            });
+            }, this));
         }
 
         getWidth(index) {
@@ -3502,9 +3599,9 @@ goog.events.EventHandler.typeArray_ = [];
         // Play frame animation sequence (K)
         playFrameSequence(frames, delay, repeatDelay, repeatCount = 1, looping = false) {
             if (repeatDelay) {
-                this.timeouts.push(setTimeout(() => {
+                this.timeouts.push(setTimeout(goog.bind(() => {
                     this.playFrameSequence(frames, delay, 0, repeatCount, looping);
-                }, repeatDelay));
+                }, this), repeatDelay));
                 return;
             }
 
@@ -3517,9 +3614,9 @@ goog.events.EventHandler.typeArray_ = [];
 
             for (let i = 0; i < repeatCount; i++) {
                 frames.forEach(frame => {
-                    this.transition.addStep(function () {
+                    this.transition.addStep(goog.bind(function () {
                         Sprite.setFrame(this, frame);
-                    });
+                    }, this));
                     this.transition.addPauseStep(delay);
                 });
             }
@@ -3800,8 +3897,8 @@ goog.events.EventHandler.typeArray_ = [];
             for (let key in this.digitSprites) Sprite.setFrame(this.digitSprites[key], td[0]);
             this.currentScore = 0;
             this.digitSprites[0].show(true);
-            this.effectSprites[0].s.style.opacity = 0;
-            this.effectSprites[1].s.style.opacity = 0;
+            this.effectSprites[0].element.style.opacity = 0;
+            this.effectSprites[1].element.style.opacity = 0;
             this.effectSprites[0].show(true);
             this.effectSprites[1].show(true);
             this.pendingScoreDiffs = [];
@@ -3852,7 +3949,7 @@ goog.events.EventHandler.typeArray_ = [];
                         Sprite.setFrame(this.effectSprites[i], frame);
                         Sprite.animateOpacity(this.effectSprites[i], 300, 0, 1);
                     } else {
-                        this.effectSprites[i].s.style.opacity = 0;
+                        this.effectSprites[i].element.style.opacity = 0;
                     }
                 }
 
@@ -3929,11 +4026,8 @@ goog.events.EventHandler.typeArray_ = [];
     function playSwapAnimation(ctx, startPos, targetSprite, frameIndex) {
         const mainSprite = ctx.backgroundSprite;
 
-        // Stop any ongoing animation
-        if (ctx.animation) ctx.animation.stop();
-
-        // Create a new animation sequence
-        ctx.animation = new AnimationSequence();
+        if (ctx.animation) ctx.animation.stop(); // Stop any ongoing animation
+        ctx.animation = new AnimationSequence(); // Create a new animation sequence
 
         // Setup initial display state
         mainSprite.show(true);
@@ -4115,7 +4209,7 @@ goog.events.EventHandler.typeArray_ = [];
     }
     defineSingleton(SpritePool);
 
-    class GridEntity extends goog.Disposable {
+    class GridEntity extends goog.Disposable { // T
         constructor(config) {
             super();
 
@@ -4160,8 +4254,8 @@ goog.events.EventHandler.typeArray_ = [];
 
             // Behavior triggers
             this.behaviors = [
-                new ConditionalTrigger(this.onReady, this.onDisappear, true),
-                new ConditionalTrigger(this.onActive, this.onFinish, false, 400)
+                new ConditionalTrigger(goog.bind(this.onReady, this), goog.bind(this.onDisappear, this), true),
+                new ConditionalTrigger(goog.bind(this.onActive, this), goog.bind(this.onFinish, this), false, 400)
             ];
         }
 
@@ -4214,6 +4308,9 @@ goog.events.EventHandler.typeArray_ = [];
         getCellIndex() { return this.tileIndex; }
         getRow() { return Math.floor(this.tileIndex / 23); }
         getColumn() { return this.tileIndex % 23; }
+        getName() {
+            return this.name;
+        }
 
         cycleFrame() {
             let index = this.grid.indexOf(this.mainSprite.getFrame());
@@ -4341,9 +4438,9 @@ goog.events.EventHandler.typeArray_ = [];
 
         onImpact() {
             this.mainSprite.playFrameSequence(Md, 400);
-            setTimeout(() => {
+            setTimeout(goog.bind(() => {
                 this.state = 2;
-            }, 500);
+            }, this), 500);
         }
     }
 
@@ -4412,9 +4509,6 @@ goog.events.EventHandler.typeArray_ = [];
     }
     defineSingleton(ObjectPoolManager);
 
-    var ItemDefinitions = {}; // Registry of base item data
-    var ItemClasses = null; // Registry mapping item names to their constructors
-
     // Item factory
     function createItem(name) {
         if (!(name in ItemDefinitions) || !(name in ItemClasses))
@@ -4423,7 +4517,11 @@ goog.events.EventHandler.typeArray_ = [];
     }
     createItem = createItem;
 
-    // Weighted random loot generator
+    /**
+     * Weighted random loot generator
+     * @param {ObjectPoolManager} pool 
+     * @returns 
+     */
     function generateRandomItem(pool) {
         const roll = random(pool.count);
         let cumulative = 0;
@@ -4578,13 +4676,13 @@ goog.events.EventHandler.typeArray_ = [];
 
         init() {
             this.cellMap = new MapEx();
-            getAllGridCells().forEach(function(a) {
+            goog.structs.forEach(getAllGridCells(), function(a) {
                 this.cellMap.set(a, {
                     usedCount: 0, // Gc
                     specialCount: 0, // Ic
                     totalCount: 0 // Jc
                 })
-            }, this);
+            }, this)
 
             this.availableCells = new SetEx;
             this.availableCells.addAll(getAllGridCells(true));
@@ -4666,7 +4764,7 @@ goog.events.EventHandler.typeArray_ = [];
     function selectRandomAvailableCell(grid) {
         if (grid.availableCells.isEmpty()) return -1;
 
-        const available = grid.availableCells.getValues();
+        const available = grid.availableCells.values();
         return available[random(available.length)];
     }
 
@@ -4736,7 +4834,7 @@ goog.events.EventHandler.typeArray_ = [];
         const startCell = selectRandomAvailableCell(grid);
         const result = [];
 
-        forEachItem(grid.patterns[patternId], function (offset) {
+        goog.structs.forEach(grid.patterns[patternId], function (offset) {
             let target = (offset + startCell) % 207;
             if (this.availableCells.contains(target)) {
                 result.push(target);
@@ -4746,7 +4844,7 @@ goog.events.EventHandler.typeArray_ = [];
         return result;
     }
 
-    class TileSpawner extends goog.Disposable {
+    class TileSpawner extends goog.Disposable { // se
         constructor() {
             super();
 
@@ -4764,8 +4862,8 @@ goog.events.EventHandler.typeArray_ = [];
         init(parentElement) {
             this.rootElement = parentElement;
 
-            this.itemMap = new MapEx();   // stores all items by ID
-            this.activeItems = new SetEx(); // stores active items
+            this.itemMap = new MapEx(); // stores all items by ID (Ra)
+            this.activeItems = new SetEx(); // stores active items (Ca)
 
             this.lastSpawnTime = getTime();
             this.spawnRate = 1;
@@ -4779,15 +4877,15 @@ goog.events.EventHandler.typeArray_ = [];
 
             const now = getTime();
 
-            let missingItemCount = 8 - this.activeItems.va();
-
+            let missingItemCount = 8 - this.activeItems.size();
             if (now - this.lastSpawnTime > 2500 && missingItemCount > 0) {
                 // number of items to spawn this tick
                 for (let i = 0; i < random(missingItemCount) + 1; i++) {
-                    const item = generateRandomItem(this.itemSource);
+                    const item = generateRandomItem(this.objectPool);
 
                     // special logic for "steamer"
-                    let spawnCell = (item.getName() === "steamer") ? find2x2Block(this.gridManager) : selectRandomAvailableCell(this.gridManager);
+                    let spawnCell = -1;
+                    spawnCell = (item.getName() === "steamer") ? find2x2Block(this.gridManager) : selectRandomAvailableCell(this.gridManager);
                     if (spawnCell !== -1) spawnItem(this, item, spawnCell);
                 }
 
@@ -4820,10 +4918,10 @@ goog.events.EventHandler.typeArray_ = [];
      * @returns 
      */
     function updateItems(obj, currentTime) {
-        if (currentTime - obj.lastUpdateTime <= 40) return;
+        if (currentTime - obj.lastSpawnTime <= 40) return;
 
         // Update each item in Ca
-        forEachItem(obj.activeItems, function(item) {
+        goog.structs.forEach(obj.activeItems, function(item) {
             item.update(currentTime);
 
             // Remove items that are not in states 0 or 1
@@ -4841,12 +4939,12 @@ goog.events.EventHandler.typeArray_ = [];
             }
         }, obj);
 
-        obj.lastUpdateTime = currentTime;
+        obj.lastSpawnTime = currentTime;
     }
 
     // Generate items for a grid based on a pattern
     function fillGridWithItems(obj, patternCount) {
-        const sequence = generatePatternedCellSequence(obj.g, patternCount);
+        const sequence = generatePatternedCellSequence(obj.gridManager, patternCount);
         initializeObjectCounter(obj.objectPool, patternCount);
 
         sequence.forEach(function(cell) {
@@ -4865,6 +4963,7 @@ goog.events.EventHandler.typeArray_ = [];
      * @param {Point|Point[]} positions - Single position or array of positions to place the item.
      */
     function spawnItem(tileSpawner, item, positions) {
+        console.log(tileSpawner, item, positions);
         var addItemToGrid = (it, pos) => {
             tileSpawner.itemMap.set(pos, it);   // Map grid position → item
             tileSpawner.activeItems.add(it);        // Track active items
@@ -4880,7 +4979,7 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         attachSpritesToContainer(item, tileSpawner.rootElement);
-        item.zb *= tileSpawner.spawnRate; // Apply spawn rate multiplier
+        item.texture *= tileSpawner.spawnRate; // Apply spawn rate multiplier
     }
     spawnItem = spawnItem
 
@@ -4921,7 +5020,6 @@ goog.events.EventHandler.typeArray_ = [];
                 snake.segments[i].mainSprite.show(i <= snakeBodyVisible + 1);
             }
         }
-
         snakeBodyVisible++;
     };
 
@@ -4984,9 +5082,6 @@ goog.events.EventHandler.typeArray_ = [];
             this.stepPixel = 20; // used for pixel computations
             this.currentStepFrame = 0; // ed cached step frame
             this.patternManager = GridPatternManager.getInstance();
-
-            // helpers for certain display/cache
-            this.cachedLastActive = null;
         }
 
         /**
@@ -5555,8 +5650,8 @@ goog.events.EventHandler.typeArray_ = [];
             this.scoreDigits = [];
 
             this.TileSpawner = TileSpawner.getInstance(); // ka
-            gridClass = this.TileSpawner;
             this.TileSpawner.init(this.gridContainer);
+            gridClass = this.TileSpawner;
             this.snake = new SnakeController(this.gridContainer); // N
             snakeClass = this.snake;
             boostFunction = this.snake.setSpeedParameters;
@@ -5572,7 +5667,7 @@ goog.events.EventHandler.typeArray_ = [];
             this.soundButton.show(false);
 
             this.muted = false; // Ka
-            this.music = new AudioPlayer(["./assets/snake"]); // la
+            this.music = new AudioSequencePlayer(["./assets/snake"]); // la
 
             this.mainSprite = new SpriteGroup(31, MAIN_SPR_POS.x, MAIN_SPR_POS.y, this.root, 100); // cb
             this.mainSprite.show(false);
@@ -5580,11 +5675,11 @@ goog.events.EventHandler.typeArray_ = [];
             this.tutorialRoot = null;
             this.tutorialButtons = [];
 
-            this.uiSeq = null;
-            this.tutSeq = null;
-            this.introSeq = null;
+            this.introSeq = null; // this.ec
+            this.tutSeq = null; // this.fc
+            this.uiSeq = null; // this.dc
 
-            this.visibilityTimer = new VisibilityTimer(3E4, this.onVisibilityLost, this.onVisibilityReturn);
+            this.visibilityTimer = new VisibilityTimer(3E4, goog.bind(this.onVisibilityLost, this), goog.bind(this.onVisibilityReturn, this));
             window.isAnimationPaused = false;
 
             new SpriteGroup(19, BG_LEFT_POS.x, BG_LEFT_POS.y, this.root, 100);
@@ -5628,7 +5723,7 @@ goog.events.EventHandler.typeArray_ = [];
             this.visibilityTimer.resetTimer();
 
             let seq = new AnimationSequence();
-            this.uiSeq = seq;
+            this.introSeq = seq;
 
             seq.addStep(() => Sprite.fadeOut(this.mainSprite));
             seq.addStep((t) => {
@@ -5659,7 +5754,7 @@ goog.events.EventHandler.typeArray_ = [];
             });
 
             seq.addStep(() => {
-                this.onVisibilityLost();
+                initTutorial(this);
             });
 
             seq.play();
@@ -5689,7 +5784,7 @@ goog.events.EventHandler.typeArray_ = [];
         flashStartButton() {
             if ("init" == this.state) {
                 this.playButton.playFrameSequence(playFrameAnim, 80);
-                setTimeout(this.flashStartButton, 3E3);
+                setTimeout(goog.bind(this.flashStartButton, this), 3E3);
             }
         }
 
@@ -5723,7 +5818,7 @@ goog.events.EventHandler.typeArray_ = [];
                         if (comboStr) {
                             let spawner = this.TileSpawner;
                             for (let i = 0; i < comboStr.length; i++)
-                                spawnItem(spawner, createItem("steamer"), find2x2Block(spawner.grid));
+                                spawnItem(spawner, createItem("steamer"), find2x2Block(spawner.gridManager));
 
                             if (comboStr.length === 6) fillGridWithItems(spawner, comboStr[random(comboStr.length)]);
                         }
@@ -5754,13 +5849,14 @@ goog.events.EventHandler.typeArray_ = [];
             }
         }
 
-        td() {
+        handleClick() {
             this.visibilityTimer.resetTimer();
             if ("tutorial_end" == this.state) {
                 hideTutorialUI(this);
-                ResumeGame(this);
+                ResetGame(this);
             } 
         }
+
         playTutorialSequence() {
             if ("tutorial_start" == this.state || "tutorial_end" == this.state) {
                 var seq = new AnimationSequence();
@@ -5769,9 +5865,10 @@ goog.events.EventHandler.typeArray_ = [];
                     seq.addStep(createFrameAnimation(this.tutorialButtons[key], TUTORIAL_BUTTON_FRAMES[key], TUTORIAL_BUTTON_POS[key], 29));
                     seq.addPauseStep(300);
                 }
-                seq.addStep(function () {
+                goog.bind
+                seq.addStep(goog.bind(function () {
                     if ("tutorial_start" == this.state) this.state = "tutorial_end";
-                });
+                }, this));
                 seq.play();
                 setTimeout(this.playTutorialSequence, 3E3);
             }
@@ -5780,7 +5877,7 @@ goog.events.EventHandler.typeArray_ = [];
             this.visibilityTimer.resetTimer();
             this.muted = !this.muted;
             Sprite.setFrame(this.soundButton, this.muted ? 90 : 89);
-            this.music.audio.muted = this.muted ? false : true;
+            this.music.audioElement.muted = this.muted ? false : true;
         }
 
         showGameplayUI() {
@@ -5789,7 +5886,7 @@ goog.events.EventHandler.typeArray_ = [];
             ResetGame(this);
         }
 
-        gameLoop = () => {
+        gameLoop() {
             var currentTime = getTime();
             let deltaTime = Math.min(50, currentTime - this.lastUpdateTime);
 
@@ -5805,8 +5902,8 @@ goog.events.EventHandler.typeArray_ = [];
                     break;
             }
 
+            requestAnimationFrame(goog.bind(this.gameLoop, this));
             this.lastUpdateTime = currentTime;
-            requestAnimationFrame(this.gameLoop);
         }
 
         /**
@@ -5821,7 +5918,7 @@ goog.events.EventHandler.typeArray_ = [];
             this.TileSpawner.update(currentTime);
             this.snake.move(currentTime);
             this.scoreDisplay.processPendingEffects(currentTime);
-            this.timerDisplay.update(Math.floor(game.remainingTime / 1000));
+            this.timerDisplay.update(Math.floor(this.remainingTime / 1000));
 
             // Countdown timer
             this.remainingTime -= deltaTime;
@@ -5906,8 +6003,8 @@ goog.events.EventHandler.typeArray_ = [];
 
         // Update entity parameters from registry
         const entity = game.snake;
-        entity.Fb = ObjectRegistry[phaseId].V;
-        entity.Ab = entity.Fb * entity.Gb;
+        entity.baseDuration = ObjectRegistry[phaseId].V;
+        entity.moveDuration = entity.baseDuration * entity.speedMultiplier;
         game.TileSpawner.spawnScale = ObjectRegistry[phaseId].U;
     }
 
@@ -5921,7 +6018,7 @@ goog.events.EventHandler.typeArray_ = [];
 
         // Animate entity 38 times with short pauses
         for (let i = 1; i < 39; i++) {
-            seq.addStep(runTutorialStep(game.snake));
+            seq.addStep(goog.bind(runTutorialStep, game, game.snake));
             seq.addPauseStep(150);
         }
 
@@ -5945,7 +6042,7 @@ goog.events.EventHandler.typeArray_ = [];
 
         // Bounce animation 2
         seq.addStep(function (t) {
-            Sprite.setPosition(game.playButton, START_BUTTON_POS.x, START_BUTTON_POS.y - 80 * (0.25 - (0.5 - t) * (0.5 - t)));
+            Sprite.setPosition(game.playButton, START_BUTTON_POS.x, START_BUTTON_POS.y - 80 * (.25 - (.5 - t) * (.5 - t)));
         }, 700);
 
         // Run "ready" callback
@@ -5987,7 +6084,7 @@ goog.events.EventHandler.typeArray_ = [];
         game.remainingTime = minutes;
         switchGamePhase(game, 1);
 
-        game.timerDisplay.update(Math.floor(a.remainingTime / 1E3));
+        game.timerDisplay.update(Math.floor(game.remainingTime / 1E3));
         game.timerDisplay.show(true);
 
         game.score = 0;
@@ -6003,7 +6100,7 @@ goog.events.EventHandler.typeArray_ = [];
         });
         game.soundButton.show(true);
         game.music.play();
-        game.music.audio.muted = !game.muted;
+        game.music.audioElement.muted = !game.muted;
     };
 
     /**
@@ -6068,22 +6165,22 @@ goog.events.EventHandler.typeArray_ = [];
 
     /** @param {GameController} game */
     function initTutorial(game) {
-        game.tutorialRoot = new ClickableElement(94, TUTORIAL_ROOT_POS.x, TUTORIAL_ROOT_POS.y, game.v, 100);
+        game.tutorialRoot = new ClickableElement(94, TUTORIAL_ROOT_POS.x, TUTORIAL_ROOT_POS.y, game.root, 100);
         for (var key in TUTORIAL_BUTTON_FRAMES) {
             game.tutorialButtons[key] = new ClickableElement(TUTORIAL_BUTTON_FRAMES[key][0], TUTORIAL_BUTTON_POS[key].x, TUTORIAL_BUTTON_POS[key].y, game.root, 101);
-            game.eventHandler.listen(game.tutorialButtons[key], "click", game.td);
+            game.eventHandler.listen(game.tutorialButtons[key], "click", game.handleClick);
             game.tutorialRoot.add(game.tutorialButtons[key]);
         }
         game.state = "tutorial_start";
-        game.eventHandler.listen(game.tutorialRoot, "click", game.td);
-        game.sd()
+        game.eventHandler.listen(game.tutorialRoot, "click", game.handleClick);
+        game.playTutorialSequence()
     };
 
     /** @param {GameController} game */
-    function hideTutorialUI (game) {
+    function hideTutorialUI(game) {
         Sprite.fadeOut(game.tutorialRoot);
         ArrayUtils.forEach(game.tutorialButtons, function (a) {
-            Sprite.fadeOut(game)
+            Sprite.fadeOut(a)
         });
         game.tutorialRoot.show(false)
     };
