@@ -1,7 +1,7 @@
-var spawnItem = null;
-var createItem = null;
-var find2x2Block = null;
-var gridClass = null;
+var spawnItem_ = null;
+var createItem_ = null;
+var find2x2Block_ = null;
+var tileSpawner_ = null;
 var boostFunction = null;
 var snakeClass = null;
 
@@ -17,72 +17,6 @@ function defineSingleton(cls) {
         }
         return cls._instance;
     };
-}
-
-/** ---------------------------
- * Array Utilities
- * --------------------------- */
-const ArrayUtils = {
-    indexOf(array, value, start = 0) {
-        goog.asserts.assert(array != null);
-        if (Array.prototype.indexOf) {
-            return Array.prototype.indexOf.call(array, value, start);
-        }
-        if (typeof array === "string") {
-            return array.indexOf(value, start);
-        }
-        for (let i = start; i < array.length; i++) {
-            if (i in array && array[i] === value) return i;
-        }
-        return -1;
-    },
-    forEach(array, callback, thisArg) {
-        goog.asserts.assert(array != null);
-        if (Array.prototype.forEach) {
-            Array.prototype.forEach.call(array, callback, thisArg);
-        } else {
-            for (let i = 0; i < array.length; i++) {
-                if (i in array) callback.call(thisArg, array[i], i, array);
-            }
-        }
-    },
-    forEachReverse(array, callback) {
-        const copy = typeof array === "string" ? array.split("") : array;
-        for (let i = copy.length - 1; i >= 0; i--) {
-            if (i in copy) callback(copy[i], i, array);
-        }
-    },
-    every(array, callback, thisArg) {
-        goog.asserts.assert(array != null);
-        if (Array.prototype.every) {
-            return Array.prototype.every.call(array, callback, thisArg);
-        }
-        for (let i = 0; i < array.length; i++) {
-            if (i in array && !callback.call(thisArg, array[i], i, array)) {
-                return false;
-            }
-        }
-        return true;
-    },
-    slice(array, start, end) {
-        goog.asserts.assert(array != null);
-        return Array.prototype.slice.call(array, start, end);
-    }
-};
-/**
- * Returns an array of all keys in an object.
- * @param {Object} obj - The object to extract keys from.
- * @returns {Array} Array of object keys.
- */
-function getObjectKeys(obj) {
-    const keys = [];
-    for (const key in obj) {
-        keys.push(key);
-    }
-    return keys;
-}
-function forEachObject(a, b, c) {
-    for (var d in a) b.call(c, a[d], d, a)
 }
 
 var goog = goog || {};
@@ -136,6 +70,7 @@ goog.removeUid = function (a) {
         delete a[goog.UID_PROPERTY_]
     } catch (b) { }
 };
+goog.nullFunction = function () {};
 goog.UID_PROPERTY_ = "closure_uid_" + Math.floor(2147483648 * Math.random()).toString(36);
 goog.uidCounter_ = 0;
 goog.getHashCode = goog.getUid;
@@ -157,7 +92,7 @@ goog.bindJs_ = function (a, b, c) {
 		return a.apply(d, arguments)
 	}
 };
-goog.bind = function (a, b, c) {
+goog.bind = function() {
 	goog.bind = Function.prototype.bind && Function.prototype.bind.toString().indexOf("native code") != -1 ? goog.bindNative_ : goog.bindJs_;
 	return goog.bind.apply(null, arguments)
 };
@@ -523,29 +458,26 @@ goog.object.forEach = function (a, b, c) {
     for (var d in a) b.call(c, a[d], d, a)
 };
 goog.object.filter = function (a, b, c) {
-    var d = {}, e;
-    for (e in a) b.call(c, a[e], e, a) && (d[e] = a[e]);
+    var d = {};
+    for (var e in a) b.call(c, a[e], e, a) && (d[e] = a[e]);
     return d
 };
 goog.object.map = function (a, b, c) {
-    var d = {}, e;
-    for (e in a) d[e] = b.call(c, a[e], e, a);
+    var d = {};
+    for (var e in a) d[e] = b.call(c, a[e], e, a);
     return d
 };
 goog.object.some = function (a, b, c) {
-    for (var d in a)
-        if (b.call(c, a[d], d, a)) return true;
+    for (var d in a) if (b.call(c, a[d], d, a)) return true;
     return false
 };
 goog.object.every = function (a, b, c) {
-    for (var d in a)
-        if (!b.call(c, a[d], d, a)) return false;
+    for (var d in a) if (!b.call(c, a[d], d, a)) return false;
     return true
 };
 goog.object.getCount = function (a) {
-    var b = 0,
-        c;
-    for (c in a) b++;
+    var b = 0;
+    for (var _ in a) b++;
     return b
 };
 goog.object.getAnyKey = function (a) {
@@ -558,17 +490,13 @@ goog.object.contains = function (a, b) {
     return goog.object.containsValue(a, b)
 };
 goog.object.getValues = function (a) {
-    var b = [],
-        c = 0,
-        d;
-    for (d in a) b[c++] = a[d];
+    var b = [], c = 0;
+    for (var d in a) b[c++] = a[d];
     return b
 };
 goog.object.getKeys = function (a) {
-    var b = [],
-        c = 0,
-        d;
-    for (d in a) b[c++] = d;
+    var b = [], c = 0;
+    for (var d in a) b[c++] = d;
     return b
 };
 goog.object.containsKey = function (a, b) {
@@ -587,7 +515,7 @@ goog.object.findValue = function (a, b, c) {
     return (b = goog.object.findKey(a, b, c)) && a[b]
 };
 goog.object.isEmpty = function (a) {
-    for (var b in a) return false;
+    for (var _b in a) if(Object.hasOwn(a, _b)) return false;
     return true
 };
 goog.object.clear = function (a) {
@@ -708,21 +636,14 @@ goog.array = {};
 goog.array.peek = function (a) {
     return a[a.length - 1]
 };
-goog.array.ARRAY_PROTOTYPE_ = Array.prototype;
-goog.array.indexOf = goog.array.ARRAY_PROTOTYPE_.indexOf ? function (a, b, c) {
-    goog.asserts.assert(null != a.length);
-    return goog.array.ARRAY_PROTOTYPE_.indexOf.call(a, b, c)
-} : function (a, b, c) {
+goog.array.indexOf = function (a, b, c) {
     c = null == c ? 0 : 0 > c ? Math.max(0, a.length + c) : c;
     if (goog.isString(a)) return !goog.isString(b) || 1 != b.length ? -1 : a.indexOf(b, c);
     for (; c < a.length; c++)
         if (c in a && a[c] === b) return c;
     return -1
 };
-goog.array.lastIndexOf = goog.array.ARRAY_PROTOTYPE_.lastIndexOf ? function (a, b, c) {
-    goog.asserts.assert(null != a.length);
-    return goog.array.ARRAY_PROTOTYPE_.lastIndexOf.call(a, b, null == c ? a.length - 1 : c)
-} : function (a, b, c) {
+goog.array.lastIndexOf = function (a, b, c) {
     c = null == c ? a.length - 1 : c;
     0 > c && (c = Math.max(0, a.length + c));
     if (goog.isString(a)) return !goog.isString(b) || 1 != b.length ? -1 : a.lastIndexOf(b, c);
@@ -730,19 +651,13 @@ goog.array.lastIndexOf = goog.array.ARRAY_PROTOTYPE_.lastIndexOf ? function (a, 
         if (c in a && a[c] === b) return c;
     return -1
 };
-goog.array.forEach = goog.array.ARRAY_PROTOTYPE_.forEach ? function (a, b, c) {
-    goog.asserts.assert(null != a.length);
-    goog.array.ARRAY_PROTOTYPE_.forEach.call(a, b, c)
-} : function (a, b, c) {
+goog.array.forEach = function (a, b, c) {
     for (var d = a.length, e = goog.isString(a) ? a.split("") : a, f = 0; f < d; f++) f in e && b.call(c, e[f], f, a)
 };
 goog.array.forEachRight = function (a, b, c) {
     for (var d = a.length, e = goog.isString(a) ? a.split("") : a, d = d - 1; 0 <= d; --d) d in e && b.call(c, e[d], d, a)
 };
-goog.array.filter = goog.array.ARRAY_PROTOTYPE_.filter ? function (a, b, c) {
-    goog.asserts.assert(null != a.length);
-    return goog.array.ARRAY_PROTOTYPE_.filter.call(a, b, c)
-} : function (a, b, c) {
+goog.array.filter = function (a, b, c) {
     for (var d = a.length, e = [], f = 0, g = goog.isString(a) ? a.split("") : a, h = 0; h < d; h++)
         if (h in g) {
             var j = g[h];
@@ -750,10 +665,7 @@ goog.array.filter = goog.array.ARRAY_PROTOTYPE_.filter ? function (a, b, c) {
         }
     return e
 };
-goog.array.map = goog.array.ARRAY_PROTOTYPE_.map ? function (a, b, c) {
-    goog.asserts.assert(null != a.length);
-    return goog.array.ARRAY_PROTOTYPE_.map.call(a, b, c)
-} : function (a, b, c) {
+goog.array.map = function (a, b, c) {
     for (var d = a.length, e = Array(d), f = goog.isString(a) ? a.split("") : a, g = 0; g < d; g++) g in f && (e[g] = b.call(c, f[g], g, a));
     return e
 };
@@ -773,18 +685,12 @@ goog.array.reduceRight = function (a, b, c, d) {
     });
     return e
 };
-goog.array.some = goog.array.ARRAY_PROTOTYPE_.some ? function (a, b, c) {
-    goog.asserts.assert(null != a.length);
-    return goog.array.ARRAY_PROTOTYPE_.some.call(a, b, c)
-} : function (a, b, c) {
+goog.array.some = function (a, b, c) {
     for (var d = a.length, e = goog.isString(a) ? a.split("") : a, f = 0; f < d; f++)
         if (f in e && b.call(c, e[f], f, a)) return true;
     return false
 };
-goog.array.every = goog.array.ARRAY_PROTOTYPE_.every ? function (a, b, c) {
-    goog.asserts.assert(null != a.length);
-    return goog.array.ARRAY_PROTOTYPE_.every.call(a, b, c)
-} : function (a, b, c) {
+goog.array.every = function (a, b, c) {
     for (var d = a.length, e = goog.isString(a) ? a.split("") : a, f = 0; f < d; f++)
         if (f in e && !b.call(c, e[f], f, a)) return false;
     return true
@@ -839,14 +745,14 @@ goog.array.remove = function (a, b) {
 };
 goog.array.removeAt = function (a, b) {
     goog.asserts.assert(null != a.length);
-    return 1 == goog.array.ARRAY_PROTOTYPE_.splice.call(a, b, 1).length
+    return 1 == Array.prototype.splice.call(a, b, 1).length
 };
 goog.array.removeIf = function (a, b, c) {
     b = goog.array.findIndex(a, b, c);
     return 0 <= b ? (goog.array.removeAt(a, b), true) : false
 };
 goog.array.concat = function (a) {
-    return goog.array.ARRAY_PROTOTYPE_.concat.apply(goog.array.ARRAY_PROTOTYPE_, arguments)
+    return Array.prototype.concat.apply(Array.prototype, arguments)
 };
 goog.array.clone = function (a) {
     if (goog.isArray(a)) return goog.array.concat(a);
@@ -868,11 +774,11 @@ goog.array.extend = function (a, b) {
 };
 goog.array.splice = function (a, b, c, d) {
     goog.asserts.assert(null != a.length);
-    return goog.array.ARRAY_PROTOTYPE_.splice.apply(a, goog.array.slice(arguments, 1))
+    return Array.prototype.splice.apply(a, goog.array.slice(arguments, 1))
 };
 goog.array.slice = function (a, b, c) {
     goog.asserts.assert(null != a.length);
-    return 2 >= arguments.length ? goog.array.ARRAY_PROTOTYPE_.slice.call(a, b) : goog.array.ARRAY_PROTOTYPE_.slice.call(a, b, c)
+    return 2 >= arguments.length ? Array.prototype.splice.call(a, b) : Array.prototype.splice.call(a, b, c)
 };
 goog.array.removeDuplicates = function (a, b) {
     for (var c = b || a, d = {}, e = 0, f = 0; f < a.length;) {
@@ -899,7 +805,7 @@ goog.array.binarySearch_ = function (a, b, c, d, e) {
 };
 goog.array.sort = function (a, b) {
     goog.asserts.assert(null != a.length);
-    goog.array.ARRAY_PROTOTYPE_.sort.call(a, b || goog.array.defaultCompare)
+    Array.prototype.sort.call(a, b || goog.array.defaultCompare)
 };
 goog.array.stableSort = function (a, b) {
     for (var c = 0; c < a.length; c++) a[c] = {
@@ -969,7 +875,7 @@ goog.array.flatten = function (a) {
 };
 goog.array.rotate = function (a, b) {
     goog.asserts.assert(null != a.length);
-    a.length && (b %= a.length, 0 < b ? goog.array.ARRAY_PROTOTYPE_.unshift.apply(a, a.splice(-b, b)) : 0 > b && goog.array.ARRAY_PROTOTYPE_.push.apply(a, a.splice(0, -b)));
+    a.length && (b %= a.length, 0 < b ? Array.prototype.unshift.apply(a, a.splice(-b, b)) : 0 > b && Array.prototype.push.apply(a, a.splice(0, -b)));
     return a
 };
 goog.array.zip = function (a) {
@@ -1171,194 +1077,196 @@ goog.structs.every = function (a, b, c) {
         if (!b.call(c, e[g], d && d[g], a)) return false;
     return true
 };
-goog.structs.Map = function (a, b) {
-    this.map_ = {};
-    this.keys_ = [];
-    var c = arguments.length;
-    if (1 < c) {
-        if (c % 2) throw Error("Uneven number of arguments");
-        for (var d = 0; d < c; d += 2) this.set(arguments[d], arguments[d + 1])
-    } else a && this.addAll(a)
+
+goog.structs.Map = class {
+    constructor(a) {
+        this.map_ = {};
+        this.keys_ = [];
+        var c = arguments.length;
+        if (1 < c) {
+            if (c % 2) throw Error("Uneven number of arguments");
+            for (var d = 0; d < c; d += 2) this.set(arguments[d], arguments[d + 1]);
+        } else a && this.addAll(a);
+    }
+    static defaultEquals(a, b) {
+        return a === b;
+    }
+    static hasKey_(a, b) {
+        return Object.prototype.hasOwnProperty.call(a, b);
+    }
+    getCount() {
+        return this.count_;
+    }
+    getValues() {
+        this.cleanupKeysArray_();
+        for (var a = [], b = 0; b < this.keys_.length; b++) a.push(this.map_[this.keys_[b]]);
+        return a;
+    }
+    getKeys() {
+        this.cleanupKeysArray_();
+        return this.keys_.concat();
+    }
+    containsKey(a) {
+        return goog.structs.Map.hasKey_(this.map_, a);
+    }
+    containsValue(a) {
+        for (var b = 0; b < this.keys_.length; b++) {
+            var c = this.keys_[b];
+            if (goog.structs.Map.hasKey_(this.map_, c) && this.map_[c] == a) return true;
+        }
+        return false;
+    }
+    equals(a, b) {
+        if (this === a) return true;
+        if (this.count_ != a.getCount()) return false;
+        var c = b || goog.structs.Map.defaultEquals;
+        this.cleanupKeysArray_();
+        for (var d, e = 0; d = this.keys_[e]; e++)
+            if (!c(this.get(d), a.get(d))) return false;
+        return true;
+    }
+    isEmpty() {
+        return 0 == this.count_;
+    }
+    clear() {
+        this.map_ = {};
+        this.version_ = this.count_ = this.keys_.length = 0;
+    }
+    remove(a) {
+        return goog.structs.Map.hasKey_(this.map_, a) ? (delete this.map_[a], this.count_--, this.version_++, this.keys_.length > 2 * this.count_ && this.cleanupKeysArray_(), true) : false;
+    }
+    cleanupKeysArray_() {
+        if (this.count_ != this.keys_.length) {
+            for (var a = 0, b = 0; a < this.keys_.length;) {
+                var c = this.keys_[a];
+                goog.structs.Map.hasKey_(this.map_, c) && (this.keys_[b++] = c);
+                a++;
+            }
+            this.keys_.length = b;
+        }
+        if (this.count_ != this.keys_.length) {
+            for (var d = {}, b = a = 0; a < this.keys_.length;) c = this.keys_[a], goog.structs.Map.hasKey_(d, c) || (this.keys_[b++] = c, d[c] = 1), a++;
+            this.keys_.length = b;
+        }
+    }
+    get(a, b) {
+        return goog.structs.Map.hasKey_(this.map_, a) ? this.map_[a] : b;
+    }
+    set(a, b) {
+        goog.structs.Map.hasKey_(this.map_, a) || (this.count_++, this.keys_.push(a), this.version_++);
+        this.map_[a] = b;
+    }
+    addAll(a) {
+        var b;
+        a instanceof goog.structs.Map ? (b = a.getKeys(), a = a.getValues()) : (b = goog.object.getKeys(a), a = goog.object.getValues(a));
+        for (var c = 0; c < b.length; c++) this.set(b[c], a[c]);
+    }
+    clone() {
+        return new goog.structs.Map(this);
+    }
+    transpose() {
+        for (var a = new goog.structs.Map, b = 0; b < this.keys_.length; b++) {
+            var c = this.keys_[b];
+            a.set(this.map_[c], c);
+        }
+        return a;
+    }
+    toObject() {
+        this.cleanupKeysArray_();
+        for (var a = {}, b = 0; b < this.keys_.length; b++) {
+            var c = this.keys_[b];
+            a[c] = this.map_[c];
+        }
+        return a;
+    }
+    getKeyIterator() {
+        return this.__iterator__(true);
+    }
+    getValueIterator() {
+        return this.__iterator__(false);
+    }
+    __iterator__(a) {
+        this.cleanupKeysArray_();
+        var b = 0, c = this.keys_, d = this.map_, e = this.version_, f = this, g = new goog.iter.Iterator;
+        g.next = function () {
+            for (; ;) {
+                if (e != f.version_) throw Error("The map has changed since the iterator was created");
+                if (b >= c.length) throw goog.iter.StopIteration;
+                var g = c[b++];
+                return a ? g : d[g];
+            }
+        };
+        return g;
+    }
 };
 goog.structs.Map.prototype.count_ = 0;
 goog.structs.Map.prototype.version_ = 0;
-goog.structs.Map.prototype.getCount = function () {
-    return this.count_
-};
-goog.structs.Map.prototype.getValues = function () {
-    this.cleanupKeysArray_();
-    for (var a = [], b = 0; b < this.keys_.length; b++) a.push(this.map_[this.keys_[b]]);
-    return a
-};
-goog.structs.Map.prototype.getKeys = function () {
-    this.cleanupKeysArray_();
-    return this.keys_.concat()
-};
-goog.structs.Map.prototype.containsKey = function (a) {
-    return goog.structs.Map.hasKey_(this.map_, a)
-};
-goog.structs.Map.prototype.containsValue = function (a) {
-    for (var b = 0; b < this.keys_.length; b++) {
-        var c = this.keys_[b];
-        if (goog.structs.Map.hasKey_(this.map_, c) && this.map_[c] == a) return true
+
+goog.structs.Set = class {
+    constructor(a) {
+        this.map_ = new goog.structs.Map;
+        a && this.addAll(a);
     }
-    return false
-};
-goog.structs.Map.prototype.equals = function (a, b) {
-    if (this === a) return true;
-    if (this.count_ != a.getCount()) return false;
-    var c = b || goog.structs.Map.defaultEquals;
-    this.cleanupKeysArray_();
-    for (var d, e = 0; d = this.keys_[e]; e++)
-        if (!c(this.get(d), a.get(d))) return false;
-    return true
-};
-goog.structs.Map.defaultEquals = function (a, b) {
-    return a === b
-};
-goog.structs.Map.prototype.isEmpty = function () {
-    return 0 == this.count_
-};
-goog.structs.Map.prototype.clear = function () {
-    this.map_ = {};
-    this.version_ = this.count_ = this.keys_.length = 0
-};
-goog.structs.Map.prototype.remove = function (a) {
-    return goog.structs.Map.hasKey_(this.map_, a) ? (delete this.map_[a], this.count_--, this.version_++, this.keys_.length > 2 * this.count_ && this.cleanupKeysArray_(), true) : false
-};
-goog.structs.Map.prototype.cleanupKeysArray_ = function () {
-    if (this.count_ != this.keys_.length) {
-        for (var a = 0, b = 0; a < this.keys_.length;) {
-            var c = this.keys_[a];
-            goog.structs.Map.hasKey_(this.map_, c) && (this.keys_[b++] = c);
-            a++
+    static getKey_(a) {
+        var b = typeof a;
+        return "object" == b && a || "function" == b ? "o" + goog.getUid(a) : b.substr(0, 1) + a;
+    }
+    getCount() {
+        return this.map_.getCount();
+    }
+    add(a) {
+        this.map_.set(goog.structs.Set.getKey_(a), a);
+    }
+    addAll(a) {
+        for (var a = goog.structs.getValues(a), b = a.length, c = 0; c < b; c++) this.add(a[c]);
+    }
+    removeAll(a) {
+        for (var a = goog.structs.getValues(a), b = a.length, c = 0; c < b; c++) this.remove(a[c]);
+    }
+    remove(a) {
+        return this.map_.remove(goog.structs.Set.getKey_(a));
+    }
+    clear() {
+        this.map_.clear();
+    }
+    isEmpty() {
+        return this.map_.isEmpty();
+    }
+    contains(a) {
+        return this.map_.containsKey(goog.structs.Set.getKey_(a));
+    }
+    containsAll(a) {
+        return goog.structs.every(a, this.contains, this);
+    }
+    intersection(a) {
+        for (var b = new goog.structs.Set, a = goog.structs.getValues(a), c = 0; c < a.length; c++) {
+            var d = a[c];
+            this.contains(d) && b.add(d);
         }
-        this.keys_.length = b
+        return b;
     }
-    if (this.count_ != this.keys_.length) {
-        for (var d = {}, b = a = 0; a < this.keys_.length;) c = this.keys_[a], goog.structs.Map.hasKey_(d, c) || (this.keys_[b++] = c, d[c] = 1), a++;
-        this.keys_.length = b
+    getValues() {
+        return this.map_.getValues();
+    }
+    clone() {
+        return new goog.structs.Set(this);
+    }
+    equals(a) {
+        return this.getCount() == goog.structs.getCount(a) && this.isSubsetOf(a);
+    }
+    isSubsetOf(a) {
+        var b = goog.structs.getCount(a);
+        if (this.getCount() > b) return false;
+        !(a instanceof goog.structs.Set) && 5 < b && (a = new goog.structs.Set(a));
+        return goog.structs.every(this, function (b) {
+            return goog.structs.contains(a, b);
+        });
+    }
+    __iterator__() {
+        return this.map_.__iterator__(false);
     }
 };
-goog.structs.Map.prototype.get = function (a, b) {
-    return goog.structs.Map.hasKey_(this.map_, a) ? this.map_[a] : b
-};
-goog.structs.Map.prototype.set = function (a, b) {
-    goog.structs.Map.hasKey_(this.map_, a) || (this.count_++, this.keys_.push(a), this.version_++);
-    this.map_[a] = b
-};
-goog.structs.Map.prototype.addAll = function (a) {
-    var b;
-    a instanceof goog.structs.Map ? (b = a.getKeys(), a = a.getValues()) : (b = goog.object.getKeys(a), a = goog.object.getValues(a));
-    for (var c = 0; c < b.length; c++) this.set(b[c], a[c])
-};
-goog.structs.Map.prototype.clone = function () {
-    return new goog.structs.Map(this)
-};
-goog.structs.Map.prototype.transpose = function () {
-    for (var a = new goog.structs.Map, b = 0; b < this.keys_.length; b++) {
-        var c = this.keys_[b];
-        a.set(this.map_[c], c)
-    }
-    return a
-};
-goog.structs.Map.prototype.toObject = function () {
-    this.cleanupKeysArray_();
-    for (var a = {}, b = 0; b < this.keys_.length; b++) {
-        var c = this.keys_[b];
-        a[c] = this.map_[c]
-    }
-    return a
-};
-goog.structs.Map.prototype.getKeyIterator = function () {
-    return this.__iterator__(true)
-};
-goog.structs.Map.prototype.getValueIterator = function () {
-    return this.__iterator__(false)
-};
-goog.structs.Map.prototype.__iterator__ = function (a) {
-    this.cleanupKeysArray_();
-    var b = 0,
-        c = this.keys_,
-        d = this.map_,
-        e = this.version_,
-        f = this,
-        g = new goog.iter.Iterator;
-    g.next = function () {
-        for (; ;) {
-            if (e != f.version_) throw Error("The map has changed since the iterator was created");
-            if (b >= c.length) throw goog.iter.StopIteration;
-            var g = c[b++];
-            return a ? g : d[g]
-        }
-    };
-    return g
-};
-goog.structs.Map.hasKey_ = function (a, b) {
-    return Object.prototype.hasOwnProperty.call(a, b)
-};
-goog.structs.Set = function (a) {
-    this.map_ = new goog.structs.Map;
-    a && this.addAll(a)
-};
-goog.structs.Set.getKey_ = function (a) {
-    var b = typeof a;
-    return "object" == b && a || "function" == b ? "o" + goog.getUid(a) : b.substr(0, 1) + a
-};
-goog.structs.Set.prototype.getCount = function () {
-    return this.map_.getCount()
-};
-goog.structs.Set.prototype.add = function (a) {
-    this.map_.set(goog.structs.Set.getKey_(a), a)
-};
-goog.structs.Set.prototype.addAll = function (a) {
-    for (var a = goog.structs.getValues(a), b = a.length, c = 0; c < b; c++) this.add(a[c])
-};
-goog.structs.Set.prototype.removeAll = function (a) {
-    for (var a = goog.structs.getValues(a), b = a.length, c = 0; c < b; c++) this.remove(a[c])
-};
-goog.structs.Set.prototype.remove = function (a) {
-    return this.map_.remove(goog.structs.Set.getKey_(a))
-};
-goog.structs.Set.prototype.clear = function () {
-    this.map_.clear()
-};
-goog.structs.Set.prototype.isEmpty = function () {
-    return this.map_.isEmpty()
-};
-goog.structs.Set.prototype.contains = function (a) {
-    return this.map_.containsKey(goog.structs.Set.getKey_(a))
-};
-goog.structs.Set.prototype.containsAll = function (a) {
-    return goog.structs.every(a, this.contains, this)
-};
-goog.structs.Set.prototype.intersection = function (a) {
-    for (var b = new goog.structs.Set, a = goog.structs.getValues(a), c = 0; c < a.length; c++) {
-        var d = a[c];
-        this.contains(d) && b.add(d)
-    }
-    return b
-};
-goog.structs.Set.prototype.getValues = function () {
-    return this.map_.getValues()
-};
-goog.structs.Set.prototype.clone = function () {
-    return new goog.structs.Set(this)
-};
-goog.structs.Set.prototype.equals = function (a) {
-    return this.getCount() == goog.structs.getCount(a) && this.isSubsetOf(a)
-};
-goog.structs.Set.prototype.isSubsetOf = function (a) {
-    var b = goog.structs.getCount(a);
-    if (this.getCount() > b) return false;
-    !(a instanceof goog.structs.Set) && 5 < b && (a = new goog.structs.Set(a));
-    return goog.structs.every(this, function (b) {
-        return goog.structs.contains(a, b)
-    })
-};
-goog.structs.Set.prototype.__iterator__ = function () {
-    return this.map_.__iterator__(false)
-};
+
 goog.debug.catchErrors = function (a, b, c) {
     var c = c || document,
         d = c.onerror;
@@ -1723,8 +1631,7 @@ goog.events.BrowserEvent = class extends goog.events.Event {
         this.relatedTarget = d;
         this.offsetX = undefined !== a.offsetX ? a.offsetX : a.layerX;
         this.offsetY = undefined !== a.offsetY ? a.offsetY : a.layerY;
-        this.clientX = undefined !== a.clientX ?
-            a.clientX : a.pageX;
+        this.clientX = undefined !== a.clientX ? a.clientX : a.pageX;
         this.clientY = undefined !== a.clientY ? a.clientY : a.pageY;
         this.screenX = a.screenX || 0;
         this.screenY = a.screenY || 0;
@@ -1854,39 +1761,36 @@ goog.structs.SimplePool.prototype.createObjectFn_ = null;
 goog.structs.SimplePool.prototype.disposeObjectFn_ = null;
 
 goog.events.pools = {};
-(function () {
-    var g;
-    goog.events.pools.setProxyCallbackFunction = function (a) {
-        g = a
-    };
-
-    goog.events.pools.getObject = function() {
-        return {
-            count_: 0,
-            remaining_: 0
-        }
+var g;
+goog.events.pools.setProxyCallbackFunction = function (a) {
+    g = a
+};
+goog.events.pools.getObject = function() {
+    return {
+        count_: 0,
+        remaining_: 0
     }
-    goog.events.pools.releaseObject = goog.nullFunction;
-    goog.events.pools.getArray = function () {
-        return []
-    }
-    goog.events.pools.releaseArray = goog.nullFunction;
-    goog.events.pools.getProxy = function() {
-        var a = function (b) {
-            return g.call(a.src, a.key, b)
-        };
-        return a
-    }
-    goog.events.pools.releaseProxy = goog.nullFunction;
-    goog.events.pools.getListener =  function () {
-        return new goog.events.Listener
+}
+goog.events.pools.releaseObject = goog.nullFunction;
+goog.events.pools.getArray = function () {
+    return []
+}
+goog.events.pools.releaseArray = goog.nullFunction;
+goog.events.pools.getProxy = function() {
+    var a = function (b) {
+        return g.call(a.src, a.key, b)
     };
-    goog.events.pools.releaseListener = goog.nullFunction;
-    goog.events.pools.getEvent = function () {
-        return new goog.events.BrowserEvent
-    };
-    goog.events.pools.releaseEvent = goog.nullFunction;
-})();
+    return a
+}
+goog.events.pools.releaseProxy = goog.nullFunction;
+goog.events.pools.getListener =  function () {
+    return new goog.events.Listener
+};
+goog.events.pools.releaseListener = goog.nullFunction;
+goog.events.pools.getEvent = function () {
+    return new goog.events.BrowserEvent
+};
+goog.events.pools.releaseEvent = goog.nullFunction;
 goog.events.listeners_ = {};
 goog.events.listenerTree_ = {};
 goog.events.sources_ = {};
@@ -1894,42 +1798,40 @@ goog.events.onString_ = "on";
 goog.events.onStringMap_ = {};
 goog.events.keySeparator_ = "_";
 goog.events.listen = function (a, b, c, d, e) {
-    if (b) {
-        if (goog.isArray(b)) {
-            for (var f = 0; f < b.length; f++) goog.events.listen(a, b[f], c, d, e);
-            return null
-        }
-        var d = !!d,
-            g = goog.events.listenerTree_;
-        b in g || (g[b] = goog.events.pools.getObject());
-        g = g[b];
-        d in g || (g[d] = goog.events.pools.getObject(), g.count_++);
-        var g = g[d],
-            h = goog.getUid(a),
-            j;
-        g.remaining_++;
-        if (g[h]) {
-            j = g[h];
-            for (f = 0; f < j.length; f++)
-                if (g = j[f], g.listener == c && g.handler == e) {
-                    if (g.removed) break;
-                    return j[f].key
-                }
-        } else j = g[h] = goog.events.pools.getArray(), g.count_++;
-        f = goog.events.pools.getProxy();
-        f.src = a;
-        g = goog.events.pools.getListener();
-        g.init(c, f, a, b, d, e);
-        c = g.key;
-        f.key = c;
-        j.push(g);
-        goog.events.listeners_[c] = g;
-        goog.events.sources_[h] || (goog.events.sources_[h] = goog.events.pools.getArray());
-        goog.events.sources_[h].push(g);
-        a.addEventListener ? (a == document || !a.customEvent_) && a.addEventListener(b, f, d) : a.attachEvent(goog.events.getOnString_(b), f);
-        return c
+    if (!b) throw Error("Invalid event type");
+    if (goog.isArray(b)) {
+        for (var f = 0; f < b.length; f++) goog.events.listen(a, b[f], c, d, e);
+        return null
     }
-    throw Error("Invalid event type");
+    var d = !!d,
+        g = goog.events.listenerTree_;
+    b in g || (g[b] = goog.events.pools.getObject());
+    g = g[b];
+    d in g || (g[d] = goog.events.pools.getObject(), g.count_++);
+    var g = g[d],
+        h = goog.getUid(a),
+        j;
+    g.remaining_++;
+    if (g[h]) {
+        j = g[h];
+        for (f = 0; f < j.length; f++)
+            if (g = j[f], g.listener == c && g.handler == e) {
+                if (g.removed) break;
+                return j[f].key
+            }
+    } else j = g[h] = goog.events.pools.getArray(), g.count_++;
+    f = goog.events.pools.getProxy();
+    f.src = a;
+    g = goog.events.pools.getListener();
+    g.init(c, f, a, b, d, e);
+    c = g.key;
+    f.key = c;
+    j.push(g);
+    goog.events.listeners_[c] = g;
+    goog.events.sources_[h] || (goog.events.sources_[h] = goog.events.pools.getArray());
+    goog.events.sources_[h].push(g);
+    a.addEventListener ? (a == document || !a.customEvent_) && a.addEventListener(b, f, d) : a.attachEvent(goog.events.getOnString_(b), f);
+    return c
 };
 goog.events.listenOnce = function (a, b, c, d, e) {
     if (goog.isArray(b)) {
@@ -2345,9 +2247,9 @@ goog.events.EventHandler.typeArray_ = [];
             }
         }
 
-        dispose() {
-            super.dispose();
-            this.handler.dispose();
+        disposeInternal() {
+            super.disposeInternal();
+            this.handler.disposeInternal();
             this.handler = null;
 
             if (!goog.userAgent.ASSUME_IE) {
@@ -2572,9 +2474,9 @@ goog.events.EventHandler.typeArray_ = [];
             this.scheduleCheck();
         }
 
-        dispose() {
+        disposeInternal() {
             window.clearTimeout(this.timer);
-            super.dispose();
+            super.disposeInternal();
         }
 
         // Called when timer interval passes
@@ -2689,13 +2591,43 @@ goog.events.EventHandler.typeArray_ = [];
         el.className = existing.join(" ");
     }
 
-    // Utility: Set position
-    function setPosition(el, x, y) {
-        el.style.left = `${Math.round(x)}px`;
-        el.style.top = `${Math.round(y)}px`;
+    /**
+     * Sets the position (left, top) of a DOM element.
+     *
+     * @param {HTMLElement} element
+     * @param {K|number} x      // Either a K object with .x/.y or a number
+     * @param {number} [y]      // Only used if x is a number
+     */
+    function setPosition(element, x, y) {
+        let posX, posY;
+
+        const needsRoundingFix = goog.userAgent.ASSUME_GECKO && (goog.userAgent.ASSUME_MAC || goog.userAgent.ASSUME_LINUX) && goog.userAgent.isVersion("1.9");
+        if (x instanceof Point) {
+            posX = x.x;
+            posY = x.y;
+        } else {
+            posX = x;
+            posY = y;
+        }
+
+        element.style.left = formatPixelValue(posX, needsRoundingFix);
+        element.style.top = formatPixelValue(posY, needsRoundingFix);
     }
 
-    // Utility: Set opacity cross-browser
+    /**
+     * Converts a numeric position value into a CSS pixel string.
+     *
+     * @param {number|string} value     // A number or an already-formatted CSS value
+     * @param {boolean} shouldRound     // Whether to round the value (browser-quirk flag)
+     * @return {string}                 // Returns a pixel string like "20px" or original string
+     */
+    function formatPixelValue(value, shouldRound) {
+        if (typeof value === "number") {
+            value = (shouldRound ? Math.round(value) : value) + "px";
+        }
+        return value;
+    }
+
     function setOpacity(el, value) {
         const s = el.style;
         if ('opacity' in s) s.opacity = value;
@@ -2707,7 +2639,6 @@ goog.events.EventHandler.typeArray_ = [];
         constructor() {
             super();
 
-            /** @type {string[]} */
             this.items = [];            // pb
             this.index = 0;             // ua
             this.isLoaded = false;      // qb
@@ -2738,12 +2669,11 @@ goog.events.EventHandler.typeArray_ = [];
             if (this.index >= this.items.length) {
                 this.index = loop ? 0 : this.items.length - 1;
             }
-            this.load(loop, onLoad, onEnd);   // original "load()" call
+            this.load(loop, onLoad, onEnd);
         }
     }
 
-    // HTML5 audio player subclass
-    class AudioSequencePlayer extends MediaSequence {
+    class AudioPlayer extends MediaSequence {
         /**
          * @param {string[]} audioPaths
          * @param {HTMLElement=} parent
@@ -2751,14 +2681,14 @@ goog.events.EventHandler.typeArray_ = [];
         constructor(audioPaths, parent) {
             super();
 
-            this.items = audioPaths;
-            this.audioElement = null;           // H
-            this.parent = parent || document.body;  // Dc
-            this.autoplay = false;              // Cc
+            this.items = audioPaths; // pb
+            this.audioElement = null; // H
+            this.parent = parent || document.body; // Dc
+            this.autoplay = false; // Cc
 
-            this.onLoadedCallback = null;       // Lb
-            this.onPlayCallback = null;         // Wa
-            this.lastLoadedIndex = this.index;  // ud
+            this.onLoadedCallback = null; // Lb
+            this.onPlayCallback = null; // Wa
+            this.lastLoadedIndex = this.index; // ud
         }
 
         disposeInternal() {
@@ -2766,16 +2696,11 @@ goog.events.EventHandler.typeArray_ = [];
             this.autoplay = false;
             this.onPlayCallback = this.onLoadedCallback = null;
 
-            if (this.audioElement) {
-                this.parent.removeChild(this.audioElement);
-            }
-
+            if (this.audioElement) this.parent.removeChild(this.audioElement);
             super.disposeInternal();
         }
 
-        /**
-         * Triggered when audio is ready to play.
-         */
+        /**Triggered when audio is ready to play. (wd)*/
         handleCanPlay() {
             this.isLoaded = true;
             if (this.onLoadedCallback) this.onLoadedCallback();
@@ -2785,21 +2710,17 @@ goog.events.EventHandler.typeArray_ = [];
             }
         }
 
-        /**
-         * Triggered when audio ends.
-         */
+        /**Triggered when audio ends. (Ce)*/
         handleEnded() {
             this.isPlaying = false;
             if (this.onPlayCallback) this.onPlayCallback();
         }
 
-        /**
-         * Load the current audio item.
-         */
-        load(autoplay, onLoaded, onPlay) {
+        /**Load the current audio item.*/
+        load(autoplay, onLoaded = null, onPlay = null) {
             this.autoplay = autoplay;
-            this.onLoadedCallback = onLoaded || null;
-            this.onPlayCallback = onPlay || null;
+            this.onLoadedCallback = onLoaded;
+            this.onPlayCallback = onPlay;
 
             // If we already loaded this track earlier
             if (this.audioElement && this.lastLoadedIndex === this.index) {
@@ -2840,9 +2761,9 @@ goog.events.EventHandler.typeArray_ = [];
             this.lastLoadedIndex = this.index;
         }
 
-        play(onPlay) {
+        play(onPlay = null) {
             if (this.isLoaded && !this.isPlaying) {
-                this.onPlayCallback = onPlay || null;
+                this.onPlayCallback = onPlay;
                 this.audioElement.play();
                 this.isPlaying = true;
             }
@@ -2980,103 +2901,6 @@ goog.events.EventHandler.typeArray_ = [];
             Array.from(collection).forEach(callback, context);
         } else if (typeof collection === "object") {
             Object.entries(collection).forEach(([key, value]) => callback.call(context, value, key, collection));
-        }
-    }
-
-    class MapEx {
-        constructor(...args) {
-            this._map = {};
-            this._keys = [];
-            this._count = 0;
-            this._modCount = 0;
-
-            if (args.length > 1) {
-                if (args.length % 2 !== 0) throw new Error("Uneven number of arguments");
-                for (let i = 0; i < args.length; i += 2) {
-                    this.set(args[i], args[i + 1]);
-                }
-            } else if (args[0]) {
-                this.merge(args[0]);
-            }
-        }
-
-        get size() { return this._count; }
-
-        getKeys() {
-            this._clean();
-            return this._keys.slice();
-        }
-
-        getValues() {
-            this._clean();
-            return this._keys.map(k => this._map[k]);
-        }
-
-        get(key, defaultValue) {
-            return Object.prototype.hasOwnProperty.call(this._map, key) ? this._map[key] : defaultValue;
-        }
-
-        set(key, value) {
-            if (!Object.prototype.hasOwnProperty.call(this._map, key)) {
-                this._count++;
-                this._keys.push(key);
-                this._modCount++;
-            }
-            this._map[key] = value;
-        }
-
-        hasValue(value) {
-            return this._keys.some(k => this._map[k] === value);
-        }
-
-        equals(other, compareFn = (a, b) => a === b) {
-            if (this === other) return true;
-            if (this.size !== other.size) return false;
-            for (const key of this._keys)
-                if (!compareFn(this.get(key), other.get(key))) return false;
-            return true;
-        }
-
-        isEmpty() { return this.size === 0; }
-
-        remove(key) {
-            if (Object.prototype.hasOwnProperty.call(this._map, key)) {
-                delete this._map[key];
-                this._count--;
-                this._modCount++;
-                if (this._keys.length > 2 * this._count) this._clean();
-                return true;
-            }
-            return false;
-        }
-
-        clear() {
-            this._map = {};
-            this._keys = [];
-            this._count = 0;
-            this._modCount = 0;
-        }
-
-        merge(source) {
-            if (source instanceof MapEx) {
-                const keys = source.getKeys();
-                const values = source.getValues();
-                for (let i = 0; i < keys.length; i++) this.set(keys[i], values[i]);
-            } else if (typeof source === "object") {
-                for (const key in source)
-                    if (Object.prototype.hasOwnProperty.call(source, key))
-                        this.set(key, source[key]);
-            }
-        }
-
-        clone() {
-            return new MapEx(this);
-        }
-
-        _clean() {
-            // Remove deleted or duplicate keys
-            const seen = {};
-            this._keys = this._keys.filter(k => Object.prototype.hasOwnProperty.call(this._map, k) && !(k in seen) && (seen[k] = true));
         }
     }
 
@@ -3536,12 +3360,12 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         // Cleanup
-        dispose() {
+        disposeInternal() {
             if (this.element && this.element.parentNode) {
                 this.element.parentNode.removeChild(this.element);
             }
             this.element = null;
-            super.dispose();
+            super.disposeInternal();
         }
 
         // Rotation logic
@@ -3964,9 +3788,9 @@ goog.events.EventHandler.typeArray_ = [];
             }
         }
 
-        dispose() {
-            this.digitSprites.forEach(s => s.dispose());
-            super.dispose();
+        disposeInternal() {
+            this.digitSprites.forEach(s => s.disposeInternal());
+            super.disposeInternal();
         }
     }
 
@@ -4106,9 +3930,9 @@ goog.events.EventHandler.typeArray_ = [];
         /**
          * Cleanup sprite resources when disposed.
          */
-        dispose() {
-            this.digits.forEach(digit => digit.dispose());
-            super.dispose();
+        disposeInternal() {
+            this.digits.forEach(digit => digit.disposeInternal());
+            super.disposeInternal();
         }
     }
 
@@ -4143,9 +3967,9 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         /** Dispose of this sprite and its children */
-        dispose() {
-            this.children.forEach(child => child.dispose());
-            super.dispose();
+        disposeInternal() {
+            this.children.forEach(child => child.disposeInternal());
+            super.disposeInternal();
         }
     }
 
@@ -4167,10 +3991,10 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         // Cleanup
-        destroy() {
-            this.eventHandler.dispose();
+        disposeInternal() {
+            this.eventHandler.disposeInternal();
             this.eventHandler = null;
-            super.destroy();
+            super.disposeInternal();
         }
 
         // Event Handlers
@@ -4193,18 +4017,20 @@ goog.events.EventHandler.typeArray_ = [];
 
     class SpritePool extends goog.Disposable {
         constructor() {
+            super()
             this.pool = []
         }
 
         get() {
             return this.pool.length === 0 ? new Sprite(57) : this.pool.shift()
         }
-        dispose() {
+
+        disposeInternal() {
             this.pool.forEach(function(spr) {
-                spr.dispose();
+                spr.disposeInternal();
             });
             this.pool = null;
-            super.dispose();
+            super.disposeInternal();
         }
     }
     defineSingleton(SpritePool);
@@ -4244,8 +4070,9 @@ goog.events.EventHandler.typeArray_ = [];
             this.data = config.data;
 
             // Sprite positions
-            this.cc = this.jd = 40;
-            this.nc = this.ib = this.hb = 0;
+            this.baseX = this.baseY = 40; // jd, cc
+            this.mainX = this.mainY = 0; // hb, ib
+            this.shadowX = this.shadowY = 0; // nc, qd
 
             // Motion parameters
             this.targetY = 1400;
@@ -4254,12 +4081,12 @@ goog.events.EventHandler.typeArray_ = [];
 
             // Behavior triggers
             this.behaviors = [
-                new ConditionalTrigger(goog.bind(this.onReady, this), goog.bind(this.onDisappear, this), true),
-                new ConditionalTrigger(goog.bind(this.onActive, this), goog.bind(this.onFinish, this), false, 400)
+                new ConditionalTrigger(goog.bind(this.isEndingSoon, this), goog.bind(this.fadeOut, this), true),
+                new ConditionalTrigger(goog.bind(this.hasData, this), goog.bind(this.cycleFrame, this), false, 400)
             ];
         }
 
-        dispose() {
+        disposeInternal() {
             const pool = this.spritePool;
             [this.mainSprite, this.shadowSprite].forEach(sprite => {
                 sprite.show(false);
@@ -4268,7 +4095,7 @@ goog.events.EventHandler.typeArray_ = [];
                 pool.pool.push(sprite);
             });
             this.behaviors = null;
-            super.dispose();
+            super.disposeInternal();
         }
 
         update(now) {
@@ -4293,21 +4120,21 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         renderPosition() {
-            const x = 20 * (Math.floor(this.tileIndex % 23) + 0.5);
-            const y = 20 * (Math.floor(this.tileIndex / 23) + 0.5);
+            var worldX = 20 * (Math.floor(this.tileIndex % 23) + 0.5);
+            var worldY = 20 * (Math.floor(this.tileIndex / 23) + 0.5);
 
-            this.posX = x - this.mainSprite.getWidth() / 2;
-            this.posY = y - this.mainSprite.getHeight() / 2;
-            Sprite.setPosition(this.mainSprite, this.posX, this.posY);
+            this.mainX = worldX - this.mainSprite.getWidth() / 2;
+            this.mainY = worldY - this.mainSprite.getHeight() / 2;
+            Sprite.setPosition(this.mainSprite, this.mainX, this.mainY);
 
-            const shadowX = x - this.shadowSprite.getWidth() / 2;
-            const shadowY = y + this.mainSprite.getHeight() / 2 - this.shadowSprite.getHeight() + this.tileOffset;
-            Sprite.setPosition(this.shadowSprite, shadowX, shadowY);
+            this.shadowX = worldX - this.shadowSprite.getWidth() / 2;
+            this.shadowY = worldY + this.mainSprite.getHeight() / 2 - this.shadowSprite.getHeight() + this.tileOffset;
+            Sprite.setPosition(this.shadowSprite, this.shadowX, this.shadowY);
         }
 
         getCellIndex() { return this.tileIndex; }
         getRow() { return Math.floor(this.tileIndex / 23); }
-        getColumn() { return this.tileIndex % 23; }
+        getCol() { return this.tileIndex % 23; }
         getName() {
             return this.name;
         }
@@ -4391,27 +4218,24 @@ goog.events.EventHandler.typeArray_ = [];
 
     /**
      * Applies movement and scaling to a sprite.
-     * @param {Object} obj - The target object containing sprite and transform data.
+     * @param {GridEntity} obj - The target object containing sprite and transform data.
      * @param {number} deltaX - X offset.
      * @param {number} deltaY - Y offset.
      */
-    function applyMovement(obj, deltaX, deltaY) {
-        if ((obj.lastY === deltaY && obj.lastX === deltaX) || Math.abs(deltaX) > 15) return;
+    function applyMovement(obj, offX, offY) { // Gd
+        if (obj.baseY === offY && obj.baseX === offX) return;
+        if (offX > 15 || offY < -15) return;
 
-        obj.lastX = deltaX;
-        obj.lastY = deltaY;
+        obj.baseX = offX;
+        obj.baseY = offY;
 
         // Move sprite
-        setPosition(obj.sprite, obj.baseX - deltaX, obj.baseY - deltaY);
+        setPosition(obj.mainSprite, obj.mainX - offX, obj.mainY - offY);
 
         // Scale smoothly with vertical movement
-        const scale = 1 - (1 - 0.7) * deltaY / 40;
-        obj.transform.scale(scale, scale);
-
-        // Move based on parallax
-        if (deltaX) {
-            setPosition(obj.transform, obj.centerX - deltaX, obj.centerY);
-        }
+        const scale = 1 - (1 - 0.7) * offY / 40;
+        obj.shadowSprite.scale(scale, scale);
+        if (offX) setPosition(obj.shadowSprite, obj.shadowX - offX, obj.shadowY);
     }
 
     function initMotion(a) {
@@ -4427,12 +4251,12 @@ goog.events.EventHandler.typeArray_ = [];
         entity.tileIndex = idx;
         entity.renderPosition();
     }
-    
+
     class AnimatedFallingEntity extends GridEntity {
         constructor(config) {
             super(config);
-            this.sprite.playFrameSequence(Ld, 700, this.targetY);
-            this.sprite.playFrameSequence(Md, 80, this.targetY + 700 * Ld.length);
+            this.mainSprite.playFrameSequence(Ld, 700, this.targetY);
+            this.mainSprite.playFrameSequence(Md, 80, this.targetY + 700 * Ld.length);
             this.speed = -5;
         }
 
@@ -4461,13 +4285,13 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         updatePosition() {
-            const idx = this.Qa;
+            const idx = this.tileIndex;
             const x = 20 * (Math.floor(idx % 23) + 0.5);
             const y = 20 * (Math.floor(idx / 23) + 0.5);
 
-            this.hb = x - this.sprite.getWidth() / 4;
-            this.ib = y - this.sprite.getHeight() / 4;
-            Sprite.setPosition(this.mainSprite, this.hb, this.ib);
+            this.baseX = x - this.sprite.getWidth() / 4;
+            this.baseY = y - this.sprite.getHeight() / 4;
+            Sprite.setPosition(this.mainSprite, this.baseX, this.baseY);
             Sprite.setPosition(this.shadowSprite, x - this.shadowSprite.getWidth() / 4, y + 5 - this.shadowSprite.getHeight());
         }
     }
@@ -4515,7 +4339,7 @@ goog.events.EventHandler.typeArray_ = [];
             return new GridEntity(ItemDefinitions.coin);
         return new ItemClasses[name](ItemDefinitions[name]);
     }
-    createItem = createItem;
+    createItem_ = createItem;
 
     /**
      * Weighted random loot generator
@@ -4553,9 +4377,9 @@ goog.events.EventHandler.typeArray_ = [];
         target.count = 0;
         target.objects = (typeId in ObjectRegistry) ? ObjectRegistry[typeId].data : ObjectRegistry[1].data;
 
-        forEachObject(target.objects, function (value) {
+        goog.object.forEach(target.objects, function (value) {
             this.count += value;
-        }, target);
+        }, target)
     }
 
     var LootTable = {
@@ -4581,90 +4405,7 @@ goog.events.EventHandler.typeArray_ = [];
     };
 
     var phase, ObjectRegistry = {};
-    class SetEx {
-        constructor(values) {
-            this._map = new MapEx();
-            if (values) this.addAll(values);
-        }
-
-        get size() {
-            return this._map.size;
-        }
-
-        _keyFor(value) {
-            const type = typeof value;
-            if (type === "object" && value || type === "function") {
-                return "o" + getUniqueId(value); // ga(a)
-            }
-            return type[0] + String(value);
-        }
-
-        add(value) {
-            this._map.set(this._keyFor(value), value);
-        }
-
-        addAll(iterable) {
-            for (const v of Array.from(iterable)) this.add(v);
-        }
-
-        remove(value) {
-            return this._map.remove(this._keyFor(value));
-        }
-
-        removeAll(iterable) {
-            for (const v of Array.from(iterable)) this.remove(v);
-        }
-
-        clear() {
-            this._map.clear();
-        }
-
-        has(value) {
-            return Object.prototype.hasOwnProperty.call(this._map._map, this._keyFor(value));
-        }
-
-        values() {
-            return this._map.getValues();
-        }
-
-        clone() {
-            return new SetEx(this.values());
-        }
-
-        equals(other) {
-            if (this.size !== getCount(other)) return false;
-            return isSubset(this, other);
-        }
-
-        isEmpty() {
-            return this._map.isEmpty();
-        }
-
-        *[Symbol.iterator]() {
-            yield* this._map.getValues();
-        }
-    }
-
-    // Helper: subset/equality
-    function isSubset(a, b) {
-        const bCount = getCount(b);
-        if (a.size > bCount) return false;
-
-        if (!(b instanceof SetEx) && bCount > 5) b = new SetEx(b);
-
-        for (const value of a.values()) {
-            let exists = false;
-            if (typeof b.contains === "function") exists = b.contains(value);
-            else if (Array.isArray(b)) exists = b.includes(value);
-            else if (b instanceof Set) exists = b.has(value);
-            else {
-                for (const key in b) if (b[key] === value) { exists = true; break; }
-            }
-            if (!exists) return false;
-        }
-        return true;
-    }
-
+    
     class GridPatternManager {
         constructor() {
             this.cellMap = null;  // Map of cell -> usage counters (g)
@@ -4675,8 +4416,8 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         init() {
-            this.cellMap = new MapEx();
-            goog.structs.forEach(getAllGridCells(), function(a) {
+            this.cellMap = new goog.structs.Map();
+            goog.array.forEach(getAllGridCells(), function(a) {
                 this.cellMap.set(a, {
                     usedCount: 0, // Gc
                     specialCount: 0, // Ic
@@ -4684,12 +4425,12 @@ goog.events.EventHandler.typeArray_ = [];
                 })
             }, this)
 
-            this.availableCells = new SetEx;
+            this.availableCells = new goog.structs.Set();
             this.availableCells.addAll(getAllGridCells(true));
-            this.activeCells = new SetEx;
-            forEachObject(LetterShapes, function (a, b) {
-                var c = new SetEx;
-                ArrayUtils.forEach(a, function (a) {
+            this.activeCells = new goog.structs.Set();
+            goog.object.forEach(LetterShapes, function (a, b) {
+                var c = new goog.structs.Set();
+                goog.array.forEach(a, function (a) {
                     c.add(23 * a.y + a.x);
                 });
                 this.patterns[b] = c;
@@ -4699,6 +4440,7 @@ goog.events.EventHandler.typeArray_ = [];
         markCell(cellIndex, isSpecial) {
             this.availableCells.remove(cellIndex);
             const info = this.cellMap.get(cellIndex);
+            console.log(info);
             info.totalCount++;
 
             if (isSpecial) {
@@ -4710,13 +4452,13 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         match() {
-            var a = new SetEx
+            var a = new goog.structs.Set();
             var b = getLowestActiveCellIndex(this);
             forEachItem(this.activeCells, function (c) {
                 a.add(c - b);
             }, this);
             var c = "";
-            forEachObject(this.patterns, function (b, e) {
+            goog.object.forEach(this.patterns, function (b, e) {
                 b.equals(a) && (c = e);
             });
             return c;
@@ -4731,7 +4473,7 @@ goog.events.EventHandler.typeArray_ = [];
      */
     function find2x2Block(gridManager) {
         // Get all available cell indices
-        const cells = gridManager.availableCells.values();
+        const cells = gridManager.availableCells.getValues();
 
         // Filter cells that can form a valid 2x2 block
         const validCells = cells.filter(index => {
@@ -4753,7 +4495,7 @@ goog.events.EventHandler.typeArray_ = [];
         // Return the 4 indices forming the 2x2 block
         return [start, start + 1, start + 23, start + 23 + 1];
     }
-    find2x2Block = find2x2Block;
+    find2x2Block_ = find2x2Block;
 
     /**
      * Selects a random available cell index from the grid.
@@ -4764,7 +4506,7 @@ goog.events.EventHandler.typeArray_ = [];
     function selectRandomAvailableCell(grid) {
         if (grid.availableCells.isEmpty()) return -1;
 
-        const available = grid.availableCells.values();
+        const available = grid.availableCells.getValues();
         return available[random(available.length)];
     }
 
@@ -4802,11 +4544,11 @@ goog.events.EventHandler.typeArray_ = [];
      * @returns {Array<number>} Active cell indices.
      */
     function getActiveLinkedCells(grid) {
-        const result = new SetEx();
+        const result = new goog.structs.Set();
         forEachItem(grid.activeCells, function (cellIndex) {
             if (grid.cellMap.get(cellIndex).usedCount > 0) result.add(cellIndex);
         }, grid);
-        return result.values();
+        return result.getValues();
     }
 
     /**
@@ -4834,7 +4576,7 @@ goog.events.EventHandler.typeArray_ = [];
         const startCell = selectRandomAvailableCell(grid);
         const result = [];
 
-        goog.structs.forEach(grid.patterns[patternId], function (offset) {
+        goog.array.forEach(grid.patterns[patternId], function (offset) {
             let target = (offset + startCell) % 207;
             if (this.availableCells.contains(target)) {
                 result.push(target);
@@ -4849,8 +4591,8 @@ goog.events.EventHandler.typeArray_ = [];
             super();
 
             this.rootElement = null; // was: v
-            this.itemMap = null; // was: Ra (MapEx)
-            this.activeItems = null; // was: Ca (SetEx)
+            this.itemMap = null; // was: Ra (Map)
+            this.activeItems = null; // was: Ca (Set)
             this.lastSpawnTime = null; // was: Ec
             this.spawnScale = 1; // was: vc
             this.extraData = null; // was: ld
@@ -4862,8 +4604,8 @@ goog.events.EventHandler.typeArray_ = [];
         init(parentElement) {
             this.rootElement = parentElement;
 
-            this.itemMap = new MapEx(); // stores all items by ID (Ra)
-            this.activeItems = new SetEx(); // stores active items (Ca)
+            this.itemMap = new goog.structs.Map(); // stores all items by ID (Ra)
+            this.activeItems = new goog.structs.Set(); // stores active items (Ca)
 
             this.lastSpawnTime = getTime();
             this.spawnRate = 1;
@@ -4877,7 +4619,7 @@ goog.events.EventHandler.typeArray_ = [];
 
             const now = getTime();
 
-            let missingItemCount = 8 - this.activeItems.size();
+            let missingItemCount = 8 - this.activeItems.getCount();
             if (now - this.lastSpawnTime > 2500 && missingItemCount > 0) {
                 // number of items to spawn this tick
                 for (let i = 0; i < random(missingItemCount) + 1; i++) {
@@ -4897,16 +4639,16 @@ goog.events.EventHandler.typeArray_ = [];
             return this.itemMap.get(id, null);
         }
 
-        dispose() {
+        disposeInternal() {
             forEachItem(this.activeItems, item => {
-                item.dispose(); // dispose
+                item.disposeInternal(); // dispose
             });
 
             this.activeItems.clear();
             this.itemMap.clear();
-            this.spawnArea.dispose();
+            this.spawnArea.disposeInternal();
 
-            super.dispose();
+            super.disposeInternal();
         }
     }
     defineSingleton(TileSpawner);
@@ -4921,13 +4663,13 @@ goog.events.EventHandler.typeArray_ = [];
         if (currentTime - obj.lastSpawnTime <= 40) return;
 
         // Update each item in Ca
-        goog.structs.forEach(obj.activeItems, function(item) {
-            item.update(currentTime);
+        goog.array.forEach(obj.activeItems, function(item) {
+            if (item.update !== undefined) item.update(currentTime);
 
             // Remove items that are not in states 0 or 1
             if (item.i !== 0 && item.i !== 1) {
                 obj.activeItems.remove(item);
-                item.dispose();
+                item.disposeInternal();
             }
         }, obj);
 
@@ -4981,9 +4723,9 @@ goog.events.EventHandler.typeArray_ = [];
         attachSpritesToContainer(item, tileSpawner.rootElement);
         item.texture *= tileSpawner.spawnRate; // Apply spawn rate multiplier
     }
-    spawnItem = spawnItem
+    spawnItem_ = spawnItem
 
-    var snakeStepIndex, snakeBodyVisible, tutorialSteps = [ // was: ye
+    var snakeStepIndex, snakeBodyVisible, introSteps = [ // was: ye
         {point: [3, 7], dir: 1},
         {point: [2, 6], dir: 4},
         {point: [4, 5], dir: 2},
@@ -4994,17 +4736,17 @@ goog.events.EventHandler.typeArray_ = [];
     ];
 
     /** @param {SnakeController} snake */
-    function runTutorialStep(snake) {
-        const step = tutorialSteps[snakeStepIndex];
+    function runIntroStep(snake) {
+        const step = introSteps[snakeStepIndex];
         const point = step.point;
 
-        if (snake.getRow() === point[1] && snake.getColumn() === point[0]) {
+        if (snake.getRow() === point[1] && snake.getCol() === point[0]) {
             snake.enqueueDirection(step.dir);
 
             snakeStepIndex++;
 
             // If reached end of tutorial steps
-            if (snakeStepIndex === tutorialSteps.length) {
+            if (snakeStepIndex === introSteps.length) {
                 snake.setSpeedParameters(getTime(), Infinity);
                 snake.segments[0].playAnimation(Be, 80);
             }
@@ -5122,7 +4864,7 @@ goog.events.EventHandler.typeArray_ = [];
             const releasingIndex = this.segments[this.segments.length - 1].getCellIndex();
 
             // move segments backwards
-            ArrayUtils.forEachReverse(this.segments, seg => {
+            goog.array.forEachRight(this.segments, seg => {
                 if (seg.parent) {
                     // if a link to previous exists, follow it
                     seg.gridX = seg.parent.gridX;
@@ -5146,7 +4888,7 @@ goog.events.EventHandler.typeArray_ = [];
             let queued = null;
             if (this.directionQueue.length) queued = this.directionQueue.shift();
 
-            ArrayUtils.forEachReverse(this.segments, seg => {
+            goog.array.forEachRight(this.segments, seg => {
                 const d = queued;
                 seg.baseDirection = seg.currentDirection; // store old facing
                 // choose new current Direction based on segment type
@@ -5236,7 +4978,7 @@ goog.events.EventHandler.typeArray_ = [];
                 if (this.segments[0].currentDirection === this.segments[1].currentDirection) {
                     const headAngle = this.segments[0].getSprite().getRotation();
                     this.headSprite.show(true);
-                    const headPixelX = 20 * this.getColumn();
+                    const headPixelX = 20 * this.getCol();
                     const headPixelY = 20 * this.getRow();
                     placeSprite(headPixelX, headPixelY, headAngle, frame, this.headSprite, true);
                     this.segments[0].move(this.moveProgress);
@@ -5274,7 +5016,7 @@ goog.events.EventHandler.typeArray_ = [];
         handleCatchAndItems(now) {
             const activeLinked = getActiveLinkedCells(this.patternManager);
             if (activeLinked.length) {
-                ArrayUtils.forEach(activeLinked, idx => {
+                goog.array.forEach(activeLinked, idx => {
                     // if head occupies same cell, trigger short animation
                     if (this.segments[0].getCellIndex() === idx) {
                         this.segments[0].playAnimation(Ie, 80);
@@ -5360,10 +5102,10 @@ goog.events.EventHandler.typeArray_ = [];
          * For debugging, sets IB (some timer), speed multiplier Gb and derived duration Ab.
          */
         setSpeedParameters(secs, speed) {
-            console.log(`secs: ${secs} | speed: ${speed}`);
             this.lastCatchTime = secs;
             this.speedMultiplier = speed;
             this.moveDuration = this.baseDuration * this.speedMultiplier;
+            console.log(`duration: ${this.moveDuration} | speed: ${this.speedMultiplier}`);
         }
 
         // shorthand helpers to expose head coordinates like Sa / Ta
@@ -5375,18 +5117,18 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         // cleanup
-        dispose() {
-            ArrayUtils.forEach(this.segments, seg => seg.dispose());
+        disposeInternal() {
+            goog.array.forEach(this.segments, seg => seg.disposeInternal());
             this.directionQueue = null;
-            this.headSprite.dispose();
-            super.dispose();
+            this.headSprite.disposeInternal();
+            super.disposeInternal();
         }
 
         // convenience getters used in original code
         getRow() {
             return this.getY();
         }
-        getColumn() {
+        getCol() {
             return this.getX();
         }
     }
@@ -5489,10 +5231,10 @@ goog.events.EventHandler.typeArray_ = [];
         /**
          * Cleanup sprite resources.
          */
-        dispose() { // h
-            this.mainSprite.dispose();
-            if (this.shadowSprite) this.shadowSprite.dispose();
-            super.dispose();
+        disposeInternal() { // h
+            this.mainSprite.disposeInternal();
+            if (this.shadowSprite) this.shadowSprite.disposeInternal();
+            super.disposeInternal();
         }
 
         /** @returns {Sprite} The main sprite object. (qa) */
@@ -5579,7 +5321,7 @@ goog.events.EventHandler.typeArray_ = [];
     class DirectionManager {
         constructor() {
             // Rotation angles between directional pairs [from, to]
-            this.rotationMap = new MapEx(); //ga
+            this.rotationMap = new goog.structs.Map(); //ga
             this.rotationMap.set([1, 3], 180);
             this.rotationMap.set([1, 4], 90);
             this.rotationMap.set([2, 3], 270);
@@ -5590,14 +5332,14 @@ goog.events.EventHandler.typeArray_ = [];
             this.rotationMap.set([4, 2], 180);
 
             // Base facing direction angles
-            this.baseDirection = new MapEx(); //g
+            this.baseDirection = new goog.structs.Map(); //g
             this.baseDirection.set(1, 270);
             this.baseDirection.set(2, 90);
             this.baseDirection.set(3, 180);
             this.baseDirection.set(4, 0);
 
             // Directional transformation table
-            this.transformMap = new MapEx(); //$
+            this.transformMap = new goog.structs.Map(); //$
             this.transformMap.set([3, 1], 4);
             this.transformMap.set([3, 2], 3);
             this.transformMap.set([4, 1], 3);
@@ -5651,7 +5393,7 @@ goog.events.EventHandler.typeArray_ = [];
 
             this.TileSpawner = TileSpawner.getInstance(); // ka
             this.TileSpawner.init(this.gridContainer);
-            gridClass = this.TileSpawner;
+            tileSpawner_ = this.TileSpawner;
             this.snake = new SnakeController(this.gridContainer); // N
             snakeClass = this.snake;
             boostFunction = this.snake.setSpeedParameters;
@@ -5667,7 +5409,7 @@ goog.events.EventHandler.typeArray_ = [];
             this.soundButton.show(false);
 
             this.muted = false; // Ka
-            this.music = new AudioSequencePlayer(["./assets/snake"]); // la
+            this.music = new AudioPlayer(["./assets/snake"]); // la
 
             this.mainSprite = new SpriteGroup(31, MAIN_SPR_POS.x, MAIN_SPR_POS.y, this.root, 100); // cb
             this.mainSprite.show(false);
@@ -5865,7 +5607,6 @@ goog.events.EventHandler.typeArray_ = [];
                     seq.addStep(createFrameAnimation(this.tutorialButtons[key], TUTORIAL_BUTTON_FRAMES[key], TUTORIAL_BUTTON_POS[key], 29));
                     seq.addPauseStep(300);
                 }
-                goog.bind
                 seq.addStep(goog.bind(function () {
                     if ("tutorial_start" == this.state) this.state = "tutorial_end";
                 }, this));
@@ -5876,8 +5617,8 @@ goog.events.EventHandler.typeArray_ = [];
         toggleMute() {
             this.visibilityTimer.resetTimer();
             this.muted = !this.muted;
-            Sprite.setFrame(this.soundButton, this.muted ? 90 : 89);
-            this.music.audioElement.muted = this.muted ? false : true;
+            Sprite.setFrame(this.soundButton, this.muted ? 89 : 90);
+            this.music.audioElement.muted = this.muted;
         }
 
         showGameplayUI() {
@@ -5935,30 +5676,30 @@ goog.events.EventHandler.typeArray_ = [];
                 this.state = "stop";
                 stopGame(this);
 
-                this.remainingTime.show(false);
+                this.timerDisplay.show(false);
                 resetDisplay(this.scoreDisplay);
 
-                ArrayUtils.forEach(this.icons, sprite => sprite.show(false));
+                goog.array.forEach(this.icons, sprite => sprite.show(false));
                 this.music.load(false);
             }
         }
 
-        dispose() {
+        disposeInternal() {
             this.state = "stop";
-            this.eventHandler.dispose();
+            this.eventHandler.disposeInternal();
             if (this.introSeq) this.introSeq.stop();
             if (this.tutSeq) this.tutSeq.stop();
             if (this.uiSeq) this.uiSeq.stop();
             window.isAnimationPaused = true;
             this.comboData = null;
-            this.timerDisplay.dispose();
-            this.scoreDisplay.dispose();
-            this.TileSpawner.dispose();
-            this.snake.dispose();
-            this.input.dispose();
-            this.soundButton.dispose();
-            this.visibilityTimer.dispose();
-            super.dispose();
+            this.timerDisplay.disposeInternal();
+            this.scoreDisplay.disposeInternal();
+            this.TileSpawner.disposeInternal();
+            this.snake.disposeInternal();
+            this.input.disposeInternal();
+            this.soundButton.disposeInternal();
+            this.visibilityTimer.disposeInternal();
+            super.disposeInternal();
         }
     }
 
@@ -6018,7 +5759,7 @@ goog.events.EventHandler.typeArray_ = [];
 
         // Animate entity 38 times with short pauses
         for (let i = 1; i < 39; i++) {
-            seq.addStep(goog.bind(runTutorialStep, game, game.snake));
+            seq.addStep(goog.bind(runIntroStep, game, game.snake));
             seq.addPauseStep(150);
         }
 
@@ -6051,9 +5792,9 @@ goog.events.EventHandler.typeArray_ = [];
         });
 
         // Add click handler
-        seq.addStep(function () {
-            game.playButton.addEventListener("mousedown", game.playIntroUISequence);
-        });
+        seq.addStep(goog.bind(function () {
+            goog.events.listenOnce(this.playButton, "mousedown", this.playIntroUISequence)
+        }, game));
         seq.play();
     }
 
@@ -6100,7 +5841,7 @@ goog.events.EventHandler.typeArray_ = [];
         });
         game.soundButton.show(true);
         game.music.play();
-        game.music.audioElement.muted = !game.muted;
+        game.music.audioElement.muted = game.muted;
     };
 
     /**
@@ -6108,7 +5849,7 @@ goog.events.EventHandler.typeArray_ = [];
      * @param {GameController} game
      */
     function resetComboData(game) {
-        getObjectKeys(ItemDefinitions).forEach(function (key) {
+        goog.object.getKeys(ItemDefinitions).forEach(function (key) {
             this.comboData[key] = 0
         }, game);
     };
@@ -6179,7 +5920,7 @@ goog.events.EventHandler.typeArray_ = [];
     /** @param {GameController} game */
     function hideTutorialUI(game) {
         Sprite.fadeOut(game.tutorialRoot);
-        ArrayUtils.forEach(game.tutorialButtons, function (a) {
+        goog.array.forEach(game.tutorialButtons, function (a) {
             Sprite.fadeOut(a)
         });
         game.tutorialRoot.show(false)
@@ -6196,7 +5937,7 @@ goog.events.EventHandler.typeArray_ = [];
             SpriteManager.load();
 
             // Build a configuration set (rc) with many keys enabled
-            var enabledSet = new MapEx();
+            var enabledSet = new goog.structs.Map();
             enabledSet.set(Bc, true);
             enabledSet.set(pc, true);
             enabledSet.set(id, true);
@@ -6212,7 +5953,7 @@ goog.events.EventHandler.typeArray_ = [];
             rc = enabledSet;
 
             // Another configuration set (sc) with a different set of keys
-            var otherSet = new MapEx();
+            var otherSet = new goog.structs.Map();
             otherSet.set(Zc, true);
             otherSet.set($c, true);
             otherSet.set(ad, true);
@@ -6227,8 +5968,8 @@ goog.events.EventHandler.typeArray_ = [];
 
             // Build level / wave presets (W)
             var keyEnum = LootTable;
-            var configObj;
 
+            var configObj;
             configObj = {};
             configObj[keyEnum.firecraker] = 10;
             configObj[keyEnum.dumpling] = 20;
@@ -6313,7 +6054,6 @@ goog.events.EventHandler.typeArray_ = [];
             itemDefs[enumObj.lantern] = new Item([R.se, R.ve, R.ue, R.re], enumObj.lantern, 8000, 2);
             itemDefs[enumObj.coin] = new Item([R.coin], enumObj.coin, 10000, 1);
             itemDefs[enumObj.ingot] = new Item([R.ingot], enumObj.ingot, 5000, 5);
-            console.log(itemDefs);
             ItemDefinitions = itemDefs;
 
             // Start or set some initial state (ae probably attaches / activates level/state manager)
@@ -6324,6 +6064,6 @@ goog.events.EventHandler.typeArray_ = [];
         }
     }, function cleanup() {
         // cleanup callback — release controller if present
-        if (gameController) gameController.dispose();
+        if (gameController) gameController.disposeInternal();
     });
 })();

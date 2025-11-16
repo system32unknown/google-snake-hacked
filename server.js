@@ -19,5 +19,6 @@ app.get('/', function (req, res) {
 app.get('/boo', (req, res) => {
     res.sendFile(__dirname + "/views/boo.html");
 });
+app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 app.listen(PORT, () => console.log(`App listening at http://localhost:${PORT}`));
