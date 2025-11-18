@@ -2830,10 +2830,9 @@ goog.events.EventHandler.typeArray_ = [];
     };
 
     class SpriteSheet {
-        constructor(imageUrl, frames, extraData = null) {
+        constructor(imageUrl, frames) {
             this.imageUrl = imageUrl;
             this.frames = frames;
-            this.extraData = extraData;
             this.imageLoader = new ImageLoader(imageUrl);
             this.isReady = false;
 
@@ -2869,7 +2868,6 @@ goog.events.EventHandler.typeArray_ = [];
     function createDiv() {
         var div = document.createElement("div");
         div.style.position = "absolute";
-        div.style.Ih = "none";
         div.style.userSelect = "none";
         div.style.webkitTapHighlightColor = "rgba(0,0,0,0)";
         div.unselectable = "on";
@@ -4440,7 +4438,6 @@ goog.events.EventHandler.typeArray_ = [];
         markCell(cellIndex, isSpecial) {
             this.availableCells.remove(cellIndex);
             const info = this.cellMap.get(cellIndex);
-            console.log(info);
             info.totalCount++;
 
             if (isSpecial) {
@@ -4595,7 +4592,6 @@ goog.events.EventHandler.typeArray_ = [];
             this.activeItems = null; // was: Ca (Set)
             this.lastSpawnTime = null; // was: Ec
             this.spawnScale = 1; // was: vc
-            this.extraData = null; // was: ld
 
             this.gridManager = GridPatternManager.getInstance();  // was: g
             this.objectPool = ObjectPoolManager.getInstance();    // was: bb
@@ -4705,7 +4701,6 @@ goog.events.EventHandler.typeArray_ = [];
      * @param {Point|Point[]} positions - Single position or array of positions to place the item.
      */
     function spawnItem(tileSpawner, item, positions) {
-        console.log(tileSpawner, item, positions);
         var addItemToGrid = (it, pos) => {
             tileSpawner.itemMap.set(pos, it);   // Map grid position → item
             tileSpawner.activeItems.add(it);        // Track active items
@@ -4799,8 +4794,8 @@ goog.events.EventHandler.typeArray_ = [];
         constructor(containerElement) {
             super();
 
-            // segments array (head is segments[0]) (d)
-            this.segments = [];
+            /*** @type {SnakeSegment[]}*/
+            this.segments = []; // segments array (head is segments[0]) (d)
 
             // visual "head" alternate sprite used when head matches next segment (A)
             this.headSprite = null;
@@ -5220,11 +5215,11 @@ goog.events.EventHandler.typeArray_ = [];
         /**
          * Play an animation on the segment.
          */
-        playAnimation(anim, delay, repeatdelay, count, loop) { // K
-            if (!isSpecialFrame(this) || anim == null) {
+        playAnimation(frame, delay, repeatdelay, count, loop) { // K
+            if (!isSpecialFrame(this) || frame == null) {
                 delay = Math.min(delay, 500);
-                this.mainSprite.playFrameSequence(anim, delay, repeatdelay, count, loop);
-                if (this.shadowSprite) this.shadowSprite.playFrameSequence(anim, delay, repeatdelay, count, loop);
+                this.mainSprite.playFrameSequence(frame, delay, repeatdelay, count, loop);
+                if (this.shadowSprite) this.shadowSprite.playFrameSequence(frame, delay, repeatdelay, count, loop);
             }
         }
 
@@ -5548,9 +5543,8 @@ goog.events.EventHandler.typeArray_ = [];
                     case "medicine":
                     case "tea":
                         let snake = this.snake;
-                        let boostSrc = evt.time;
-                        snake.segments[0].animate(Ge, 80, 500);
-                        snake.setSpeedParameters(boostSrc, 0.1)
+                        snake.segments[0].playAnimation(Ge, 80, 500);
+                        snake.setSpeedParameters(evt.time, 0.1)
                         snake.frameId = Vc;
                         break;
 
@@ -5793,7 +5787,7 @@ goog.events.EventHandler.typeArray_ = [];
 
         // Add click handler
         seq.addStep(goog.bind(function () {
-            goog.events.listenOnce(this.playButton, "mousedown", this.playIntroUISequence)
+            this.eventHandler.listenOnce(this.playButton, "mousedown", this.playIntroUISequence)
         }, game));
         seq.play();
     }
