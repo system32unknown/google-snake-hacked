@@ -19,6 +19,44 @@ function defineSingleton(cls) {
     };
 }
 
+/**
+ * Parse a Starling-style XML spritesheet into a JavaScript object.
+ * @param {string} xmlText - The content of spritesheet.xml as string.
+ * @returns {object} Parsed data: frames: {[name]: {x,y,width,height}}
+ */
+function parseSpriteSheetXML(xmlText) {
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(xmlText, "application/xml");
+    const atlas = xml.querySelector("TextureAtlas");
+    if (!atlas) throw new Error("Invalid spritesheet XML: missing <TextureAtlas>");
+
+    const frames = [];
+    atlas.querySelectorAll("SubTexture").forEach((node) => {
+        frames.push({
+            x: parseInt(node.getAttribute("x")),
+            y: parseInt(node.getAttribute("y")),
+            width: parseInt(node.getAttribute("width")),
+            height: parseInt(node.getAttribute("height"))
+        });
+    });
+    return frames;
+}
+
+function readTextFile(file) {
+    var rawStr = "";
+    var rawFile = new XMLHttpRequest();
+    rawFile.open("GET", file, false);
+    rawFile.onreadystatechange = function () {
+        if (rawFile.readyState === 4)  {
+            if (rawFile.status === 200 || rawFile.status == 0) {
+                rawStr = rawFile.responseText;
+            }
+        }
+    }
+    rawFile.send(null);
+    return rawStr;
+}
+
 var goog = goog || {};
 goog.typeOf = function (a) {
     var b = typeof a;
@@ -2830,10 +2868,12 @@ goog.events.EventHandler.typeArray_ = [];
     };
 
     class SpriteSheet {
-        constructor(imageUrl, frames) {
-            this.imageUrl = imageUrl;
-            this.frames = frames;
-            this.imageLoader = new ImageLoader(imageUrl);
+        constructor(url) {
+            this.imageUrl = url + ".png";
+            this.frameUrl = url + ".xml";
+
+            this.frames = parseSpriteSheetXML(readTextFile(`assets/${this.frameUrl}`));
+            this.imageLoader = new ImageLoader(`./assets/${this.imageUrl}`);
             this.isReady = false;
 
             onImageLoaded(this.imageLoader, goog.bind(() => {
@@ -2842,12 +2882,11 @@ goog.events.EventHandler.typeArray_ = [];
         }
 
         getWidth(index) {
-            var w = this.frames[index];
-            return w[2];
+            return this.frames[index].width;
         }
 
         getHeight(index) {
-            return this.frames[index][3];
+            return this.frames[index].height;
         }
 
         load(callback) {
@@ -2858,9 +2897,9 @@ goog.events.EventHandler.typeArray_ = [];
         createFrame(index) {
             const div = createDiv();
             const frame = this.frames[index];
-            div.style.width = frame[2] + "px";
-            div.style.height = frame[3] + "px";
-            div.style.background = `url(${this.imageUrl}) -${frame[0]}px -${frame[1]}px no-repeat`;
+            div.style.width = frame.width + "px";
+            div.style.height = frame.height + "px";
+            div.style.background = `url("./assets/${this.imageUrl}") -${frame.x}px -${frame.y}px no-repeat`;
             return div;
         }
     }
@@ -2901,306 +2940,6 @@ goog.events.EventHandler.typeArray_ = [];
             Object.entries(collection).forEach(([key, value]) => callback.call(context, value, key, collection));
         }
     }
-
-    const SPRITE_FRAMES = [
-        [734, 138, 14, 23],
-        [0, 255, 6, 23],
-        [501, 559, 14, 23],
-        [1001, 438, 14, 23],
-        [1074, 485, 14, 23],
-        [565, 552, 14, 23],
-        [904, 193, 14, 23],
-        [345, 651, 14, 23],
-        [647, 23, 14, 23],
-        [58, 492, 14, 23],
-        [0, 557, 6, 14],
-        [994, 516, 38, 22],
-        [62, 33, 61, 65],
-        [362, 529, 61, 65],
-        [239, 507, 61, 65],
-        [647, 115, 61, 65],
-        [834, 639, 61, 65],
-        [252, 615, 61, 65],
-        [86, 615, 61, 65],
-        [413, 255, 488, 208],
-        [565, 508, 9, 15],
-        [468, 748, 9, 15],
-        [752, 40, 9, 15],
-        [149, 139, 9, 15],
-        [1018, 438, 9, 15],
-        [520, 33, 9, 15],
-        [575, 33, 9, 15],
-        [428, 33, 9, 15],
-        [664, 23, 9, 15],
-        [501, 466, 9, 15],
-        [35, 525, 9, 15],
-        [940, 0, 168, 128],
-        [565, 466, 12, 14],
-        [77, 466, 12, 14],
-        [525, 0, 12, 14],
-        [518, 559, 12, 14],
-        [150, 615, 99, 128],
-        [178, 33, 56, 30],
-        [647, 183, 56, 30],
-        [380, 33, 9, 15],
-        [764, 198, 9, 15],
-        [940, 415, 9, 15],
-        [1030, 438, 9, 15],
-        [1023, 720, 9, 15],
-        [1035, 720, 9, 15],
-        [416, 33, 9, 15],
-        [620, 466, 9, 15],
-        [404, 33, 9, 15],
-        [392, 33, 9, 15],
-        [790, 0, 9, 15],
-        [149, 56, 26, 26],
-        [994, 485, 26, 28],
-        [834, 466, 26, 28],
-        [963, 284, 99, 128],
-        [1043, 160, 26, 26],
-        [536, 508, 26, 28],
-        [149, 85, 26, 28],
-        [126, 0, 19, 11],
-        [1018, 456, 26, 26],
-        [431, 676, 26, 28],
-        [940, 216, 26, 28],
-        [58, 306, 352, 152],
-        [1072, 160, 20, 14],
-        [206, 489, 30, 24],
-        [480, 748, 16, 16],
-        [501, 726, 20, 19],
-        [685, 466, 32, 39],
-        [501, 585, 40, 43],
-        [177, 255, 32, 39],
-        [1024, 160, 16, 28],
-        [513, 466, 32, 39],
-        [513, 541, 20, 15],
-        [550, 700, 18, 23],
-        [35, 543, 16, 28],
-        [91, 255, 32, 39],
-        [35, 719, 18, 23],
-        [27, 33, 32, 39],
-        [756, 574, 18, 23],
-        [904, 151, 32, 39],
-        [940, 526, 18, 23],
-        [790, 156, 32, 39],
-        [468, 572, 30, 29],
-        [468, 664, 18, 21],
-        [627, 489, 32, 39],
-        [0, 515, 32, 39],
-        [1064, 656, 18, 20],
-        [1043, 219, 32, 39],
-        [904, 252, 20, 16],
-        [178, 66, 466, 186],
-        [51, 158, 48, 48],
-        [126, 255, 48, 48],
-        [597, 543, 133, 60],
-        [971, 541, 133, 60],
-        [316, 466, 133, 60],
-        [597, 638, 212, 132],
-        [316, 622, 26, 29],
-        [904, 0, 27, 29],
-        [693, 83, 27, 29],
-        [995, 160, 26, 29],
-        [723, 40, 26, 28],
-        [597, 489, 27, 28],
-        [834, 608, 27, 28],
-        [100, 483, 26, 28],
-        [1035, 630, 26, 27],
-        [133, 514, 27, 27],
-        [612, 0, 27, 27],
-        [904, 354, 26, 26],
-        [565, 483, 22, 22],
-        [830, 0, 22, 22],
-        [0, 440, 22, 22],
-        [316, 597, 22, 22],
-        [309, 33, 22, 20],
-        [587, 33, 22, 20],
-        [28, 158, 20, 22],
-        [461, 0, 20, 22],
-        [149, 33, 20, 20],
-        [35, 255, 20, 20],
-        [940, 476, 20, 20],
-        [126, 683, 20, 20],
-        [971, 485, 20, 20],
-        [811, 546, 20, 20],
-        [904, 58, 20, 20],
-        [1047, 693, 20, 20],
-        [796, 489, 20, 20],
-        [206, 466, 20, 20],
-        [355, 0, 20, 20],
-        [0, 135, 20, 20],
-        [904, 383, 30, 20],
-        [597, 615, 30, 20],
-        [0, 0, 20, 30],
-        [77, 567, 20, 30],
-        [23, 112, 30, 20],
-        [258, 0, 30, 20],
-        [995, 660, 20, 30],
-        [35, 492, 20, 30],
-        [0, 281, 30, 20],
-        [468, 549, 30, 20],
-        [543, 667, 20, 30],
-        [664, 64, 20, 30],
-        [316, 750, 30, 20],
-        [100, 567, 30, 20],
-        [513, 508, 20, 30],
-        [1070, 693, 20, 30],
-        [133, 544, 20, 20],
-        [54, 525, 20, 20],
-        [711, 115, 20, 20],
-        [845, 86, 20, 20],
-        [1014, 415, 20, 20],
-        [0, 346, 20, 20],
-        [904, 406, 20, 20],
-        [0, 75, 20, 20],
-        [693, 60, 20, 20],
-        [468, 604, 20, 20],
-        [235, 0, 20, 20],
-        [734, 115, 20, 20],
-        [0, 465, 20, 20],
-        [670, 0, 20, 20],
-        [647, 225, 20, 20],
-        [408, 677, 20, 20],
-        [291, 0, 20, 20],
-        [612, 33, 20, 20],
-        [149, 116, 20, 20],
-        [971, 516, 20, 20],
-        [1043, 261, 20, 20],
-        [345, 622, 20, 20],
-        [35, 615, 20, 20],
-        [597, 520, 20, 20],
-        [401, 0, 20, 20],
-        [527, 700, 20, 20],
-        [35, 306, 20, 20],
-        [940, 193, 20, 20],
-        [533, 559, 20, 20],
-        [23, 135, 20, 20],
-        [339, 569, 20, 20],
-        [0, 98, 20, 20],
-        [357, 33, 20, 20],
-        [940, 131, 20, 20],
-        [342, 677, 40, 20],
-        [971, 415, 40, 20],
-        [35, 329, 20, 40],
-        [940, 433, 20, 40],
-        [477, 33, 40, 20],
-        [192, 0, 40, 20],
-        [733, 546, 20, 40],
-        [904, 108, 20, 40],
-        [163, 514, 40, 20],
-        [35, 745, 40, 20],
-        [126, 14, 20, 40],
-        [834, 565, 20, 40],
-        [532, 33, 40, 20],
-        [266, 33, 40, 20],
-        [385, 677, 20, 40],
-        [733, 489, 20, 40],
-        [149, 0, 40, 20],
-        [163, 537, 40, 20],
-        [863, 466, 20, 40],
-        [1047, 438, 20, 40],
-        [1004, 693, 40, 20],
-        [569, 0, 40, 20],
-        [0, 369, 20, 40],
-        [734, 164, 20, 40],
-        [662, 466, 20, 20],
-        [378, 0, 20, 20],
-        [544, 585, 20, 20],
-        [647, 0, 20, 20],
-        [597, 466, 20, 20],
-        [1E3, 720, 20, 20],
-        [316, 569, 20, 20],
-        [940, 284, 20, 20],
-        [664, 41, 20, 20],
-        [1023, 485, 20, 20],
-        [733, 466, 20, 20],
-        [693, 0, 20, 20],
-        [77, 483, 20, 20],
-        [35, 696, 20, 20],
-        [334, 33, 20, 20],
-        [904, 331, 20, 20],
-        [35, 466, 39, 23],
-        [501, 667, 39, 23],
-        [0, 304, 23, 39],
-        [1072, 177, 23, 39],
-        [995, 604, 39, 23],
-        [35, 670, 39, 23],
-        [706, 183, 23, 39],
-        [468, 507, 23, 39],
-        [995, 630, 37, 26],
-        [35, 641, 37, 26],
-        [723, 0, 26, 37],
-        [816, 86, 26, 37],
-        [756, 489, 37, 26],
-        [86, 683, 37, 26],
-        [239, 575, 26, 37],
-        [316, 529, 26, 37],
-        [790, 126, 34, 27],
-        [834, 535, 34, 27],
-        [23, 75, 27, 34],
-        [567, 585, 27, 34],
-        [385, 720, 34, 27],
-        [424, 0, 34, 27],
-        [971, 438, 27, 34],
-        [693, 23, 27, 34],
-        [963, 131, 30, 26],
-        [940, 693, 30, 26],
-        [237, 33, 26, 30],
-        [540, 0, 26, 30],
-        [904, 302, 30, 26],
-        [58, 255, 30, 26],
-        [830, 25, 26, 30],
-        [904, 219, 26, 30],
-        [342, 700, 25, 23],
-        [58, 615, 25, 23],
-        [790, 86, 23, 25],
-        [830, 58, 23, 25],
-        [133, 567, 25, 23],
-        [796, 512, 25, 23],
-        [662, 508, 23, 25],
-        [785, 546, 23, 25],
-        [764, 0, 23, 23],
-        [316, 677, 23, 23],
-        [565, 526, 23, 23],
-        [969, 604, 23, 23],
-        [904, 32, 23, 23],
-        [969, 216, 23, 23],
-        [501, 700, 23, 23],
-        [1064, 630, 23, 23],
-        [940, 552, 24, 26],
-        [368, 622, 24, 26],
-        [940, 604, 26, 24],
-        [0, 488, 26, 24],
-        [1046, 485, 25, 26],
-        [802, 0, 25, 26],
-        [756, 546, 26, 25],
-        [756, 518, 26, 25],
-        [904, 271, 24, 28],
-        [0, 33, 24, 28],
-        [973, 693, 28, 24],
-        [940, 499, 28, 24],
-        [940, 160, 25, 30],
-        [0, 199, 25, 30],
-        [0, 412, 30, 25],
-        [100, 514, 30, 25],
-        [501, 631, 24, 33],
-        [149, 157, 24, 33],
-        [904, 81, 33, 24],
-        [431, 622, 33, 24],
-        [973, 720, 24, 34],
-        [468, 627, 24, 34],
-        [440, 33, 34, 24],
-        [431, 649, 34, 24],
-        [0, 158, 23, 38],
-        [777, 574, 23, 38],
-        [35, 574, 38, 23],
-        [484, 0, 38, 23],
-        [468, 466, 23, 38],
-        [239, 466, 23, 38],
-        [834, 509, 38, 23],
-        [314, 0, 38, 23]
-    ];
 
     class Sprite extends goog.events.EventTarget {
         constructor(frameId) {
@@ -3352,7 +3091,7 @@ goog.events.EventHandler.typeArray_ = [];
         // Private: refresh background position for current frame
         static _updateBackground(sprite) {
             const frame = SpriteManager.frames[sprite._getFrameSource(sprite.frameId)];
-            const pos = frame ? `-${frame[0]}px -${frame[1]}px` : undefined;
+            const pos = frame ? `-${frame.x}px -${frame.y}px` : undefined;
             sprite.element.style.backgroundPosition = pos;
             if (sprite.isLooping) Sprite.moveToGrid(sprite, sprite.gridX, sprite.gridY);
         }
@@ -5927,7 +5666,7 @@ goog.events.EventHandler.typeArray_ = [];
     })(function init() {
         if (Logo = document.getElementById("hplogo")) {
             // Sprite / resource loader for the doodle
-            SpriteManager = new SpriteSheet("./assets/spritesheet.png", SPRITE_FRAMES);
+            SpriteManager = new SpriteSheet("spritesheet");
             SpriteManager.load();
 
             // Build a configuration set (rc) with many keys enabled
