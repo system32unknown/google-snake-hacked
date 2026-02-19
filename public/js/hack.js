@@ -4,9 +4,9 @@ var item_amount = document.getElementById("item_amount");
 var min_time = document.getElementById("min_time");
 
 function spawn() {
-    var tile = tileSpawner_;
+    var tile = gameController.TileSpawner;
     for (var e = 0; e < item_amount.value; e++) {
-        spawnItem_(tile, createItem_(item_type.value), find2x2Block_(tile.gridManager));
+        spawnItem(tile, createItem(item_type.value), find2x2Block(tile.gridManager));
     }
 }
 

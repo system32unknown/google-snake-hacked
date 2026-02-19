@@ -11,7 +11,6 @@ app.use(express.json()); // parse JSON request bodies
 app.use(express.static(__dirname + '/public')); // serve static files from a directory
 
 app.get('/', (_, res) => res.sendFile(__dirname + '/views/index.html'));
-app.get('/boo.html', (_, res) => res.sendFile(__dirname + "/views/boo.html"));
 app.get('/favicon.ico', (_, res) => res.status(204).end());
 
 app.listen(PORT, () => console.log(`App listening at http://localhost:${PORT}`));
