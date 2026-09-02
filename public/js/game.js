@@ -1318,9 +1318,7 @@ class ScoreDisplay extends goog.Disposable {
                 if (sprite.getFrameId() !== frame) {
                     playSwapAnimation(this, pos, sprite, frame);
                 }
-            } else {
-                sprite.show(false);
-            }
+            } else sprite.show(false);
         }
 
         // queue the numeric difference for the small pop effect

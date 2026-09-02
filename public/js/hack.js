@@ -2,6 +2,7 @@ var item_type = document.getElementById("item_type");
 var item_amount = document.getElementById("item_amount");
 
 var min_time = document.getElementById("min_time");
+var score_ = document.getElementById("score_input");
 
 function spawn() {
     var tile = gameController.TileSpawner;
@@ -12,4 +13,9 @@ function spawn() {
 
 function changeTime() {
     minutes = parseInt(min_time.value) * 10000;
+}
+
+function changeScore() {
+    gameController.score = parseInt(score_input.value);
+    gameController.scoreDisplay.update(gameController.score);
 }
