@@ -4,7 +4,7 @@ var ItemDefinitions = {}; // Registry of base item data
 var ItemClasses = null; // Registry mapping item names to their constructors
 
 function defineSingleton(cls) {
-    cls.getInstance = function () {
+    cls.getInstance = () => {
         if (!cls._instance) {
             cls._instance = new cls();
         }
@@ -37,7 +37,7 @@ function parseSpriteSheetXML(xmlText) {
 
 function readTextFile(file) {
     var rawStr = "";
-    var rawFile = new XMLHttpRequest();
+    const rawFile = new XMLHttpRequest();
     rawFile.open("GET", file, false);
     rawFile.onreadystatechange = function () {
         if (rawFile.readyState === 4) {
@@ -129,7 +129,6 @@ class InputController extends goog.events.EventTarget {
 
     onKeyDown(e) {
         let direction = KeyToDirection[e.keyCode];
-        console.log(direction);
         if (direction) {
             this.dispatchEvent(new DirectionEvent(direction));
             if (this.preventDefault && e.preventDefault) e.preventDefault();
@@ -471,15 +470,6 @@ class Point {
     }
 }
 
-// Utility: Add class(es)
-function addClass(el, ...classes) {
-    const existing = (el.className.match(/\S+/g) || []);
-    for (const cls of classes) {
-        if (!existing.includes(cls)) existing.push(cls);
-    }
-    el.className = existing.join(" ");
-}
-
 /**
  * Sets the position (left, top) of a DOM element.
  *
@@ -780,17 +770,6 @@ function getAllGridCells(excludeBlocked = false) {
     return cells;
 }
 const blockedCells = [0, 22, 184, 206];
-
-function forEachItem(collection, callback, context) {
-    if (collection == null) return;
-    if (typeof collection.forEach === "function") {
-        collection.forEach(callback, context);
-    } else if (typeof collection === "string" || Array.isArray(collection)) {
-        Array.from(collection).forEach(callback, context);
-    } else if (typeof collection === "object") {
-        Object.entries(collection).forEach(([key, value]) => callback.call(context, value, key, collection));
-    }
-}
 
 class Sprite extends goog.events.EventTarget {
     constructor(frameId) {
@@ -2045,7 +2024,7 @@ class GridPatternManager {
     match() {
         var a = new goog.structs.Set();
         var b = getLowestActiveCellIndex(this);
-        forEachItem(this.activeCells, function (c) {
+        goog.structs.forEach(this.activeCells, function (c) {
             a.add(c - b);
         }, this);
         var c = "";
@@ -2135,7 +2114,7 @@ function updateCellUsage(grid, cellIndex, isActive) {
  */
 function getActiveLinkedCells(grid) {
     const result = new goog.structs.Set();
-    forEachItem(grid.activeCells, function (cellIndex) {
+    goog.structs.forEach(grid.activeCells, (cellIndex) => {
         if (grid.cellMap.get(cellIndex).usedCount > 0) result.add(cellIndex);
     }, grid);
     return result.getValues();
@@ -2149,7 +2128,7 @@ function getActiveLinkedCells(grid) {
  */
 function getLowestActiveCellIndex(grid) {
     let min = Infinity;
-    forEachItem(grid.activeCells, function (cellIndex) {
+    goog.structs.forEach(grid.activeCells, function (cellIndex) {
         if (cellIndex < min) min = cellIndex;
     });
     return min;
@@ -2229,7 +2208,7 @@ class TileSpawner extends goog.Disposable { // se
     }
 
     disposeInternal() {
-        forEachItem(this.activeItems, item => {
+        goog.structs.forEach(this.activeItems, item => {
             item.disposeInternal(); // dispose
         });
 
@@ -2263,7 +2242,7 @@ function updateItems(obj, currentTime) {
     }, obj);
 
     // Update Ra cells
-    forEachItem(obj.itemMap, function (cell, key) {
+    goog.structs.forEach(obj.itemMap, function (cell, key) {
         if (cell.Bc) {
             updateCellUsage(obj.gridManager, key);
             obj.itemMap.remove(key);
@@ -2410,6 +2389,8 @@ class SnakeController extends goog.events.EventTarget {
         this.speedMultiplier = 1; // Gb
         this.stepPixel = 20; // used for pixel computations
         this.currentStepFrame = 0; // ed cached step frame
+
+        this.Yc = this.Hb = this.Ib = null;
         this.patternManager = GridPatternManager.getInstance();
     }
 
@@ -2489,7 +2470,7 @@ class SnakeController extends goog.events.EventTarget {
      */
     move(now) {
         // auto-reset speed if idle too long
-        if (this.lastCatchTime && (now - this.lastCatchTime) > 5000) {
+        if (this.Ib && (now - this.Ib) > 5000) {
             this.resetSpeed(now);
         }
 
@@ -2554,7 +2535,7 @@ class SnakeController extends goog.events.EventTarget {
                     sprite.getWidth(d + 1);
                     if (rot === 180) x -= 2;
                 } else {
-                    sprite.height(d + 1);
+                    sprite.getHeight(d + 1);
                     if (rot === 270) y -= 2;
                 }
 
@@ -2577,16 +2558,17 @@ class SnakeController extends goog.events.EventTarget {
 
             // tail handling (depending on Ze checks)
             const lastIndex = this.segments.length - 1;
-            if (isSpecialFrame(this.segments[lastIndex - 1])) {
+            const lastSeg = this.segments[lastIndex - 1];
+            if (isSpecialFrame(lastSeg)) {
                 // special tail case: hide last sprite, animate previous
                 this.segments[lastIndex].getSprite().show(false);
-                animateSegmentTurn(this.segments[lastIndex - 1], this.moveProgress);
+                animateSegmentTurn(lastSeg, this.moveProgress);
             } else {
                 // normal tail interpolation
                 this.segments[lastIndex].move(this.moveProgress);
-                const prevSprite = this.segments[lastIndex - 1].getSprite();
-                const px = 20 * this.segments[lastIndex - 1].getRow();
-                const py = 20 * this.segments[lastIndex - 1].getRow();
+                const prevSprite = lastSeg.getSprite();
+                const px = 20 * lastSeg.getX();
+                const py = 20 * lastSeg.getY();
                 placeSprite(px, py, prevSprite.getRotation(), frame, prevSprite, false);
             }
 
@@ -2631,9 +2613,19 @@ class SnakeController extends goog.events.EventTarget {
         this.moveDuration = this.baseDuration;
         this.speedMultiplier = 1;
         this.lastUpdateTime = now;
-        this.lastMatchTime = null;
+        this.Ib = null;
     }
 
+    /**
+     * setSpeedParameters — equivalent to original Ae
+     * For debugging, sets IB (some timer), speed multiplier Gb and derived duration Ab.
+     */
+    setSpeedParameters(secs, speed) {
+        this.Ib = secs;
+        this.speedMultiplier = speed;
+        this.moveDuration = this.baseDuration * this.speedMultiplier;
+        console.log(`duration: ${this.moveDuration} | speed: ${this.speedMultiplier}`);
+    }
     /**
      * enqueueDirection — original ze
      * Adds a direction into the direction queue if valid and triggers animation on head.
@@ -2686,15 +2678,16 @@ class SnakeController extends goog.events.EventTarget {
         updateSegmentSprite(this.segments[lastIndex]);
     }
 
-    /**
-     * setSpeedParameters — equivalent to original Ae
-     * For debugging, sets IB (some timer), speed multiplier Gb and derived duration Ab.
-     */
-    setSpeedParameters(secs, speed) {
-        this.lastCatchTime = secs;
-        this.speedMultiplier = speed;
-        this.moveDuration = this.baseDuration * this.speedMultiplier;
-        console.log(`duration: ${this.moveDuration} | speed: ${this.speedMultiplier}`);
+    reverseMove(b) {
+        if (this.Yc != null) return;
+        this.currentFrame = Xc;
+        this.Hb = b;
+        setTimeout(goog.bind(function() {
+            if (this.Hb == b) {
+                this.currentFrame = Ee;
+                this.Hb = null;
+            }
+        }, this), 5000)
     }
 
     // shorthand helpers to expose head coordinates like Sa / Ta
@@ -2966,7 +2959,7 @@ class GameController extends goog.Disposable {
         this.root = rootElement;
 
         this.gridContainer = createDiv(); // fa
-        addClass(this.gridContainer, "grids");
+        this.gridContainer.className = "grids";
         this.root.appendChild(this.gridContainer);
         setPosition(this.gridContainer, START_POS.x, START_POS.y);
 
@@ -3131,16 +3124,29 @@ class GameController extends goog.Disposable {
             this.score = Math.min(this.score + itemData.score, 999);
 
             switch (name) {
-                case "mushroom":
                 case "firecraker":
-                case "medicine":
+                    var snake = this.snake;
+                    if (snake.Yc == null) {
+                        snake.segments[0].playAnimation(Je, 80);
+                        snake.segments[0].playAnimation(Ke, 100, 500, 100);
+                        snake.setSpeedParameters(evt.time, Infinity);
+                    }
+                    break;
                 case "tea":
-                    let snake = this.snake;
+                    var snake = this.snake;
                     snake.segments[0].playAnimation(Ge, 80, 500);
-                    snake.setSpeedParameters(evt.time, 0.1)
+                    snake.setSpeedParameters(evt.time, 0.1);
                     snake.frameId = Vc;
                     break;
-
+                case "medicine":
+                    var snake = this.snake;
+                    snake.segments[0].playAnimation(Ge, 80, 500);
+                    snake.setSpeedParameters(evt.time, 1.5);
+                    snake.frameId = Wc;
+                    break;
+                case "mushroom":
+                    snake.reverseMove(evt.time);
+                    break;
                 case "lantern":
                     // Lantern combo logic (unchanged)
                     let comboStr = processLanternCombo(itemData);
@@ -3620,8 +3626,7 @@ function init() {
         // Build reverse mapping Xd from keys in Zd to some default T, then override some
         var enumObj = LootTable;
         var reverseMap = {};
-        var enumKey;
-        for (enumKey in enumObj) reverseMap[enumObj[enumKey]] = GridEntity;
+        for (var enumKey in enumObj) reverseMap[enumObj[enumKey]] = GridEntity;
         reverseMap[enumObj.firecraker] = AnimatedFallingEntity;
         reverseMap[enumObj.dumpling] = StaticVariantEntity;
         reverseMap[enumObj.steamer] = ShadowedEntity;
