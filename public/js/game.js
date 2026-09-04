@@ -706,7 +706,7 @@ class ImageLoader {
 }
 function onImageLoaded(loader, callback) {
     loader.loaded ? callback() : loader.callbacks.push(callback)
-};
+}
 
 class SpriteSheet {
     constructor(url) {
@@ -914,12 +914,12 @@ class Sprite extends goog.events.EventTarget {
 
     // Change frame
     static setFrame(sprite, frameId) {
-        if (sprite.element) {
-            Sprite._updateSize(sprite, frameId);
-            if (sprite.frameId !== frameId) {
-                sprite.frameId = frameId;
-                Sprite._updateBackground(sprite);
-            }
+        if (!sprite.element) return;
+
+        Sprite._updateSize(sprite, frameId);
+        if (sprite.frameId !== frameId) {
+            sprite.frameId = frameId;
+            Sprite._updateBackground(sprite);
         }
     }
 
@@ -1024,12 +1024,21 @@ class Sprite extends goog.events.EventTarget {
     // Internal helper to update size when frame changes
     static _updateSize(sprite, frameId) {
         const frameSource = sprite._getFrameSource(frameId);
-        const w = SpriteManager.getWidth(frameSource);
-        const h = SpriteManager.getHeight(frameSource);
-        sprite.width = w;
-        sprite.height = h;
-        sprite.element.style.width = `${w + 1}px`;
-        sprite.element.style.height = `${h + 1}px`;
+        sprite.setWidth(SpriteManager.getWidth(frameSource));
+        sprite.setHeight(SpriteManager.getHeight(frameSource));
+    }
+
+    setWidth(value) {
+        if (this.width != value && this.element) {
+            this.width = value;
+            this.element.style.width = `${value + 1}px`;
+        }
+    }
+    setHeight(value) {
+        if (this.height != value && this.element) {
+            this.height = value;
+            this.element.style.height = `${value + 1}px`;
+        }
     }
 }
 let SpriteManager = null;
@@ -1093,7 +1102,7 @@ var qc = [111, 114, 112, 113],
     R = {
         Lg: 57,
         kf: 11,
-        pe: 86,
+        firecracker: 86,
         Gf: 84,
         Hf: 83,
         If: 80,
@@ -1105,12 +1114,12 @@ var qc = [111, 114, 112, 113],
         Ff: 66,
         ne: 65,
         oe: 62,
-        ha: 64,
-        Ea: 71,
+        coin: 64,
+        ingot: 71,
         we: 69,
         xe: 73,
-        Fa: 87,
-        mb: 85,
+        medicine: 87,
+        mushroom: 85,
         le: 82,
         qe: 81,
         se: 72,
@@ -1121,8 +1130,8 @@ var qc = [111, 114, 112, 113],
         og: 35,
         ng: 34,
         lg: 32,
-        ob: 67,
-        Va: 63,
+        steamer: 67,
+        envelope: 63,
         of: qc,
         Ug: Bc,
         bg: Cc,
@@ -1891,9 +1900,7 @@ class LanternEntity extends GridEntity {
     }
 }
 
-var sequence = [];
-var forward = true;
-var matchCount = 0;
+var lanternSequence = [];
 
 class ObjectPoolManager {
     constructor() {
@@ -2529,14 +2536,12 @@ class SnakeController extends goog.events.EventTarget {
 
                 if (flip) sprite.rotate(rot);
                 if (rot === 180 || rot === 0) {
-                    // setWidth/Height adjustments (nc/oc logic converted)
-                    sprite.getWidth(d + 1);
+                    sprite.setWidth(d + 1);
                     if (rot === 180) x -= 2;
                 } else {
-                    sprite.getHeight(d + 1);
+                    sprite.setHeight(d + 1);
                     if (rot === 270) y -= 2;
                 }
-
                 Sprite.setPosition(sprite, x, y);
             };
 
@@ -3146,8 +3151,7 @@ class GameController extends goog.Disposable {
                     snake.reverseMove(evt.time);
                     break;
                 case "lantern":
-                    // Lantern combo logic (unchanged)
-                    let comboStr = processLanternCombo(itemData);
+                    let comboStr = this.processLanternCombo(itemData);
                     if (comboStr) {
                         let spawner = this.TileSpawner;
                         for (let i = 0; i < comboStr.length; i++)
@@ -3167,6 +3171,42 @@ class GameController extends goog.Disposable {
         }
     }
 
+    processLanternCombo(itemData) {
+        var completedCombo = "";
+        var sequence = lanternSequence;
+        var value = itemData.variantKey;
+
+        const GOOGLE_WORD = "GOOGLE";
+
+        if (sequence.length === 1) {
+            if (value === sequence[0]) {
+                sequenceDirection = true;
+            } else if (sequence[0] === GOOGLE_WORD[0] && value === GOOGLE_WORD[1]) {
+                sequenceDirection = false;
+            } else {
+                lanternSequence = [];
+                sequenceDirection = true;
+            }
+        } else if (sequence.length) {
+            if ((sequenceDirection && value === sequence[0]) || (!sequenceDirection && value === GOOGLE_WORD[sequence.length])) {
+                if ((sequenceDirection && sequence.length === 2) || (!sequenceDirection && sequence.length === 5)) {
+                    sequence.push(value);
+                    lanternSequence = [];
+                    sequenceDirection = true;
+                    completedSequences++;
+
+                    completedCombo = sequence.join("");
+                }
+            } else {
+                lanternSequence = [];
+                sequenceDirection = true;
+            }
+        }
+
+        if (!completedCombo) lanternSequence.push(value);
+        return completedCombo;
+    }
+
     handlePatternMatch(evt) {
         const pattern = evt.pattern;
         if (pattern !== "") fillGridWithItems(this.TileSpawner, pattern);
@@ -3177,9 +3217,7 @@ class GameController extends goog.Disposable {
         if ("tutorial_end" == this.state) {
             hideTutorialUI(this);
             ResetGame(this);
-        } else if ("running" == this.state) {
-            this.snake.enqueueDirection(input.direction);
-        }
+        } else if ("running" == this.state) this.snake.enqueueDirection(input.direction);
     }
 
     handleClick() {
@@ -3247,7 +3285,7 @@ class GameController extends goog.Disposable {
      */
     update(deltaTime, currentTime) {
         // Update managers
-        this.TileSpawner.update(currentTime);
+        this.TileSpawner.update(deltaTime);
         this.snake.move(currentTime);
         this.scoreDisplay.processPendingEffects(currentTime);
         this.timerDisplay.update(Math.floor(this.remainingTime / 1000));
@@ -3378,9 +3416,7 @@ function playIntroSequence(game) {
     }, 700);
 
     // Run "ready" callback
-    seq.addStep(function () {
-        game.flashStartButton();
-    });
+    seq.addStep(() => game.flashStartButton());
 
     // Add click handler
     seq.addStep(goog.bind(function () {
@@ -3424,12 +3460,9 @@ function ResetGame(game) {
     game.scoreDisplay.reset();
     resetComboData(game);
 
-    sequence = [];
-    forward = true;
+    lanternSequence = [];
 
-    game.icons.forEach(function (icon) {
-        icon.show(false)
-    });
+    game.icons.forEach(icon => icon.show(false));
     game.soundButton.show(true);
     game.music.play();
     game.music.audioElement.muted = game.muted;
@@ -3451,8 +3484,8 @@ function resetComboData(game) {
  */
 function updateIcons(game) {
     game.icons.forEach(function (icon, index) {
-        if (index < sequence.length) {
-            Sprite.setFrame(icon, sd[sequence[index]]);
+        if (index < lanternSequence.length) {
+            Sprite.setFrame(icon, sd[lanternSequence[index]]);
             icon.show(true);
         } else icon.show(false);
     })
@@ -3511,9 +3544,7 @@ function initTutorial(game) {
 /** @param {GameController} game */
 function hideTutorialUI(game) {
     Sprite.fadeOut(game.tutorialRoot);
-    goog.array.forEach(game.tutorialButtons, function (a) {
-        Sprite.fadeOut(a)
-    });
+    goog.array.forEach(game.tutorialButtons, a => Sprite.fadeOut(a));
     game.tutorialRoot.show(false)
 };
 
@@ -3562,8 +3593,7 @@ function init() {
         // Build level / wave presets (W)
         var keyEnum = LootTable;
 
-        var configObj;
-        configObj = {};
+        var configObj = {};
         configObj[keyEnum.firecraker] = 10;
         configObj[keyEnum.dumpling] = 20;
         configObj[keyEnum.tea] = 20;
@@ -3635,14 +3665,14 @@ function init() {
 
         // Build item definitions (Wd)
         var itemDefs = {};
-        itemDefs[enumObj.firecraker] = new Item([R.pe], enumObj.firecraker, 5000);
+        itemDefs[enumObj.firecraker] = new Item([R.firecracker], enumObj.firecraker, 5000);
         itemDefs[enumObj.dumpling] = new Item([R.ne, R.oe], enumObj.dumpling, 7000, 2);
-        itemDefs[enumObj.steamer] = new Item([R.ob], enumObj.steamer, 7000, 10);
+        itemDefs[enumObj.steamer] = new Item([R.steamer], enumObj.steamer, 7000, 10);
         itemDefs[enumObj.tea] = new Item([R.we, R.xe], enumObj.tea, 6000, 2, true);
-        itemDefs[enumObj.medicine] = new Item([R.Fa], enumObj.medicine, 6000, 2, false);
+        itemDefs[enumObj.medicine] = new Item([R.medicine], enumObj.medicine, 6000, 2, false);
         itemDefs[enumObj.papercut] = new Item([R.qe, R.le], enumObj.papercut, 6000, 5);
         itemDefs[enumObj.envelope] = new Item([R.envelope], enumObj.envelope, 7000, 2);
-        itemDefs[enumObj.mushroom] = new Item([R.mb], enumObj.mushroom, 7000, 1, false);
+        itemDefs[enumObj.mushroom] = new Item([R.mushroom], enumObj.mushroom, 7000, 1, false);
         itemDefs[enumObj.lantern] = new Item([R.se, R.ve, R.ue, R.re], enumObj.lantern, 8000, 2);
         itemDefs[enumObj.coin] = new Item([R.coin], enumObj.coin, 10000, 1);
         itemDefs[enumObj.ingot] = new Item([R.ingot], enumObj.ingot, 5000, 5);
