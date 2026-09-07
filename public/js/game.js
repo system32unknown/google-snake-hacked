@@ -2271,7 +2271,7 @@ function fillGridWithItems(obj, patternCount) {
 }
 
 /**
- * Spawns an item into the grid at specified positions.
+ * Spawns an item into the grid at specified positions. (ue)
  * 
  * @param {TileSpawner} tileSpawner - The TileSpawner instance managing the grid.
  * @param {Object} item - The item object to spawn.
@@ -2279,17 +2279,19 @@ function fillGridWithItems(obj, patternCount) {
  */
 function spawnItem(tileSpawner, item, positions) {
     var addItemToGrid = (it, pos) => {
-        tileSpawner.itemMap.set(pos, it);   // Map grid position → item
-        tileSpawner.activeItems.add(it);        // Track active items
-        tileSpawner.gridManager.markCell(pos);   // Mark cell as occupied
+        tileSpawner.itemMap.set(pos, it); // Map grid position → item
+        tileSpawner.activeItems.add(it); // Track active items
+        tileSpawner.gridManager.markCell(pos); // Mark cell as occupied
     };
 
     if (Array.isArray(positions)) {
         positions.forEach(pos => addItemToGrid.call(tileSpawner, item, pos));
         snapPos(item, positions[0]);
+        console.log("Cell" + positions);
     } else {
         addItemToGrid.call(tileSpawner, item, positions);
         snapPos(item, positions);
+        console.log("Cell" + positions);
     }
 
     attachSpritesToContainer(item, tileSpawner.rootElement);
@@ -2311,7 +2313,7 @@ function runIntroStep(snake) {
     const step = introSteps[snakeStepIndex];
     const point = step.point;
 
-    if (snake.getRow() === point[1] && snake.getCol() === point[0]) {
+    if (snake.getY() === point[1] && snake.getX() === point[0]) {
         snake.enqueueDirection(step.dir);
 
         snakeStepIndex++;
@@ -2549,8 +2551,8 @@ class SnakeController extends goog.events.EventTarget {
             if (this.segments[0].currentDirection === this.segments[1].currentDirection) {
                 const headAngle = this.segments[0].getSprite().getRotation();
                 this.headSprite.show(true);
-                const headPixelX = 20 * this.getCol();
-                const headPixelY = 20 * this.getRow();
+                const headPixelX = 20 * this.getX();
+                const headPixelY = 20 * this.getY();
                 placeSprite(headPixelX, headPixelY, headAngle, frame, this.headSprite, true);
                 this.segments[0].move(this.moveProgress);
             } else {
@@ -2644,8 +2646,7 @@ class SnakeController extends goog.events.EventTarget {
 
             // only allow orthogonal turns (1/2 vs 3/4 cross)
             if (((currentFacing === 1 || currentFacing === 2) && (directionInput === 3 || directionInput === 4)) || ((directionInput === 1 || directionInput === 2) && (currentFacing === 3 || currentFacing === 4))) {
-                this.directionQueue.push(directionInput);
-                // choose a quick animation depending on transform map result
+                this.directionQueue.push(directionInput); // choose a quick animation depending on transform map result
                 const transform = DirectionManager.getInstance().transformMap.get([currentFacing, directionInput]);
                 this.segments[0].playAnimation((transform === 3) ? Le : Me, 80);
             }
@@ -2707,14 +2708,6 @@ class SnakeController extends goog.events.EventTarget {
         this.directionQueue = null;
         this.headSprite.disposeInternal();
         super.disposeInternal();
-    }
-
-    // convenience getters used in original code
-    getRow() {
-        return this.getY();
-    }
-    getCol() {
-        return this.getX();
     }
 }
 
