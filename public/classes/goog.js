@@ -55,31 +55,31 @@ goog.removeUid = function (a) {
         delete a[goog.UID_PROPERTY_]
     } catch (b) { }
 };
-goog.nullFunction = function () {};
+goog.nullFunction = function () { };
 goog.UID_PROPERTY_ = "closure_uid_" + Math.floor(2147483648 * Math.random()).toString(36);
 goog.uidCounter_ = 0;
 goog.getHashCode = goog.getUid;
 goog.removeHashCode = goog.removeUid;
 goog.bindNative_ = function (a, b, c) {
-	return a.call.apply(a.bind, arguments)
+    return a.call.apply(a.bind, arguments)
 };
 goog.bindJs_ = function (a, b, c) {
-	var d = b || goog.global;
-	if (arguments.length > 2) {
-		var e = Array.prototype.slice.call(arguments, 2);
-		return function () {
-			var b = Array.prototype.slice.call(arguments);
-			Array.prototype.unshift.apply(b, e);
-			return a.apply(d, b)
-		}
-	}
-	return function () {
-		return a.apply(d, arguments)
-	}
+    var d = b || goog.global;
+    if (arguments.length > 2) {
+        var e = Array.prototype.slice.call(arguments, 2);
+        return function () {
+            var b = Array.prototype.slice.call(arguments);
+            Array.prototype.unshift.apply(b, e);
+            return a.apply(d, b)
+        }
+    }
+    return function () {
+        return a.apply(d, arguments)
+    }
 };
-goog.bind = function() {
-	goog.bind = Function.prototype.bind && Function.prototype.bind.toString().indexOf("native code") != -1 ? goog.bindNative_ : goog.bindJs_;
-	return goog.bind.apply(null, arguments)
+goog.bind = function () {
+    goog.bind = Function.prototype.bind && Function.prototype.bind.toString().indexOf("native code") != -1 ? goog.bindNative_ : goog.bindJs_;
+    return goog.bind.apply(null, arguments)
 };
 
 goog.string = {};
@@ -421,7 +421,7 @@ goog.userAgent.WINDOWS = goog.userAgent.PLATFORM_KNOWN_ ? goog.userAgent.ASSUME_
 goog.userAgent.LINUX = goog.userAgent.PLATFORM_KNOWN_ ? goog.userAgent.ASSUME_LINUX : goog.userAgent.detectedLinux_;
 goog.userAgent.X11 = goog.userAgent.PLATFORM_KNOWN_ ? goog.userAgent.ASSUME_X11 : goog.userAgent.detectedX11_;
 goog.userAgent.determineVersion_ = function () {
-    var a = "", b;        
+    var a = "", b;
     goog.userAgent.OPERA && document.opera ? (a = document.opera.version, a = "function" == typeof a ? a() : a) : (goog.userAgent.GECKO ? b = /rv\:([^\);]+)(\)|;)/ : goog.userAgent.IE ? b = /MSIE\s+([^\);]+)(\)|;)/ : goog.userAgent.WEBKIT && (b = /WebKit\/(\S+)/), b && (a = (a = b.exec(goog.userAgent.getUserAgentString())) ? a[1] : ""));
     return goog.userAgent.IE && (b = goog.userAgent.getDocumentMode_(), b > parseFloat(a)) ? "" + b : a
 };
@@ -500,7 +500,7 @@ goog.object.findValue = function (a, b, c) {
     return (b = goog.object.findKey(a, b, c)) && a[b]
 };
 goog.object.isEmpty = function (a) {
-    for (var _b in a) if(Object.hasOwn(a, _b)) return false;
+    for (var _b in a) if (Object.hasOwn(a, _b)) return false;
     return true
 };
 goog.object.clear = function (a) {
@@ -1750,7 +1750,7 @@ var g;
 goog.events.pools.setProxyCallbackFunction = function (a) {
     g = a
 };
-goog.events.pools.getObject = function() {
+goog.events.pools.getObject = function () {
     return {
         count_: 0,
         remaining_: 0
@@ -1761,14 +1761,14 @@ goog.events.pools.getArray = function () {
     return []
 }
 goog.events.pools.releaseArray = goog.nullFunction;
-goog.events.pools.getProxy = function() {
+goog.events.pools.getProxy = function () {
     var a = function (b) {
         return g.call(a.src, a.key, b)
     };
     return a
 }
 goog.events.pools.releaseProxy = goog.nullFunction;
-goog.events.pools.getListener =  function () {
+goog.events.pools.getListener = function () {
     return new goog.events.Listener
 };
 goog.events.pools.releaseListener = goog.nullFunction;
@@ -2151,3 +2151,306 @@ goog.events.EventHandler.keyPool_ = new goog.structs.SimplePool(goog.events.Even
 goog.events.EventHandler.keys_ = null;
 goog.events.EventHandler.key_ = null;
 goog.events.EventHandler.typeArray_ = [];
+
+goog.math = {};
+
+/**
+ * Converts degrees to radians.
+ * @param {number} angleDegrees Angle in degrees.
+ * @return {number} Angle in radians.
+ */
+goog.math.toRadians = function (angleDegrees) {
+    return angleDegrees * Math.PI / 180;
+};
+
+/**
+ * Converts radians to degrees.
+ * @param {number} angleRadians Angle in radians.
+ * @return {number} Angle in degrees.
+ */
+goog.math.toDegrees = function (angleRadians) {
+    return angleRadians * 180 / Math.PI;
+};
+
+/**
+ * Returns a random integer greater than or equal to 0 and less than `a`.
+ * @param {number} a  The upper bound for the random integer (exclusive).
+ * @return {number} A random integer N such that 0 <= N < a.
+ */
+goog.math.randomInt = function (a) {
+    return Math.floor(Math.random() * a);
+};
+
+/**
+ * Returns a random number greater than or equal to `a` and less than
+ * `b`.
+ * @param {number} a  The lower bound for the random number (inclusive).
+ * @param {number} b  The upper bound for the random number (exclusive).
+ * @return {number} A random number N such that a <= N < b.
+ */
+goog.math.uniformRandom = function (a, b) {
+    return a + Math.random() * (b - a);
+};
+
+/**
+ * The % operator in JavaScript returns the remainder of a / b, but differs from
+ * some other languages in that the result will have the same sign as the
+ * dividend. For example, -1 % 8 == -1, whereas in some other languages
+ * (such as Python) the result would be 7. This function emulates the more
+ * correct modulo behavior, which is useful for certain applications such as
+ * calculating an offset index in a circular list.
+ *
+ * @param {number} a The dividend.
+ * @param {number} b The divisor.
+ * @return {number} a % b where the result is between 0 and b (either 0 <= x < b
+ *     or b < x <= 0, depending on the sign of b).
+ */
+goog.math.modulo = function (a, b) {
+    var r = a % b;
+    // If r and b differ in sign, add b to wrap the result to the correct sign.
+    return (r * b < 0) ? r + b : r;
+};
+
+// TODO(user): Rename to normalizeAngle, retaining old name as deprecated
+// alias.
+/**
+ * Normalizes an angle to be in range [0-360). Angles outside this range will
+ * be normalized to be the equivalent angle with that range.
+ * @param {number} angle Angle in degrees.
+ * @return {number} Standardized angle.
+ */
+goog.math.standardAngle = function (angle) {
+    return goog.math.modulo(angle, 360);
+};
+
+/**
+ * Computes the angle between two points (x1,y1) and (x2,y2).
+ * Angle zero points in the +X direction, 90 degrees points in the +Y
+ * direction (down) and from there we grow clockwise towards 360 degrees.
+ * @param {number} x1 x of first point.
+ * @param {number} y1 y of first point.
+ * @param {number} x2 x of second point.
+ * @param {number} y2 y of second point.
+ * @return {number} Standardized angle in degrees of the vector from
+ *     x1,y1 to x2,y2.
+ */
+goog.math.angle = function (x1, y1, x2, y2) {
+    return goog.math.standardAngle(goog.math.toDegrees(Math.atan2(y2 - y1, x2 - x1)));
+};
+
+/**
+* A utility class for representing two-dimensional positions.
+*/
+goog.math.Coordinate = class {
+    /**
+     * @param {number=} opt_x Left, defaults to 0.
+     * @param {number=} opt_y Top, defaults to 0.
+     */
+    constructor(opt_x, opt_y) {
+        /** @type {number} X-value */
+        this.x = (opt_x !== undefined) ? opt_x : 0;
+
+        /** @type {number} Y-value */
+        this.y = (opt_y !== undefined) ? opt_y : 0;
+    }
+
+    /**
+     * Returns a new copy of the coordinate.
+     * @return {!Coordinate} A clone of this coordinate.
+     */
+    clone() {
+        return new Coordinate(this.x, this.y);
+    }
+
+    /**
+     * Returns a nice string representing the coordinate.
+     * @return {string} In the form (50, 73).
+     */
+    toString() {
+        return "(" + this.x + ", " + this.y + ")";
+    }
+
+    /**
+     * Returns whether the specified value is equal to this coordinate.
+     * @param {*} other Some other value.
+     * @return {boolean} Whether the specified value is equal to this coordinate.
+     */
+    equals(other) {
+        return other instanceof Coordinate && Coordinate.equals(this, other);
+    }
+
+    /**
+     * Rounds the x and y fields to the next larger integer values.
+     * @return {!Coordinate} This coordinate with ceil'd fields.
+     */
+    ceil() {
+        this.x = Math.ceil(this.x);
+        this.y = Math.ceil(this.y);
+        return this;
+    }
+
+    /**
+     * Rounds the x and y fields to the next smaller integer values.
+     * @return {!Coordinate} This coordinate with floored fields.
+     */
+    floor() {
+        this.x = Math.floor(this.x);
+        this.y = Math.floor(this.y);
+        return this;
+    }
+
+    /**
+     * Rounds the x and y fields to the nearest integer values.
+     * @return {!Coordinate} This coordinate with rounded fields.
+     */
+    round() {
+        this.x = Math.round(this.x);
+        this.y = Math.round(this.y);
+        return this;
+    }
+
+    /**
+     * Translates this coordinate by the given offsets. If a Coordinate is
+     * given, x and y are translated by the coordinate's x and y. Otherwise,
+     * x and y are translated by `tx` and `opt_ty` respectively.
+     * @param {number|Coordinate} tx The value to translate x by, or the
+     *     coordinate to translate this coordinate by.
+     * @param {number=} opt_ty The value to translate y by.
+     * @return {!Coordinate} This coordinate after translating.
+     */
+    translate(tx, opt_ty) {
+        if (tx instanceof Coordinate) {
+            this.x += tx.x;
+            this.y += tx.y;
+        } else {
+            this.x += Number(tx);
+            if (typeof opt_ty === "number") {
+                this.y += opt_ty;
+            }
+        }
+        return this;
+    }
+
+    /**
+     * Scales this coordinate by the given scale factors. x is scaled by
+     * `sx` and y by `opt_sy` (or `sx` again if `opt_sy` is omitted).
+     * @param {number} sx The scale factor to use for the x dimension.
+     * @param {number=} opt_sy The scale factor to use for the y dimension.
+     * @return {!Coordinate} This coordinate after scaling.
+     */
+    scale(sx, opt_sy) {
+        var sy = (typeof opt_sy === "number") ? opt_sy : sx;
+        this.x *= sx;
+        this.y *= sy;
+        return this;
+    }
+
+    /**
+     * Rotates this coordinate clockwise about the origin (or, optionally,
+     * the given center) by the given angle, in radians.
+     * @param {number} radians The angle to rotate by, clockwise, in radians.
+     * @param {!Coordinate=} opt_center The center of rotation. Defaults to
+     *     (0, 0) if not given.
+     */
+    rotateRadians(radians, opt_center) {
+        var center = opt_center || new Coordinate(0, 0);
+
+        var x = this.x;
+        var y = this.y;
+        var cos = Math.cos(radians);
+        var sin = Math.sin(radians);
+
+        this.x = (x - center.x) * cos - (y - center.y) * sin + center.x;
+        this.y = (x - center.x) * sin + (y - center.y) * cos + center.y;
+    }
+
+    /**
+     * Rotates this coordinate clockwise about the origin (or, optionally,
+     * the given center) by the given angle, in degrees.
+     * @param {number} degrees The angle to rotate by, clockwise, in degrees.
+     * @param {!Coordinate=} opt_center The center of rotation. Defaults to
+     *     (0, 0) if not given.
+     */
+    rotateDegrees(degrees, opt_center) {
+        this.rotateRadians(toRadians(degrees), opt_center);
+    }
+
+    // ---- Static (class-level) methods ----
+
+    /**
+     * Compares coordinates for equality.
+     * @param {Coordinate} a A Coordinate.
+     * @param {Coordinate} b A Coordinate.
+     * @return {boolean} True iff the coordinates are equal, or if both are null.
+     */
+    static equals(a, b) {
+        if (a == b) return true;
+        if (!a || !b) return false;
+        return a.x == b.x && a.y == b.y;
+    }
+
+    /**
+     * Returns the distance between two coordinates.
+     * @param {!Coordinate} a A Coordinate.
+     * @param {!Coordinate} b A Coordinate.
+     * @return {number} The distance between `a` and `b`.
+     */
+    static distance(a, b) {
+        var dx = a.x - b.x;
+        var dy = a.y - b.y;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    /**
+     * Returns the magnitude of a coordinate.
+     * @param {!Coordinate} a A Coordinate.
+     * @return {number} The distance between the origin and `a`.
+     */
+    static magnitude(a) {
+        return Math.sqrt(a.x * a.x + a.y * a.y);
+    }
+
+    /**
+     * Returns the angle from the origin to a coordinate.
+     * @param {!Coordinate} a A Coordinate.
+     * @return {number} The angle, in degrees, clockwise from the positive
+     *     X axis to `a`.
+     */
+    static azimuth(a) {
+        return angle(0, 0, a.x, a.y); // goog.math.angle
+    }
+
+    /**
+     * Returns the squared distance between two coordinates. Useful for
+     * comparisons when the actual distance value isn't required, since it
+     * avoids the cost of a square root.
+     * @param {!Coordinate} a A Coordinate.
+     * @param {!Coordinate} b A Coordinate.
+     * @return {number} The squared distance between `a` and `b`.
+     */
+    static squaredDistance(a, b) {
+        var dx = a.x - b.x;
+        var dy = a.y - b.y;
+        return dx * dx + dy * dy;
+    }
+
+    /**
+     * Returns the difference between two coordinates as a new Coordinate.
+     * @param {!Coordinate} a A Coordinate.
+     * @param {!Coordinate} b A Coordinate.
+     * @return {!Coordinate} A Coordinate representing `a - b`.
+     */
+    static difference(a, b) {
+        return new Coordinate(a.x - b.x, a.y - b.y);
+    }
+
+    /**
+     * Returns the sum of two coordinates as a new Coordinate.
+     * @param {!Coordinate} a A Coordinate.
+     * @param {!Coordinate} b A Coordinate.
+     * @return {!Coordinate} A Coordinate representing `a + b`.
+     */
+    static sum(a, b) {
+        return new Coordinate(a.x + b.x, a.y + b.y);
+    }
+}

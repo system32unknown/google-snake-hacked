@@ -1,3 +1,6 @@
+var Point = goog.math.Coordinate;
+var Disposable = goog.Disposable;
+
 var minutes = 6E4;
 
 var ItemDefinitions = {}; // Registry of base item data
@@ -5,10 +8,7 @@ var ItemClasses = null; // Registry mapping item names to their constructors
 
 function defineSingleton(cls) {
     cls.getInstance = () => {
-        if (!cls._instance) {
-            cls._instance = new cls();
-        }
-        return cls._instance;
+        return cls._instance ? cls._instance : (cls._instance = new cls);
     };
 }
 
@@ -336,7 +336,7 @@ function createOpacityAnimator(element, start, end) {
     };
 }
 
-class VisibilityTimer extends goog.Disposable {
+class VisibilityTimer extends Disposable {
     constructor(timeoutMs, onVisible, onHidden) {
         super();
         this.timeoutMs = timeoutMs;    // How long to wait (in ms)
@@ -418,58 +418,6 @@ function random(a) {
     return Math.floor(Math.random() * a)
 }
 
-class Point {
-    constructor(x, y) {
-        // `g` likely means undefined or null in the original code.
-        // So if x or y are not provided, default to 0.
-        this.x = (typeof x !== undefined) ? x : 0;
-        this.y = (typeof y !== undefined) ? y : 0;
-    }
-
-    /** Returns a clone (copy) of this point. */
-    clone() {
-        return new Point(this.x, this.y);
-    }
-
-    /** Returns a string like "(x, y)". */
-    toString() {
-        return `(${this.x}, ${this.y})`;
-    }
-
-    /** Rounds x and y upward to the next integer. */
-    ceil() {
-        this.x = Math.ceil(this.x);
-        this.y = Math.ceil(this.y);
-        return this;
-    }
-
-    /** Rounds x and y downward to the previous integer. */
-    floor() {
-        this.x = Math.floor(this.x);
-        this.y = Math.floor(this.y);
-        return this;
-    }
-
-    /** Rounds x and y to the nearest integer. */
-    round() {
-        this.x = Math.round(this.x);
-        this.y = Math.round(this.y);
-        return this;
-    }
-
-    /**
-     * Scales x and y by given factors.
-     * If only one argument is provided, scales both coordinates equally.
-     * @param {number} scaleX
-     * @param {number} [scaleY]
-     */
-    scale(scaleX, scaleY) {
-        this.x *= scaleX;
-        this.y *= (typeof scaleY === "number") ? scaleY : scaleX;
-        return this;
-    }
-}
-
 /**
  * Sets the position (left, top) of a DOM element.
  *
@@ -514,7 +462,7 @@ function setOpacity(el, value) {
     else if ('filter' in s) s.filter = value === "" ? "" : `alpha(opacity=${value * 100})`;
 }
 
-class MediaSequence extends goog.Disposable {
+class MediaSequence extends Disposable {
     constructor() {
         super();
 
@@ -1273,7 +1221,7 @@ var qc = [111, 114, 112, 113],
 var rc = null;
 var sc = null;
 
-class ScoreDisplay extends goog.Disposable {
+class ScoreDisplay extends Disposable {
     constructor(position, root) {
         super();
         this.digitPositions = []; // Nb
@@ -1422,7 +1370,7 @@ function createBackgroundTile(parent, x, y) {
 /**
  * Plays a swap/transition animation between two sprites.
  * @param {ScoreDisplay} ctx - The context containing sprite `A` and its animation state.
- * @param {Point} startPos - Object with `{x, y}` representing the base position.
+ * @param {goog.math.Coordinate} startPos - Object with `{x, y}` representing the base position.
  * @param {Sprite} targetSprite - The sprite to animate towards.
  * @param {number} frameIndex - Frame index to display during animation.
  */
@@ -1455,7 +1403,7 @@ function playSwapAnimation(ctx, startPos, targetSprite, frameIndex) {
     ctx.animation.play();
 }
 
-class TimerDisplay extends goog.Disposable {
+class TimerDisplay extends Disposable {
     /**
      * Creates a 4-digit timer (e.g. MM:SS) using sprite digits.
      * @param {number} x - Starting x-position on the screen.
@@ -1594,7 +1542,7 @@ class ClickableElement extends SpriteGroup {
     }
 }
 
-class SpritePool extends goog.Disposable {
+class SpritePool extends Disposable {
     constructor() {
         super()
         this.pool = []
@@ -1614,7 +1562,7 @@ class SpritePool extends goog.Disposable {
 }
 defineSingleton(SpritePool);
 
-class GridEntity extends goog.Disposable { // T
+class GridEntity extends Disposable { // T
     constructor(config) {
         super();
 
@@ -1972,12 +1920,12 @@ var LootTable = {
     lantern: "lantern"
 };
 var LetterShapes = {
-    G: [new Point(2, 3), new Point(3, 3), new Point(3, 4), new Point(3, 5), new Point(2, 5), new Point(1, 5), new Point(0, 5), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(0, 0), new Point(1, 0), new Point(2, 0), new Point(3, 0)],
-    G1: [new Point(0, 4), new Point(1, 4), new Point(2, 4), new Point(3, 4), new Point(3, 3), new Point(3, 2), new Point(3, 1), new Point(3, 0), new Point(2, 0), new Point(1, 0), new Point(0, 0), new Point(0, 1), new Point(0, 2), new Point(1, 2), new Point(2, 2)],
-    O: [new Point(0, 0), new Point(1, 0), new Point(2, 0), new Point(3, 0), new Point(3, 1), new Point(3, 2), new Point(3, 3), new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1)],
-    O2: [new Point(0, 0), new Point(1, 0), new Point(2, 0), new Point(3, 0), new Point(3, 1), new Point(3, 2), new Point(3, 3), new Point(2, 3), new Point(1, 3), new Point(0, 3), new Point(0, 2), new Point(0, 1)],
-    L: [new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(0, 0), new Point(1, 0), new Point(2, 0), new Point(3, 0), new Point(3, 1), new Point(3, 2), new Point(2, 2), new Point(1, 2)],
-    E: [new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(0, 0), new Point(1, 0), new Point(1, 1), new Point(1, 2), new Point(1, 3), new Point(2, 3), new Point(3, 3)]
+    G: [new Point(2, 3), new Point(3, 3), new Point(3, 4), new Point(3, 5), new Point(2, 5), new Point(1, 5), new Point(0, 5), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(), new Point(1, 0), new Point(2, 0), new Point(3, 0)],
+    G1: [new Point(0, 4), new Point(1, 4), new Point(2, 4), new Point(3, 4), new Point(3, 3), new Point(3, 2), new Point(3, 1), new Point(3, 0), new Point(2, 0), new Point(1, 0), new Point(), new Point(0, 1), new Point(0, 2), new Point(1, 2), new Point(2, 2)],
+    O: [new Point(), new Point(1, 0), new Point(2, 0), new Point(3, 0), new Point(3, 1), new Point(3, 2), new Point(3, 3), new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1)],
+    O2: [new Point(), new Point(1, 0), new Point(2, 0), new Point(3, 0), new Point(3, 1), new Point(3, 2), new Point(3, 3), new Point(2, 3), new Point(1, 3), new Point(0, 3), new Point(0, 2), new Point(0, 1)],
+    L: [new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(), new Point(1, 0), new Point(2, 0), new Point(3, 0), new Point(3, 1), new Point(3, 2), new Point(2, 2), new Point(1, 2)],
+    E: [new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(), new Point(1, 0), new Point(1, 1), new Point(1, 2), new Point(1, 3), new Point(2, 3), new Point(3, 3)]
 };
 
 var phase, ObjectRegistry = {};
@@ -2106,9 +2054,7 @@ function updateCellUsage(grid, cellIndex, isActive) {
     if (isActive) {
         cell.specialCount--;
         if (cell.specialCount === 0) grid.activeCells.remove(cellIndex);
-    } else {
-        cell.usedCount--;
-    }
+    } else cell.usedCount--;
 }
 
 /**
@@ -2133,7 +2079,7 @@ function getActiveLinkedCells(grid) {
  */
 function getLowestActiveCellIndex(grid) {
     let min = Infinity;
-    goog.structs.forEach(grid.activeCells, function (cellIndex) {
+    goog.structs.forEach(grid.activeCells, cellIndex => {
         if (cellIndex < min) min = cellIndex;
     });
     return min;
@@ -2152,7 +2098,7 @@ function generatePatternedCellSequence(grid, patternId) {
 
     goog.array.forEach(grid.patterns[patternId], function (offset) {
         let target = (offset + startCell) % 207;
-        if (this.availableCells.contains(target)) {
+        if (grid.availableCells.contains(target)) {
             result.push(target);
         }
     }, grid);
@@ -2160,7 +2106,7 @@ function generatePatternedCellSequence(grid, patternId) {
     return result;
 }
 
-class TileSpawner extends goog.Disposable { // se
+class TileSpawner extends Disposable { // se
     constructor() {
         super();
 
@@ -2275,7 +2221,7 @@ function fillGridWithItems(obj, patternCount) {
  * 
  * @param {TileSpawner} tileSpawner - The TileSpawner instance managing the grid.
  * @param {Object} item - The item object to spawn.
- * @param {Point|Point[]} positions - Single position or array of positions to place the item.
+ * @param {goog.math.Coordinate|goog.math.Coordinate[]} positions - Single position or array of positions to place the item.
  */
 function spawnItem(tileSpawner, item, positions) {
     var addItemToGrid = (it, pos) => {
@@ -2298,7 +2244,9 @@ function spawnItem(tileSpawner, item, positions) {
     item.texture *= tileSpawner.spawnRate; // Apply spawn rate multiplier
 }
 
-var snakeStepIndex, snakeBodyVisible, introSteps = [ // was: ye
+var snakeStepIndex = 0;
+var snakeBodyVisible = 0;
+var introSteps = [ // was: ye
     { point: [3, 7], dir: 1 },
     { point: [2, 6], dir: 4 },
     { point: [4, 5], dir: 2 },
@@ -2944,7 +2892,7 @@ class DirectionManager {
 }
 defineSingleton(DirectionManager);
 
-class GameController extends goog.Disposable {
+class GameController extends Disposable {
     lastUpdateTime = 0;
 
     /**
@@ -3421,7 +3369,7 @@ function playIntroSequence(game) {
 /**
  * @param {Sprite} sprite 
  * @param {number[]|number} frames 
- * @param {Point[]|Point} position 
+ * @param {goog.math.Coordinate[]|goog.math.Coordinate} position 
  * @param {number} offsetY 
  */
 function createFrameAnimation(sprite, frames, position, offsetY) {
@@ -3640,7 +3588,6 @@ function init() {
 
         // Some global flags / counters
         phase = 1;
-        snakeBodyVisible = snakeStepIndex = 0;
 
         GridPatternManager.getInstance().init();
 
