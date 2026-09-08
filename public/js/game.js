@@ -1,10 +1,13 @@
 var Point = goog.math.Coordinate;
 var Disposable = goog.Disposable;
+var randomInt = goog.math.randomInt;
 
 var minutes = 6E4;
 
 var ItemDefinitions = {}; // Registry of base item data
 var ItemClasses = null; // Registry mapping item names to their constructors
+
+var isAnimationPaused = false;
 
 function defineSingleton(cls) {
     cls.getInstance = () => {
@@ -84,7 +87,7 @@ class InputController extends goog.events.EventTarget {
             let y = accel.y;
 
             switch (orientation) {
-                case 90: x = -accel.y; y = accel.y; break;
+                case 90:x = -accel.y; y = accel.y; break;
                 case -90: x = accel.y; y = accel.y; break;
                 case 180: x = -accel.x; y = accel.y; break;
             }
@@ -120,9 +123,7 @@ class InputController extends goog.events.EventTarget {
                     else if (deltaY < -5) { intensity = (-deltaY - 5) / 10; direction = 1; } // up
                 }
 
-                if (intensity > 0 && direction) {
-                    this.dispatchEvent(new DirectionEvent(direction));
-                }
+                if (intensity > 0 && direction) this.dispatchEvent(new DirectionEvent(direction));
             }
         }
     }
@@ -258,12 +259,12 @@ class AnimationSequence {
 
     // Starts playback of all animation steps in sequence
     play() {
-        if (window.isAnimationPaused) return;
+        if (isAnimationPaused) return;
 
         this.stop();
         this.currentIndex = 0;
         this.startTime = getTime();
-        this.intervalId = window.setInterval(goog.bind(this.update, this), 16); // ~60fps
+        this.intervalId = setInterval(goog.bind(this.update, this), 16); // ~60fps
         this.update();
     }
 
@@ -274,7 +275,7 @@ class AnimationSequence {
             while ((step = this.steps[this.currentIndex++])) {
                 if (step.update !== null) step.update(1);
             }
-            window.clearInterval(this.intervalId);
+            clearInterval(this.intervalId);
             this.intervalId = 0;
         }
     }
@@ -283,7 +284,7 @@ class AnimationSequence {
     update = () => {
         const now = getTime();
 
-        if (window.isAnimationPaused) return;
+        if (isAnimationPaused) return;
 
         let step;
         while ((step = this.steps[this.currentIndex])) {
@@ -312,7 +313,7 @@ class AnimationSequence {
     }
 
     addPauseStep(duration) {
-        this.addStep(function () { }, duration);
+        this.addStep(function () {}, duration);
     }
 }
 
@@ -363,7 +364,7 @@ class VisibilityTimer extends Disposable {
     }
 
     disposeInternal() {
-        window.clearTimeout(this.timer);
+        clearTimeout(this.timer);
         super.disposeInternal();
     }
 
@@ -377,20 +378,17 @@ class VisibilityTimer extends Disposable {
 
     // Schedule next visibility check
     scheduleCheck() {
-        if (this.timer) window.clearTimeout(this.timer);
+        if (this.timer) clearTimeout(this.timer);
         const remaining = Math.max(100, this.timeoutMs - (getTime() - this.startTime));
-        this.timer = window.setTimeout(goog.bind(this.checkVisibility, this), remaining);
+        this.timer = setTimeout(goog.bind(this.checkVisibility, this), remaining);
     }
 
     // Called when visibility changes
     onVisibilityChange() {
         const state = document[this.visibilityStateProp];
         this.isHidden = document[this.hiddenProp] || state === "hidden";
-        if (this.isHidden) {
-            this.updateCallbacks();
-        } else {
-            this.resetTimer();
-        }
+        if (this.isHidden) this.updateCallbacks();
+        else this.resetTimer();
     }
 
     // Update which callback should fire
@@ -412,10 +410,6 @@ class VisibilityTimer extends Disposable {
         this.hasTriggered = false;
         this.updateCallbacks();
     }
-}
-
-function random(a) {
-    return Math.floor(Math.random() * a)
 }
 
 /**
@@ -1047,170 +1041,34 @@ var qc = [111, 114, 112, 113],
     pd = [237, 240, 238, 239],
     qd = [245, 248, 246, 247],
     rd = [253, 256, 254, 255],
-    R = {
-        Lg: 57,
-        kf: 11,
-        firecracker: 86,
-        Gf: 84,
-        Hf: 83,
-        If: 80,
-        Jf: 78,
-        Kf: 76,
-        Lf: 74,
-        Mf: 70,
-        Nf: 68,
-        Ff: 66,
-        ne: 65,
-        oe: 62,
-        coin: 64,
-        ingot: 71,
-        we: 69,
-        xe: 73,
-        medicine: 87,
-        mushroom: 85,
-        le: 82,
-        qe: 81,
-        se: 72,
-        ve: 75,
-        ue: 77,
-        re: 79,
-        mg: 33,
-        og: 35,
-        ng: 34,
-        lg: 32,
-        steamer: 67,
-        envelope: 63,
-        of: qc,
-        Ug: Bc,
-        bg: Cc,
-        cg: Dc,
-        dg: Ec,
-        Bf: pc,
-        Cf: Fc,
-        Df: Gc,
-        Ef: Hc,
-        Vg: Ic,
-        Wg: Jc,
-        Xg: Kc,
-        Yg: Lc,
-        eg: Mc,
-        fg: Nc,
-        gg: Oc,
-        hg: Pc,
-        ig: Qc,
-        jg: Rc,
-        lf: Sc,
-        mf: Tc,
-        nf: Uc,
-        ag: Vc,
-        Hg: Wc,
-        pg: Xc,
-        Pg: Yc,
-        oh: Zc,
-        qh: $c,
-        rh: ad,
-        sh: bd,
-        uh: cd,
-        Zg: dd,
-        $g: ed,
-        ah: fd,
-        bh: gd,
-        dh: hd,
-        eh: id,
-        fh: jd,
-        gh: kd,
-        hh: ld,
-        ih: md,
-        jh: nd,
-        kh: od,
-        lh: pd,
-        mh: qd,
-        nh: rd,
-        rf: 53,
-        qf: 36,
-        Tg: 38,
-        Sg: 37,
-        vh: 94,
-        Bh: 96,
-        Eh: 97,
-        yh: 95,
-        Hh: 98,
-        Ah: 100,
-        Dh: 101,
-        xh: 99,
-        Gh: 102,
-        zh: 104,
-        Ch: 105,
-        wh: 103,
-        Fh: 106,
-        Of: 19,
-        $f: 88,
-        Af: 49,
-        qg: 39,
-        rg: 40,
-        sg: 41,
-        tg: 42,
-        ug: 43,
-        vg: 44,
-        wg: 45,
-        xg: 46,
-        yg: 47,
-        zg: 48,
-        jf: 10,
-        Ye: 0,
-        Ze: 1,
-        $e: 2,
-        af: 3,
-        bf: 4,
-        df: 5,
-        ef: 6,
-        ff: 7,
-        gf: 8,
-        hf: 9,
-        Zf: 30,
-        Pf: 20,
-        Qf: 21,
-        Rf: 22,
-        Sf: 23,
-        Tf: 24,
-        Uf: 25,
-        Vf: 26,
-        Wf: 27,
-        Xf: 28,
-        Yf: 29,
-        Dg: 61,
-        Ag: 50,
-        Bg: 51,
-        Cg: 52,
-        Ig: 54,
-        Jg: 55,
-        Kg: 56,
-        Mg: 58,
-        Ng: 59,
-        Og: 60,
-        Eg: 91,
-        Fg: 92,
-        Gg: 93,
-        kg: 31,
-        tf: 12,
-        uf: 13,
-        vf: 14,
-        wf: 15,
-        xf: 16,
-        yf: 17,
-        zf: 18,
-        Qg: 89,
-        Rg: 90
+    ITEM_IDS = {
+        FIRECRACKER: 86,
+        DUMPLING1: 65,
+        DUMPLING2: 62,
+        COIN: 64,
+        INGOT: 71,
+        TEA1: 69,
+        TEA2: 73,
+        MEDICINE: 87,
+        MUSHROOM: 85,
+        PAPERCUT1: 81,
+        PAPERCUT2: 82,
+        LANTERNG: 72,
+        LANTERNO: 75,
+        LANTERNL: 77,
+        LANTERNE: 79,
+        STEAMER: 67,
+        ENVELOPE: 63
     },
-    sd = {
+    LANTERN_ICONS = {
         G: 33,
         O: 35,
         L: 34,
         E: 32
     },
-    td = [39, 40, 41, 42, 43, 44, 45, 46, 47, 48],
-    ud = [20, 21, 22, 23, 24, 25, 26, 27, 28, 29],
-    vd = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    TIMER_DIGITS = [39, 40, 41, 42, 43, 44, 45, 46, 47, 48],
+    SCORE_EFFECT_DIGITS = [20, 21, 22, 23, 24, 25, 26, 27, 28, 29],
+    SCORE_DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
     tc = [
         [Zc, $c, ad, bd, cd],
         [dd, ed, fd, gd, hd],
@@ -1247,7 +1105,7 @@ class ScoreDisplay extends Disposable {
     }
 
     reset() {
-        for (let key in this.digitSprites) Sprite.setFrame(this.digitSprites[key], td[0]);
+        for (let key in this.digitSprites) Sprite.setFrame(this.digitSprites[key], TIMER_DIGITS[0]);
         this.currentScore = 0;
         this.digitSprites[0].show(true);
         this.effectSprites[0].element.style.opacity = 0;
@@ -1291,7 +1149,7 @@ class ScoreDisplay extends Disposable {
     processPendingEffects(timeNow) {
         if (this.pendingScoreDiffs.length) {
             const diff = this.pendingScoreDiffs.shift();
-            const effectFrames = createDigitSprites(diff, ud, 2);
+            const effectFrames = createDigitSprites(diff, SCORE_EFFECT_DIGITS, 2);
 
             for (let i in effectFrames) {
                 stopAllAnimations(this.effectSprites[i]);
@@ -1299,9 +1157,7 @@ class ScoreDisplay extends Disposable {
                 if (frame != null) {
                     Sprite.setFrame(this.effectSprites[i], frame);
                     Sprite.animateOpacity(this.effectSprites[i], 300, 0, 1);
-                } else {
-                    this.effectSprites[i].element.style.opacity = 0;
-                }
+                } else this.effectSprites[i].element.style.opacity = 0;
             }
 
             this.lastEffectTime = timeNow;
@@ -1329,7 +1185,7 @@ class ScoreDisplay extends Disposable {
  * @param {number} length - Number of digits to generate (default = 3).
  * @returns {Array} Array of sprite references for each digit.
  */
-function createDigitSprites(number, spriteSet = td, length = 3) {
+function createDigitSprites(number, spriteSet = TIMER_DIGITS, length = 3) {
     const digits = [spriteSet[0]];
 
     for (let i = 0; i < length; i++) {
@@ -1337,9 +1193,7 @@ function createDigitSprites(number, spriteSet = td, length = 3) {
             const digit = number % 10;
             number = Math.floor(number / 10);
             digits[i] = spriteSet[digit];
-        } else if (i > 0) {
-            digits[i] = null; // Hide leading zeros
-        }
+        } else if (i > 0) digits[i] = null; // Hide leading zeros
     }
 
     return digits;
@@ -1359,7 +1213,7 @@ function resetDisplay(obj) {
 }
 
 function createBackgroundTile(parent, x, y) {
-    var tile = new Sprite(td[0]);
+    var tile = new Sprite(TIMER_DIGITS[0]);
     tile.show(false);               // hidden initially
     tile.setZIndex(-2);             // render behind everything
     Sprite.setPosition(tile, x, y); // place at coordinates
@@ -1418,7 +1272,7 @@ class TimerDisplay extends Disposable {
 
         // Create 4 sprite digits spaced horizontally
         for (let i = 0; i < 4; i++) {
-            const digitSprite = new Sprite(td[0]);
+            const digitSprite = new Sprite(TIMER_DIGITS[0]);
             Sprite.setPosition(digitSprite, x + 10 * i, y);
             parent.appendChild(digitSprite.getElement());
             this.digits.push(digitSprite);
@@ -1439,9 +1293,9 @@ class TimerDisplay extends Disposable {
         const seconds = Math.floor(time % 60);
 
         if (minutes >= 0 && seconds >= 0) {
-            Sprite.setFrame(this.digits[0], td[minutes]);
-            Sprite.setFrame(this.digits[2], td[Math.floor(seconds / 10)]);
-            Sprite.setFrame(this.digits[3], td[seconds % 10]);
+            Sprite.setFrame(this.digits[0], TIMER_DIGITS[minutes]);
+            Sprite.setFrame(this.digits[2], TIMER_DIGITS[Math.floor(seconds / 10)]);
+            Sprite.setFrame(this.digits[3], TIMER_DIGITS[seconds % 10]);
             this.lastValue = time;
         }
     }
@@ -1647,8 +1501,8 @@ class GridEntity extends Disposable { // T
     }
 
     renderPosition() {
-        var worldX = 20 * (Math.floor(this.tileIndex % 23) + 0.5);
-        var worldY = 20 * (Math.floor(this.tileIndex / 23) + 0.5);
+        var worldX = 20 * (this.getCol() + 0.5);
+        var worldY = 20 * (this.getRow() + 0.5);
 
         this.mainX = worldX - this.mainSprite.getWidth() / 2;
         this.mainY = worldY - this.mainSprite.getHeight() / 2;
@@ -1661,7 +1515,7 @@ class GridEntity extends Disposable { // T
 
     getCellIndex() { return this.tileIndex; }
     getRow() { return Math.floor(this.tileIndex / 23); }
-    getCol() { return this.tileIndex % 23; }
+    getCol() { return Math.floor(this.tileIndex % 23); }
     getName() {
         return this.name;
     }
@@ -1782,26 +1636,26 @@ function snapPos(entity, idx) {
 class AnimatedFallingEntity extends GridEntity {
     constructor(config) {
         super(config);
-        this.mainSprite.playFrameSequence(Ld, 700, this.targetY);
-        this.mainSprite.playFrameSequence(Md, 80, this.targetY + 700 * Ld.length);
+        this.mainSprite.playFrameSequence(FIRECRACKER_ANIM, 700, this.targetY);
+        this.mainSprite.playFrameSequence(FIRECRACKER_BREAK, 80, this.targetY + 700 * FIRECRACKER_ANIM.length);
         this.speed = -5;
     }
 
     onImpact() {
-        this.mainSprite.playFrameSequence(Md, 400);
+        this.mainSprite.playFrameSequence(FIRECRACKER_BREAK, 400);
         setTimeout(goog.bind(() => {
             this.state = 2;
         }, this), 500);
     }
 }
 
-var Ld = [86, 84, 83, 80, 78, 76]
-var Md = [74, 70, 68, 66]
+var FIRECRACKER_ANIM = [86, 84, 83, 80, 78, 76];
+var FIRECRACKER_BREAK = [74, 70, 68, 66];
 
 class StaticVariantEntity extends GridEntity {
     constructor(config) {
         super(config);
-        if (random(2)) Sprite.setFrame(this.mainSprite, this.grid[1]);
+        if (randomInt(2)) Sprite.setFrame(this.mainSprite, this.grid[1]);
     }
 }
 
@@ -1812,9 +1666,8 @@ class ShadowedEntity extends GridEntity {
     }
 
     updatePosition() {
-        const idx = this.tileIndex;
-        const x = 20 * (Math.floor(idx % 23) + 0.5);
-        const y = 20 * (Math.floor(idx / 23) + 0.5);
+        const x = 20 * (this.getCol() + .5);
+        const y = 20 * (this.getRow() + .5);
 
         this.baseX = x - this.sprite.getWidth() / 4;
         this.baseY = y - this.sprite.getHeight() / 4;
@@ -1833,7 +1686,7 @@ class MovingEntity extends GridEntity {
 class RandomMovingEntity extends GridEntity {
     constructor(config) {
         super(config);
-        if (random(2)) Sprite.setFrame(this.mainSprite, this.grid[1]);
+        if (randomInt(2)) Sprite.setFrame(this.mainSprite, this.grid[1]);
         initMotion(this);
     }
 }
@@ -1841,7 +1694,7 @@ class RandomMovingEntity extends GridEntity {
 class LanternEntity extends GridEntity {
     constructor(config) {
         super(config);
-        const variant = random(4);
+        const variant = randomInt(4);
         if (variant) Sprite.setFrame(this.mainSprite, this.grid[variant]);
         this.variantKey = "GOLE"[variant];
         initMotion(this);
@@ -1871,7 +1724,7 @@ function createItem(name) {
  * @returns 
  */
 function generateRandomItem(pool) {
-    const roll = random(pool.count);
+    const roll = randomInt(pool.count);
     let cumulative = 0;
     let chosenKey = "coin";
 
@@ -1920,15 +1773,16 @@ var LootTable = {
     lantern: "lantern"
 };
 var LetterShapes = {
-    G: [new Point(2, 3), new Point(3, 3), new Point(3, 4), new Point(3, 5), new Point(2, 5), new Point(1, 5), new Point(0, 5), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(), new Point(1, 0), new Point(2, 0), new Point(3, 0)],
-    G1: [new Point(0, 4), new Point(1, 4), new Point(2, 4), new Point(3, 4), new Point(3, 3), new Point(3, 2), new Point(3, 1), new Point(3, 0), new Point(2, 0), new Point(1, 0), new Point(), new Point(0, 1), new Point(0, 2), new Point(1, 2), new Point(2, 2)],
-    O: [new Point(), new Point(1, 0), new Point(2, 0), new Point(3, 0), new Point(3, 1), new Point(3, 2), new Point(3, 3), new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1)],
-    O2: [new Point(), new Point(1, 0), new Point(2, 0), new Point(3, 0), new Point(3, 1), new Point(3, 2), new Point(3, 3), new Point(2, 3), new Point(1, 3), new Point(0, 3), new Point(0, 2), new Point(0, 1)],
-    L: [new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(), new Point(1, 0), new Point(2, 0), new Point(3, 0), new Point(3, 1), new Point(3, 2), new Point(2, 2), new Point(1, 2)],
-    E: [new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(), new Point(1, 0), new Point(1, 1), new Point(1, 2), new Point(1, 3), new Point(2, 3), new Point(3, 3)]
+    G: [new Point(2, 3), new Point(3, 3), new Point(3, 4), new Point(3, 5), new Point(2, 5), new Point(1, 5), new Point(0, 5), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(), new Point(1), new Point(2), new Point(3)],
+    G1: [new Point(0, 4), new Point(1, 4), new Point(2, 4), new Point(3, 4), new Point(3, 3), new Point(3, 2), new Point(3, 1), new Point(3), new Point(2), new Point(1), new Point(), new Point(0, 1), new Point(0, 2), new Point(1, 2), new Point(2, 2)],
+    O: [new Point(), new Point(1), new Point(2), new Point(3), new Point(3, 1), new Point(3, 2), new Point(3, 3), new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1)],
+    O2: [new Point(), new Point(1), new Point(2), new Point(3), new Point(3, 1), new Point(3, 2), new Point(3, 3), new Point(2, 3), new Point(1, 3), new Point(0, 3), new Point(0, 2), new Point(0, 1)],
+    L: [new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(), new Point(1), new Point(2), new Point(3), new Point(3, 1), new Point(3, 2), new Point(2, 2), new Point(1, 2)],
+    E: [new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(), new Point(1), new Point(1, 1), new Point(1, 2), new Point(1, 3), new Point(2, 3), new Point(3, 3)]
 };
 
-var phase, ObjectRegistry = {};
+var phase = 1;
+var ObjectRegistry = {};
 
 class GridPatternManager {
     constructor() {
@@ -2029,7 +1883,7 @@ function selectRandomAvailableCell(grid) {
     if (grid.availableCells.isEmpty()) return -1;
 
     const available = grid.availableCells.getValues();
-    return available[random(available.length)];
+    return available[randomInt(available.length)];
 }
 
 /**
@@ -2098,7 +1952,7 @@ function generatePatternedCellSequence(grid, patternId) {
 
     goog.array.forEach(grid.patterns[patternId], function (offset) {
         let target = (offset + startCell) % 207;
-        if (grid.availableCells.contains(target)) {
+        if (this.availableCells.contains(target)) {
             result.push(target);
         }
     }, grid);
@@ -2141,7 +1995,7 @@ class TileSpawner extends Disposable { // se
         let missingItemCount = 8 - this.activeItems.getCount();
         if (now - this.lastSpawnTime > 2500 && missingItemCount > 0) {
             // number of items to spawn this tick
-            for (let i = 0; i < random(missingItemCount) + 1; i++) {
+            for (let i = 0; i < randomInt(missingItemCount) + 1; i++) {
                 const item = generateRandomItem(this.objectPool);
 
                 // special logic for "steamer"
@@ -2425,9 +2279,7 @@ class SnakeController extends goog.events.EventTarget {
      */
     move(now) {
         // auto-reset speed if idle too long
-        if (this.Ib && (now - this.Ib) > 5000) {
-            this.resetSpeed(now);
-        }
+        if (this.Ib && (now - this.Ib) > 5000) this.resetSpeed(now);
 
         // if an input or forced forward occurred, process forward step
         if (this.moveProgress >= 1) {
@@ -2945,7 +2797,7 @@ class GameController extends Disposable {
         this.uiSeq = null; // this.dc
 
         this.visibilityTimer = new VisibilityTimer(3E4, goog.bind(this.onVisibilityLost, this), goog.bind(this.onVisibilityReturn, this));
-        window.isAnimationPaused = false;
+        isAnimationPaused = false;
 
         new SpriteGroup(19, BG_LEFT_POS.x, BG_LEFT_POS.y, this.root, 100);
         this.leftFrame = new SpriteGroup(36, FRAME_LEFT_POS.x + 99, FRAME_LEFT_POS.y, this.root, -1); // Cb
@@ -3098,7 +2950,7 @@ class GameController extends Disposable {
                         for (let i = 0; i < comboStr.length; i++)
                             spawnItem(spawner, createItem("steamer"), find2x2Block(spawner.gridManager));
 
-                        if (comboStr.length === 6) fillGridWithItems(spawner, comboStr[random(comboStr.length)]);
+                        if (comboStr.length === 6) fillGridWithItems(spawner, comboStr[randomInt(comboStr.length)]);
                     }
                     updateIcons(this);
                     break;
@@ -3260,7 +3112,7 @@ class GameController extends Disposable {
         if (this.introSeq) this.introSeq.stop();
         if (this.tutSeq) this.tutSeq.stop();
         if (this.uiSeq) this.uiSeq.stop();
-        window.isAnimationPaused = true;
+        isAnimationPaused = true;
         this.comboData = null;
         this.timerDisplay.disposeInternal();
         this.scoreDisplay.disposeInternal();
@@ -3426,7 +3278,7 @@ function resetComboData(game) {
 function updateIcons(game) {
     game.icons.forEach(function (icon, index) {
         if (index < lanternSequence.length) {
-            Sprite.setFrame(icon, sd[lanternSequence[index]]);
+            Sprite.setFrame(icon, LANTERN_ICONS[lanternSequence[index]]);
             icon.show(true);
         } else icon.show(false);
     })
@@ -3434,7 +3286,7 @@ function updateIcons(game) {
 
 /** @param {GameController} game */
 function stopGame(game) {
-    var digits = createDigitSprites(game.score, vd);
+    var digits = createDigitSprites(game.score, SCORE_DIGITS);
     if (game.resultUI) {
         setOpacity(game.gridContainer, .3);
         Sprite.setFrame(game.medalGroup, RESULT_FRAMES[(80 > game.score ? 1 : 150 > game.score ? 2 : 3) - 1]);
@@ -3457,9 +3309,9 @@ function stopGame(game) {
 
         game.medalGroup = new SpriteGroup(RESULT_FRAMES[(80 > game.score ? 1 : 150 > game.score ? 2 : 3) - 1], MEDAL_POS.x, MEDAL_POS.y, game.root, 101);
         game.resultUI.add(game.medalGroup);
-        for (let i in createDigitSprites(game.score, vd)) {
+        for (let i in createDigitSprites(game.score, SCORE_DIGITS)) {
             const frame = digits[i];
-            game.scoreDigits[i] = new SpriteGroup(frame == null ? td[0] : frame, SCORE_POS[i].x, SCORE_POS[i].y, game.root, 101);
+            game.scoreDigits[i] = new SpriteGroup(frame == null ? TIMER_DIGITS[0] : frame, SCORE_POS[i].x, SCORE_POS[i].y, game.root, 101);
             if (frame == null) {
                 game.scoreDigits[i].show(false);
                 game.resultUI.add(game.scoreDigits[i]);
@@ -3586,9 +3438,6 @@ function init() {
         configObj[keyEnum.ingot] = 50;
         ObjectRegistry.G = { data: configObj, V: 200, U: 1 };
 
-        // Some global flags / counters
-        phase = 1;
-
         GridPatternManager.getInstance().init();
 
         // Build reverse mapping Xd from keys in Zd to some default T, then override some
@@ -3605,17 +3454,17 @@ function init() {
 
         // Build item definitions (Wd)
         var itemDefs = {};
-        itemDefs[enumObj.firecraker] = new Item([R.firecracker], enumObj.firecraker, 5000);
-        itemDefs[enumObj.dumpling] = new Item([R.ne, R.oe], enumObj.dumpling, 7000, 2);
-        itemDefs[enumObj.steamer] = new Item([R.steamer], enumObj.steamer, 7000, 10);
-        itemDefs[enumObj.tea] = new Item([R.we, R.xe], enumObj.tea, 6000, 2, true);
-        itemDefs[enumObj.medicine] = new Item([R.medicine], enumObj.medicine, 6000, 2, false);
-        itemDefs[enumObj.papercut] = new Item([R.qe, R.le], enumObj.papercut, 6000, 5);
-        itemDefs[enumObj.envelope] = new Item([R.envelope], enumObj.envelope, 7000, 2);
-        itemDefs[enumObj.mushroom] = new Item([R.mushroom], enumObj.mushroom, 7000, 1, false);
-        itemDefs[enumObj.lantern] = new Item([R.se, R.ve, R.ue, R.re], enumObj.lantern, 8000, 2);
-        itemDefs[enumObj.coin] = new Item([R.coin], enumObj.coin, 10000, 1);
-        itemDefs[enumObj.ingot] = new Item([R.ingot], enumObj.ingot, 5000, 5);
+        itemDefs[enumObj.firecraker] = new Item([ITEM_IDS.FIRECRACKER], enumObj.firecraker, 5000);
+        itemDefs[enumObj.dumpling] = new Item([ITEM_IDS.DUMPLING1, ITEM_IDS.DUMPLING2], enumObj.dumpling, 7000, 2);
+        itemDefs[enumObj.steamer] = new Item([ITEM_IDS.STEAMER], enumObj.steamer, 7000, 10);
+        itemDefs[enumObj.tea] = new Item([ITEM_IDS.TEA1, ITEM_IDS.TEA2], enumObj.tea, 6000, 2, true);
+        itemDefs[enumObj.medicine] = new Item([ITEM_IDS.MEDICINE], enumObj.medicine, 6000, 2, false);
+        itemDefs[enumObj.papercut] = new Item([ITEM_IDS.PAPERCUT1, ITEM_IDS.PAPERCUT2], enumObj.papercut, 6000, 5);
+        itemDefs[enumObj.envelope] = new Item([ITEM_IDS.ENVELOPE], enumObj.envelope, 7000, 2);
+        itemDefs[enumObj.mushroom] = new Item([ITEM_IDS.MUSHROOM], enumObj.mushroom, 7000, 1, false);
+        itemDefs[enumObj.lantern] = new Item([ITEM_IDS.LANTERNG, ITEM_IDS.LANTERNO, ITEM_IDS.LANTERNL, ITEM_IDS.LANTERNE], enumObj.lantern, 8000, 2);
+        itemDefs[enumObj.coin] = new Item([ITEM_IDS.COIN], enumObj.coin, 10000, 1);
+        itemDefs[enumObj.ingot] = new Item([ITEM_IDS.INGOT], enumObj.ingot, 5000, 5);
         ItemDefinitions = itemDefs;
 
         initializeObjectCounter(ObjectPoolManager.getInstance(), 1);
@@ -3625,5 +3474,4 @@ function init() {
     }
 }
 
-// Execute the initialization
-init();
+init(); // Execute the initialization
