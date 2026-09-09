@@ -87,7 +87,7 @@ class InputController extends goog.events.EventTarget {
             let y = accel.y;
 
             switch (orientation) {
-                case 90:x = -accel.y; y = accel.y; break;
+                case 90: x = -accel.y; y = accel.y; break;
                 case -90: x = accel.y; y = accel.y; break;
                 case 180: x = -accel.x; y = accel.y; break;
             }
@@ -313,7 +313,7 @@ class AnimationSequence {
     }
 
     addPauseStep(duration) {
-        this.addStep(function () {}, duration);
+        this.addStep(function () { }, duration);
     }
 }
 
@@ -795,15 +795,15 @@ class Sprite extends goog.events.EventTarget {
     // Move to grid coordinates (translates grid→pixel position)
     static moveToGrid(sprite, gridX, gridY) {
         if (!sprite.element) return;
-        
+
         sprite.gridX = gridX;
         sprite.gridY = gridY;
-        
+
         sprite.pixelX = Math.floor(20 * gridX);
         sprite.pixelY = Math.floor(20 * gridY);
 
-        if (sprite.frameId === qc || sprite.frameId === pc) {
-            if (sprite.frameId === qc) {
+        if (sprite.frameId === NORMAL_BODY || sprite.frameId === pc) {
+            if (sprite.frameId === NORMAL_BODY) {
                 if (sprite.rotation === 180 || sprite.rotation === 0) sprite.pixelX--;
                 else sprite.pixelY--;
             } else {
@@ -995,9 +995,9 @@ function stopAllAnimations(target) {
     if (target.animation) target.animation.stop();
 }
 
-var qc = [111, 114, 112, 113],
+var NORMAL_BODY = [111, 114, 112, 113],
     Bc = [173, 176, 174, 175],
-    Cc = [159, 162, 160, 161],
+    NORMAL_HEAD = [159, 162, 160, 161],
     Dc = [155, 158, 156, 157],
     Ec = [163, 166, 164, 165],
     pc = [107, 110, 108, 109],
@@ -1041,40 +1041,41 @@ var qc = [111, 114, 112, 113],
     pd = [237, 240, 238, 239],
     qd = [245, 248, 246, 247],
     rd = [253, 256, 254, 255],
-    ITEM_IDS = {
-        FIRECRACKER: 86,
-        DUMPLING1: 65,
-        DUMPLING2: 62,
-        COIN: 64,
-        INGOT: 71,
-        TEA1: 69,
-        TEA2: 73,
-        MEDICINE: 87,
-        MUSHROOM: 85,
-        PAPERCUT1: 81,
-        PAPERCUT2: 82,
-        LANTERNG: 72,
-        LANTERNO: 75,
-        LANTERNL: 77,
-        LANTERNE: 79,
-        STEAMER: 67,
-        ENVELOPE: 63
-    },
-    LANTERN_ICONS = {
-        G: 33,
-        O: 35,
-        L: 34,
-        E: 32
-    },
-    TIMER_DIGITS = [39, 40, 41, 42, 43, 44, 45, 46, 47, 48],
-    SCORE_EFFECT_DIGITS = [20, 21, 22, 23, 24, 25, 26, 27, 28, 29],
-    SCORE_DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
     tc = [
         [Zc, $c, ad, bd, cd],
         [dd, ed, fd, gd, hd],
         [nd, od, pd, qd, rd],
         [id, jd, kd, ld, md]
     ]
+
+var ITEM_IDS = {
+    FIRECRACKER: 86,
+    DUMPLING1: 65,
+    DUMPLING2: 62,
+    COIN: 64,
+    INGOT: 71,
+    TEA1: 69,
+    TEA2: 73,
+    MEDICINE: 87,
+    MUSHROOM: 85,
+    PAPERCUT1: 81,
+    PAPERCUT2: 82,
+    LANTERNG: 72,
+    LANTERNO: 75,
+    LANTERNL: 77,
+    LANTERNE: 79,
+    STEAMER: 67,
+    ENVELOPE: 63
+};
+var LANTERN_ICONS = {
+    G: 33,
+    O: 35,
+    L: 34,
+    E: 32
+};
+var TIMER_DIGITS = [39, 40, 41, 42, 43, 44, 45, 46, 47, 48];
+var SCORE_EFFECT_DIGITS = [20, 21, 22, 23, 24, 25, 26, 27, 28, 29];
+var SCORE_DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 var rc = null;
 var sc = null;
@@ -1823,9 +1824,7 @@ class GridPatternManager {
         if (isSpecial) {
             info.specialCount++;
             this.activeCells.add(cellIndex);
-        } else {
-            info.usedCount++;
-        }
+        } else info.usedCount++;
     }
 
     match() {
@@ -2153,7 +2152,7 @@ var Be = [Uc, Tc, Sc],
     Pe = tc[1],
     Qe = tc[2],
     Re = tc[3],
-    Ee = Cc;
+    Ee = NORMAL_HEAD;
 
 function createSprite(spriteType, zIndex, parent) {
     const sprite = new Sprite(spriteType);
@@ -2228,7 +2227,7 @@ class SnakeController extends goog.events.EventTarget {
         }
 
         // create the alternate head sprite used for special display
-        this.headSprite = createSprite(qc, 15, this.container);
+        this.headSprite = createSprite(NORMAL_BODY, 15, this.container);
     }
 
     /**
@@ -2486,7 +2485,7 @@ class SnakeController extends goog.events.EventTarget {
         if (this.Yc != null) return;
         this.currentFrame = Xc;
         this.Hb = b;
-        setTimeout(goog.bind(function() {
+        setTimeout(goog.bind(function () {
             if (this.Hb == b) {
                 this.currentFrame = Ee;
                 this.Hb = null;
@@ -2528,8 +2527,8 @@ class MatchPatternEvent extends goog.events.Event {
 
 // Sprite frame sets for each segment type
 const SegmentFrames = {
-    0: Cc,  // Head
-    1: qc,  // Body
+    0: NORMAL_HEAD,  // Head
+    1: NORMAL_BODY,  // Body
     2: Bc   // Tail
 };
 
@@ -2558,7 +2557,7 @@ class SnakeSegment extends goog.events.Event {
         this.parent = parentSegment;                            // previous segment (Pa)
 
         // Sprite for this segment
-        this.mainSprite = createSprite(qc, 16 - index, container); // base sprite (a)
+        this.mainSprite = createSprite(NORMAL_BODY, 16 - index, container); // base sprite (a)
         this.mainSprite.show(true);
 
         // Secondary sprite (for head/tail overlays)
@@ -2632,6 +2631,7 @@ class SnakeSegment extends goog.events.Event {
 
 /**
  * Determines if a segment’s current frame is special (turn/corner).
+ * @param {SnakeSegment} segment
  */
 function isSpecialFrame(segment) {
     const frameId = segment.mainSprite.getFrameId();
