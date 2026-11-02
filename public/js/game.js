@@ -167,6 +167,10 @@ class DirectionEvent extends goog.events.Event {
     }
 }
 
+/**
+ * @param {number} dir 
+ * @returns {number}
+ */
 function swapDirection(dir) {
     const map = { 1: 2, 2: 1, 3: 4, 4: 3 };
     return map[dir] || dir;
@@ -179,6 +183,8 @@ const vendorPrefixesLower = ["", "moz", "ms", "o", "webkit"];
 /**
  * Finds the correct vendor-prefixed property name supported by the browser.
  * Example: Ab("hidden") → "hidden" or "webkitHidden"
+ * @param {string} property
+ * @returns {?string}
  */
 function getVendorPropertyName(property) {
     const doc = document;
@@ -963,7 +969,11 @@ class Sprite extends goog.events.EventTarget {
         this.isTransitioning = looping;
     }
 
-    // Internal helper to update size when frame changes
+    /**
+     * Internal helper to update size when frame changes.
+     * @param {Sprite} sprite 
+     * @param {number} frameId 
+     */
     static _updateSize(sprite, frameId) {
         const frameSource = sprite._getFrameSource(frameId);
         sprite.setWidth(SpriteManager.getWidth(frameSource));
@@ -2670,6 +2680,8 @@ function updateSegmentSprite(segment, overrideFrame) {
 
 /**
  * Updates transition frames for turning animation.
+ * @param {SnakeSegment} segment
+ * @param {number} progress 
  */
 function animateSegmentTurn(segment, progress) {
     const frameId = segment.mainSprite.getFrameId();
@@ -3005,6 +3017,7 @@ class GameController extends Disposable {
         if (pattern !== "") fillGridWithItems(this.TileSpawner, pattern);
     }
 
+    /** @param {DirectionEvent} input */
     handleInput(input) {
         this.visibilityTimer.resetTimer();
         if ("tutorial_end" == this.state) {
