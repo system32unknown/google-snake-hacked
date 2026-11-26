@@ -1,13 +1,14 @@
 import { defineSingleton } from "../utils/utils.js";
+import GoogMap from "../../goog/structs/GoogMap.js";
 
 /**
  * DirectionManager handles rotation and direction mapping between entities.
  * It defines angle relationships and direction transforms.
  */
-export class DirectionManager {
+export default class DirectionManager {
   constructor() {
     // Rotation angles between directional pairs [from, to]
-    this.rotationMap = new goog.structs.Map(); //ga
+    this.rotationMap = new GoogMap(); //ga
     this.rotationMap.set([1, 3], 180);
     this.rotationMap.set([1, 4], 90);
     this.rotationMap.set([2, 3], 270);
@@ -18,14 +19,14 @@ export class DirectionManager {
     this.rotationMap.set([4, 2], 180);
 
     // Base facing direction angles
-    this.baseDirection = new goog.structs.Map(); //g
+    this.baseDirection = new GoogMap(); //g
     this.baseDirection.set(1, 270);
     this.baseDirection.set(2, 90);
     this.baseDirection.set(3, 180);
     this.baseDirection.set(4, 0);
 
     // Directional transformation table
-    this.transformMap = new goog.structs.Map(); //$
+    this.transformMap = new GoogMap(); //$
     this.transformMap.set([3, 1], 4);
     this.transformMap.set([3, 2], 3);
     this.transformMap.set([4, 1], 3);

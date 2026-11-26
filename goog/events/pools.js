@@ -1,6 +1,6 @@
 import Listener from './Listener.js';
 import BrowserEvent from './BrowserEvent.js';
-import { nullFunction } from '../js';
+import { nullFunction } from '../goog.js';
 
 export default class Pools {
   static #proxyCallback = null;

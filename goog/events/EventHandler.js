@@ -2,6 +2,7 @@ import Disposable from "../Disposable.js";
 import SimplePool from "../structs/SimplePool.js";
 import { remove } from "../object/object.js";
 import { listenOnce, listen, unlistenByKey, getListener } from "./events.js";
+import { isArray } from "../goog.js";
 
 export default class EventHandler extends Disposable {
   KEY_POOL_INITIAL_COUNT = 0;
@@ -18,13 +19,12 @@ export default class EventHandler extends Disposable {
   }
 
   listen(a, b, c, d, e) {
-    goog.isArray(b) || (this.typeArray_[0] = b, b = typeArray_);
+    isArray(b) || (this.typeArray_[0] = b, b = this.typeArray_);
     for (var f = 0; f < b.length; f++) this.recordListenerKey_(listen(a, b[f], c || this, d || false, e || this.handler_ || this));
     return this;
   }
   listenOnce(a, b, c, d, e) {
-    if (goog.isArray(b))
-      for (var f = 0; f < b.length; f++) this.listenOnce(a, b[f], c, d, e);
+    if (isArray(b)) for (var f = 0; f < b.length; f++) this.listenOnce(a, b[f], c, d, e);
     else this.recordListenerKey_(listenOnce(a, b, c || this, d || false, e || this.handler_ || this));
     return this;
   }
@@ -39,8 +39,7 @@ export default class EventHandler extends Disposable {
 
   unlisten(a, b, c, d, e) {
     if (this.key_ || this.keys_)
-      if (goog.isArray(b))
-        for (var f = 0; f < b.length; f++) this.unlisten(a, b[f], c, d, e);
+      if (isArray(b)) for (var f = 0; f < b.length; f++) this.unlisten(a, b[f], c, d, e);
       else if (a = getListener(a, b, c || this, d || false, e || this.handler_ || this)) a = a.key, unlistenByKey(a), this.keys_ ? remove(this.keys_, a) : this.key_ == a && (this.key_ = null);
     return this;
   }

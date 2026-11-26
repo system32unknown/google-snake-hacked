@@ -1,10 +1,19 @@
 import { Coordinate as Point } from './goog/math/Coordinate.js';
+import { forEach, forEachRight } from './goog/array.js';
 import { randomInt } from './goog/math/math.js';
 import { getKeys } from './goog/object/object.js';
 import * as goog from './goog/goog.js';
 import Disposable from './goog/Disposable.js';
+import GoogSet from './goog/structs/GoogSet.js';
+import EventHandler from './goog/events/EventHandler.js';
+import EventTarget from './goog/events/EventTarget.js';
+import Event from './goog/events/Event.js';
+import { getTime, getVendorPropertyName, setPosition, createDiv, defineSingleton } from './js/utils/utils.js';
+import InputController from './js/controllers/InputController.js';
+import ObjectPoolManager from './js/manager/ObjectPoolManager.js';
+import DirectionManager from './js/manager/DirectionManager.js';
 import ConditionalTrigger from './js/backend/ConditionalTrigger.js';
-import { getTime, getVendorPropertyName, setPosition } from './js/utils/utils.js';
+import SpriteSheet from './js/backend/SpriteSheet.js';
 
 var minutes = 6E4;
 
@@ -12,44 +21,6 @@ var ItemDefinitions = {}; // Registry of base item data
 var ItemClasses = null; // Registry mapping item names to their constructors
 
 var isAnimationPaused = false;
-
-/**
- * Parse a Starling-style XML spritesheet into a JavaScript object.
- * @param {string} xmlText - The content of spritesheet.xml as string.
- * @returns {object} Parsed data: frames: {[name]: {x,y,width,height}}
- */
-function parseSpriteSheetXML(xmlText) {
-  const parser = new DOMParser();
-  const xml = parser.parseFromString(xmlText, "application/xml");
-  const atlas = xml.querySelector("TextureAtlas");
-  if (!atlas) throw new Error("Invalid spritesheet XML: missing <TextureAtlas>");
-
-  const frames = [];
-  atlas.querySelectorAll("SubTexture").forEach((node) => {
-    frames.push({
-      x: parseInt(node.getAttribute("x")),
-      y: parseInt(node.getAttribute("y")),
-      width: parseInt(node.getAttribute("width")),
-      height: parseInt(node.getAttribute("height"))
-    });
-  });
-  return frames;
-}
-
-function readTextFile(file) {
-  var rawStr = "";
-  const rawFile = new XMLHttpRequest();
-  rawFile.open("GET", file, false);
-  rawFile.onreadystatechange = function () {
-    if (rawFile.readyState === 4) {
-      if (rawFile.status === 200 || rawFile.status == 0) {
-        rawStr = rawFile.responseText;
-      }
-    }
-  }
-  rawFile.send();
-  return rawStr;
-}
 
 /**
  * @param {number} dir 
@@ -171,7 +142,7 @@ class VisibilityTimer extends Disposable {
 
     // Listen to document visibility changes
     if (this.visibilityChangeEvent) {
-      var listener = new goog.events.EventHandler(this);
+      var listener = new EventHandler(this);
       listener.listen(document, this.visibilityChangeEvent, goog.bind(this.onVisibilityChange, this));
     }
 
@@ -387,95 +358,6 @@ const AUDIO_FORMATS = [
 ];
 
 /**
- * ImageLoader class — loads an image and notifies listeners when ready.
- * @param {string} src - The image URL to load.
- */
-class ImageLoader {
-  constructor(src) {
-    this.src = src;       // Image source path
-    this.loaded = false;  // Whether the image is loaded
-    this.callbacks = [];  // Functions to call when image is loaded
-    this.image = new Image();
-  }
-
-  /**
-   * Start loading the image (if not already started).
-   * When loaded, runs all registered callbacks.
-   */
-  load() {
-    // Only run if image hasn't been loaded yet
-    if (!this.image.src) {
-      var onLoad = goog.bind(() => {
-        if (!this.loaded) {
-          this.loaded = true;
-          // Call all queued callbacks
-          for (const callback of this.callbacks) {
-            callback();
-          }
-        }
-      }, this);
-
-      this.image.onload = onLoad;
-      this.image.src = this.src;
-
-      // Handle cases where image was cached
-      if (this.image.complete || this.image.readyState === "complete") {
-        onLoad();
-      }
-    }
-  }
-}
-function onImageLoaded(loader, callback) {
-  loader.loaded ? callback() : loader.callbacks.push(callback)
-}
-
-class SpriteSheet {
-  constructor(url) {
-    this.imageUrl = url + ".png";
-    this.frameUrl = url + ".xml";
-
-    this.frames = parseSpriteSheetXML(readTextFile(`assets/${this.frameUrl}`));
-    this.imageLoader = new ImageLoader(`./assets/${this.imageUrl}`);
-    this.isReady = false;
-
-    onImageLoaded(this.imageLoader, goog.bind(() => {
-      this.isReady = true;
-    }, this));
-  }
-
-  getWidth(index) {
-    return this.frames[index].width;
-  }
-
-  getHeight(index) {
-    return this.frames[index].height;
-  }
-
-  load(callback) {
-    if (callback) onImageLoaded(this.imageLoader, callback);
-    this.imageLoader.load();
-  }
-
-  createFrame(index) {
-    const div = createDiv();
-    const frame = this.frames[index];
-    div.style.width = frame.width + "px";
-    div.style.height = frame.height + "px";
-    div.style.background = `url("./assets/${this.imageUrl}") -${frame.x}px -${frame.y}px no-repeat`;
-    return div;
-  }
-}
-
-function createDiv() {
-  var div = document.createElement("div");
-  div.style.position = "absolute";
-  div.style.userSelect = "none";
-  div.style.webkitTapHighlightColor = "rgba(0,0,0,0)";
-  div.unselectable = "on";
-  return div
-};
-
-/**
  * Returns a list of valid grid cell indices.
  * 
  * @param {boolean} excludeBlocked - If true, excludes blocked cell indices listed in `blockedCells`.
@@ -492,11 +374,9 @@ function getAllGridCells(excludeBlocked = false) {
 }
 const blockedCells = [0, 22, 184, 206];
 
-class Sprite extends goog.events.EventTarget {
+class Sprite extends EventTarget {
   constructor(sprmanager, frameId) {
     super();
-
-    this.SpriteManager = sprmanager;
 
     // Current frame identifier (like image or tile type)
     this.frameId = frameId; // Q
@@ -505,7 +385,7 @@ class Sprite extends goog.events.EventTarget {
     this.rotation = 0; // T
 
     // DOM element (the sprite's visual)
-    this.element = this.SpriteManager.createFrame(this._getFrameSource()); // s
+    this.element = SpriteManager.createFrame(this._getFrameSource()); // s
 
     // Position and movement state
     this.gridX = 0;
@@ -520,8 +400,8 @@ class Sprite extends goog.events.EventTarget {
     this.visible = true;
 
     // Cached dimensions
-    this.height = this.SpriteManager.getHeight(this._getFrameSource());
-    this.width = this.SpriteManager.getWidth(this._getFrameSource());
+    this.height = SpriteManager.getHeight(this._getFrameSource());
+    this.width = SpriteManager.getWidth(this._getFrameSource());
 
     // Active animation and effect references
     this.animation = null;
@@ -542,10 +422,10 @@ class Sprite extends goog.events.EventTarget {
 
   // Get width / height from manager
   getWidth() {
-    return this.SpriteManager.getWidth(this._getFrameSource());
+    return SpriteManager.getWidth(this._getFrameSource());
   }
   getHeight() {
-    return this.SpriteManager.getHeight(this._getFrameSource());
+    return SpriteManager.getHeight(this._getFrameSource());
   }
 
   // Private: frame source (can change by rotation or animation)
@@ -648,7 +528,7 @@ class Sprite extends goog.events.EventTarget {
 
   // Private: refresh background position for current frame
   static _updateBackground(sprite) {
-    const frame = this.SpriteManager.frames[sprite._getFrameSource(sprite.frameId)];
+    const frame = SpriteManager.frames[sprite._getFrameSource(sprite.frameId)];
     const pos = frame ? `-${frame.x}px -${frame.y}px` : undefined;
     sprite.element.style.backgroundPosition = pos;
     if (sprite.isLooping) Sprite.moveToGrid(sprite, sprite.gridX, sprite.gridY);
@@ -689,7 +569,7 @@ class Sprite extends goog.events.EventTarget {
     if (scaleX !== undefined) transform += ` scaleX(${scaleX})`;
     if (scaleY !== undefined) transform += ` scaleY(${scaleY})`;
 
-    for (const prefix of vendorPrefixes) {
+    for (const prefix of ["Moz", "ms", "O", "webkit"]) {
       this.element.style[`${prefix}Transform`] = transform;
     }
   }
@@ -751,8 +631,8 @@ class Sprite extends goog.events.EventTarget {
    */
   static _updateSize(sprite, frameId) {
     const frameSource = sprite._getFrameSource(frameId);
-    sprite.setWidth(this.SpriteManager.getWidth(frameSource));
-    sprite.setHeight(this.SpriteManager.getHeight(frameSource));
+    sprite.setWidth(SpriteManager.getWidth(frameSource));
+    sprite.setHeight(SpriteManager.getHeight(frameSource));
   }
 
   setWidth(value) {
@@ -999,7 +879,7 @@ function resetDisplay(obj) {
 }
 
 function createBackgroundTile(parent, x, y) {
-  var tile = new Sprite(SpriteManager, TIMER_DIGITS[0]);
+  var tile = new Sprite(TIMER_DIGITS[0]);
   tile.show(false);               // hidden initially
   tile.setZIndex(-2);             // render behind everything
   Sprite.setPosition(tile, x, y); // place at coordinates
@@ -1058,7 +938,7 @@ class TimerDisplay extends Disposable {
 
     // Create 4 sprite digits spaced horizontally
     for (let i = 0; i < 4; i++) {
-      const digitSprite = new Sprite(SpriteManager, TIMER_DIGITS[0]);
+      const digitSprite = new Sprite(TIMER_DIGITS[0]);
       Sprite.setPosition(digitSprite, x + 10 * i, y);
       parent.appendChild(digitSprite.getElement());
       this.digits.push(digitSprite);
@@ -1145,7 +1025,7 @@ class ClickableElement extends SpriteGroup {
   constructor(id, width, height, parent, zIndex) {
     super(id, width, height, parent, zIndex);
 
-    this.eventHandler = new goog.events.EventHandler(this);
+    this.eventHandler = new EventHandler(this);
 
     // Attach mouse event listeners
     this.eventHandler.listen(this.element, "click", this.handleClick);
@@ -1189,7 +1069,7 @@ class SpritePool extends Disposable {
   }
 
   get() {
-    return this.pool.length === 0 ? new Sprite(SpriteManager, 57) : this.pool.shift()
+    return this.pool.length === 0 ? new Sprite(57) : this.pool.shift()
   }
 
   disposeInternal() {
@@ -1489,14 +1369,6 @@ class LanternEntity extends GridEntity {
 
 var lanternSequence = [];
 
-class ObjectPoolManager {
-  constructor() {
-    this.objects = {};
-    this.count = 0;
-  }
-}
-defineSingleton(ObjectPoolManager);
-
 // Item factory
 function createItem(name) {
   if (!(name in ItemDefinitions) || !(name in ItemClasses))
@@ -1539,7 +1411,7 @@ class Item {
 function initializeObjectCounter(target, typeId) {
   target.count = 0;
   target.objects = (typeId in ObjectRegistry) ? ObjectRegistry[typeId].data : ObjectRegistry[1].data;
-  target.objects.forEach(function (value) {
+  forEach(target.objects, function (value) {
     this.count += value;
   }, target)
 }
@@ -1588,10 +1460,10 @@ class GridPatternManager {
       })
     }, this);
 
-    this.availableCells = new Set();
+    this.availableCells = new GoogSet();
     this.availableCells.addAll(getAllGridCells(true));
-    this.activeCells = new Set();
-    LetterShapes.forEach(function (a, b) {
+    this.activeCells = new GoogSet();
+    forEach(LetterShapes, function (a, b) {
       var c = new Set();
       a.forEach(function (a) {
         c.add(23 * a.y + a.x);
@@ -1937,7 +1809,7 @@ var Be = [Uc, Tc, Sc],
   Ee = NORMAL_HEAD;
 
 function createSprite(spriteType, zIndex, parent) {
-  const sprite = new Sprite(SpriteManager, spriteType);
+  const sprite = new Sprite(spriteType);
   sprite.show(false);
   sprite.setZIndex(zIndex);
   sprite.isLooping = true; // 'Eb = h' looks like a boolean property
@@ -1951,7 +1823,7 @@ function createSprite(spriteType, zIndex, parent) {
  * - Advances the snake forward, handles movement interpolation, catches items, and pattern-matching.
  * - Dispatches events: "catch item" and "match pattern" (use earlier CustomEvent classes).
  */
-class SnakeController extends goog.events.EventTarget {
+class SnakeController extends EventTarget {
   constructor(containerElement) {
     super();
 
@@ -2022,7 +1894,7 @@ class SnakeController extends goog.events.EventTarget {
     const releasingIndex = this.segments[this.segments.length - 1].getCellIndex();
 
     // move segments backwards
-    goog.array.forEachRight(this.segments, seg => {
+    forEachRight(this.segments, seg => {
       if (seg.parent) {
         // if a link to previous exists, follow it
         seg.gridX = seg.parent.gridX;
@@ -2046,7 +1918,7 @@ class SnakeController extends goog.events.EventTarget {
     let queued = null;
     if (this.directionQueue.length) queued = this.directionQueue.shift();
 
-    goog.array.forEachRight(this.segments, seg => {
+    forEachRight(this.segments, seg => {
       const d = queued;
       seg.baseDirection = seg.currentDirection; // store old facing
       // choose new current Direction based on segment type
@@ -2170,7 +2042,7 @@ class SnakeController extends goog.events.EventTarget {
   handleCatchAndItems(now) {
     const activeLinked = getActiveLinkedCells(this.patternManager);
     if (activeLinked.length) {
-      goog.array.forEach(activeLinked, idx => {
+      activeLinked.forEach((idx) => {
         // if head occupies same cell, trigger short animation
         if (this.segments[0].getCellIndex() === idx) {
           this.segments[0].playAnimation(Ie, 80);
@@ -2285,7 +2157,7 @@ class SnakeController extends goog.events.EventTarget {
 
   // cleanup
   disposeInternal() {
-    goog.array.forEach(this.segments, seg => seg.disposeInternal());
+    this.segments.forEach((seg) => seg.disposeInternal());
     this.directionQueue = null;
     this.headSprite.disposeInternal();
     super.disposeInternal();
@@ -2303,7 +2175,7 @@ const SegmentFrames = {
  * SnakeSegment class
  * Represents a single segment of the snake.
  */
-class SnakeSegment extends goog.events.Event {
+class SnakeSegment extends Event {
   /**
    * @param {number} direction - Current facing direction (1–4).
    * @param {number} type - Segment type (0=head, 1=body, 2=tail).
@@ -2491,7 +2363,7 @@ class GameController extends Disposable {
     this.snake = new SnakeController(this.gridContainer); // N
 
     this.input = new InputController(true); // Zc
-    this.eventHandler = new goog.events.EventHandler(this); // B
+    this.eventHandler = new EventHandler(this); // B
     this.objectPool = ObjectPoolManager.getInstance(); // bb
 
     this.playButton = new ClickableElement(12, START_BUTTON_POS.x, START_BUTTON_POS.y, this.root, 101); // ca
@@ -2529,7 +2401,7 @@ class GameController extends Disposable {
 
     this.icons = [];
     SIDE_ICON_POS.forEach(icon => function () {
-      const sprite = new Sprite(SpriteManager, 33);
+      const sprite = new Sprite(33);
       sprite.show(false);
       Sprite.setPosition(sprite, icon.x, icon.y);
       this.root.appendChild(sprite.getElement());
@@ -2819,7 +2691,7 @@ class GameController extends Disposable {
       this.timerDisplay.show(false);
       resetDisplay(this.scoreDisplay);
 
-      goog.array.forEach(this.icons, sprite => sprite.show(false));
+      this.icons.forEach((sprite) => sprite.show(false));
       this.music.load(false);
     }
   }
@@ -3055,7 +2927,7 @@ function initTutorial(game) {
 /** @param {GameController} game */
 function hideTutorialUI(game) {
   Sprite.fadeOut(game.tutorialRoot);
-  goog.array.forEach(game.tutorialButtons, a => Sprite.fadeOut(a));
+  game.tutorialButtons.forEach((a) => Sprite.fadeOut(a));
   game.tutorialRoot.show(false)
 };
 

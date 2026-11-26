@@ -56,15 +56,13 @@ export function modulo(a, b) {
   return (r * b < 0) ? r + b : r;
 };
 
-// TODO(user): Rename to normalizeAngle, retaining old name as deprecated
-// alias.
 /**
  * Normalizes an angle to be in range [0-360). Angles outside this range will
  * be normalized to be the equivalent angle with that range.
  * @param {number} angle Angle in degrees.
  * @return {number} Standardized angle.
  */
-export function standardAngle(angle) {
+export function normalizeAngle(angle) {
   return modulo(angle, 360);
 };
 
@@ -80,5 +78,5 @@ export function standardAngle(angle) {
  *     x1,y1 to x2,y2.
  */
 export function angle(x1, y1, x2, y2) {
-  return standardAngle(toDegrees(Math.atan2(y2 - y1, x2 - x1)));
+  return normalizeAngle(toDegrees(Math.atan2(y2 - y1, x2 - x1)));
 };

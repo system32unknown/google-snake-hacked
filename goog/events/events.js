@@ -1,8 +1,10 @@
 import Pools from './pools.js';
 import { IE, isVersion } from '../userAgent/userAgent.js';
 import { forEach, getCount, extend } from '../object/object.js';
+import { remove, some } from '../array.js';
 import BrowserEvent from './BrowserEvent.js';
 import Event from './Event.js';
+import { isArray, getUid, isDef, isString, getObjectByName } from "../goog.js";
 
 const listeners_ = {};
 const listenerTree_ = {};
@@ -12,7 +14,7 @@ const onStringMap_ = {};
 
 export const listen = function (a, b, c, d, e) {
   if (!b) throw Error("Invalid event type");
-  if (goog.isArray(b)) {
+  if (isArray(b)) {
     for (var f = 0; f < b.length; f++) listen(a, b[f], c, d, e);
     return null
   }
@@ -21,7 +23,7 @@ export const listen = function (a, b, c, d, e) {
   b in g || (g[b] = Pools.getObject());
   g = g[b];
   d in g || (g[d] = Pools.getObject(), g.count_++);
-  var g = g[d], h = goog.getUid(a), j;
+  var g = g[d], h = getUid(a), j;
   g.remaining_++;
   if (g[h]) {
     j = g[h];
@@ -45,7 +47,7 @@ export const listen = function (a, b, c, d, e) {
   return c
 };
 export const listenOnce = function (a, b, c, d, e) {
-  if (goog.isArray(b)) {
+  if (isArray(b)) {
     for (var f = 0; f < b.length; f++) listenOnce(a, b[f], c, d, e);
     return null
   }
@@ -57,7 +59,7 @@ export const listenWithWrapper = function (a, b, c, d, e) {
   b.listen(a, c, d, e)
 };
 export const unlisten = function (a, b, c, d, e) {
-  if (goog.isArray(b)) {
+  if (isArray(b)) {
     for (var f = 0; f < b.length; f++) unlisten(a, b[f], c, d, e);
     return null
   }
@@ -77,11 +79,11 @@ export const unlistenByKey = function (a) {
     e = b.proxy,
     f = b.capture;
   c.removeEventListener ? (c == document || !c.customEvent_) && c.removeEventListener(d, e, f) : c.detachEvent && c.detachEvent(getOnString_(d), e);
-  c = goog.getUid(c);
+  c = getUid(c);
   e = listenerTree_[d][f][c];
   if (sources_[c]) {
     var g = sources_[c];
-    goog.array.remove(g, b);
+    remove(g, b);
     0 == g.length && delete sources_[c];
   }
   b.removed = true;
@@ -119,7 +121,7 @@ export const removeAll = function (a, b, c) {
       if ((e || b == h.type) && (f || c == h.capture)) unlistenByKey(h.key), d++
     }
   });
-  else if (a = goog.getUid(a), sources_[a])
+  else if (a = getUid(a), sources_[a])
     for (var a = sources_[a], g = a.length - 1; 0 <= g; g--) {
       var h = a[g];
       if ((e || b == h.type) && (f || c == h.capture)) unlistenByKey(h.key), d++
@@ -131,7 +133,7 @@ export const getListeners = function (a, b, c) {
 };
 export const getListeners_ = function (a, b, c) {
   var d = listenerTree_;
-  return b in d && (d = d[b], c in d && (d = d[c], a = goog.getUid(a), d[a])) ? d[a] : null
+  return b in d && (d = d[b], c in d && (d = d[c], a = getUid(a), d[a])) ? d[a] : null
 };
 export const getListener = function (a, b, c, d, e) {
   d = !!d;
@@ -141,19 +143,17 @@ export const getListener = function (a, b, c, d, e) {
   return null
 };
 export const hasListener = function (a, b, c) {
-  var a = goog.getUid(a),
-    d = sources_[a];
+  var a = getUid(a), d = sources_[a];
   if (d) {
-    var e = goog.isDef(b), f = goog.isDef(c);
-    return e && f ? (d = listenerTree_[b], !!d && !!d[c] && a in d[c]) : !e && !f ? true : goog.array.some(d, function (a) {
+    var e = isDef(b), f = isDef(c);
+    return e && f ? (d = listenerTree_[b], !!d && !!d[c] && a in d[c]) : !e && !f ? true : some(d, function (a) {
       return e && a.type == b || f && a.capture == c
     })
   }
   return false
 };
 export const expose = function (a) {
-  var b = [],
-    c;
+  var b = [], c;
   for (c in a) a[c] && a[c].id ? b.push(c + " = " + a[c] + " (" + a[c].id + ")") : b.push(c + " = " + a[c]);
   return b.join("\n")
 };
@@ -165,8 +165,7 @@ export const fireListeners = function (a, b, c, d) {
   return b in e && (e = e[b], c in e) ? fireListeners_(e[c], a, b, c, d) : true
 };
 export const fireListeners_ = function (a, b, c, d, e) {
-  var f = 1,
-    b = goog.getUid(b);
+  var f = 1, b = getUid(b);
   if (a[b]) {
     a.remaining_--;
     a = a[b];
@@ -189,7 +188,7 @@ export const getTotalListenerCount = function () {
   return getCount(listeners_)
 };
 export const dispatchEvent = function (a, b) {
-  if (goog.isString(b)) b = new Event(b, a);
+  if (isString(b)) b = new Event(b, a);
   else if (b instanceof Event) b.target = b.target || a;
   else {
     var c = b, b = new Event(b.type, a);
@@ -230,7 +229,7 @@ export const handleBrowserEvent_ = function (a, b) {
   var e = e[d],
     f, g;
   if (synthesizeEventPropagation_()) {
-    f = b || goog.getObjectByName("window.event");
+    f = b || getObjectByName("window.event");
     var h = true in e,
       j = false in e;
     if (h) {
@@ -285,7 +284,7 @@ export const getUniqueId = function (a) {
   return a + "_" + uniqueIdCounter_++
 };
 
-const requiresSyntheticEventPropagation_ = undefined;
+let requiresSyntheticEventPropagation_ = undefined;
 export const synthesizeEventPropagation_ = function () {
   undefined === requiresSyntheticEventPropagation_ && (requiresSyntheticEventPropagation_ = IE && !document.addEventListener);
   return requiresSyntheticEventPropagation_

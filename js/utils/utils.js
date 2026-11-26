@@ -1,4 +1,5 @@
 import { GECKO, MAC, LINUX, isVersion } from '../../goog/userAgent/userAgent.js';
+import { Coordinate as Point } from '../../goog/math/Coordinate.js';
 
 export function defineSingleton(cls) {
   cls.getInstance = () => {
@@ -12,7 +13,6 @@ export function getTime() {
 
 
 // Vendor prefixes commonly used by browsers
-const vendorPrefixes = ["Moz", "ms", "O", "webkit"];
 const vendorPrefixesLower = ["", "moz", "ms", "o", "webkit"];
 
 /**
@@ -71,4 +71,49 @@ function formatPixelValue(value, shouldRound) {
     value = (shouldRound ? Math.round(value) : value) + "px";
   }
   return value;
+}
+
+export function createDiv() {
+  var div = document.createElement("div");
+  div.style.position = "absolute";
+  div.style.userSelect = "none";
+  div.style.webkitTapHighlightColor = "rgba(0,0,0,0)";
+  div.unselectable = "on";
+  return div
+};
+
+const FRAME_ATTRIBUTES = ["x", "y", "width", "height"];
+
+export function parseSpriteSheetXML(xmlText) {
+  const xml = new DOMParser().parseFromString(xmlText, "application/xml");
+
+  if (xml.querySelector("parsererror")) {
+    throw new Error("Invalid spritesheet XML: could not be parsed");
+  }
+
+  const atlas = xml.querySelector("TextureAtlas");
+  if (!atlas) throw new Error("Invalid spritesheet XML: missing <TextureAtlas>");
+
+  return Array.from(atlas.querySelectorAll("SubTexture"), (node) => {
+    const frame = {};
+    for (const attribute of FRAME_ATTRIBUTES) {
+      frame[attribute] = parseInt(node.getAttribute(attribute), 10);
+    }
+    return frame;
+  });
+}
+
+export function readTextFile(file) {
+  const request = new XMLHttpRequest();
+  request.open("GET", file, false);
+  request.send();
+
+  const ok = request.status === 200 || request.status === 0;
+  return ok ? request.responseText : "";
+}
+
+export async function fetchTextFile(file) {
+  const response = await fetch(file);
+  if (!response.ok) throw new Error(`Failed to load ${file}: ${response.status}`);
+  return response.text();
 }

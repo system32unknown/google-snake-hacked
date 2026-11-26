@@ -3,7 +3,7 @@ export default class StringBuffer {
     this.buffer_ = "";
     null != a && this.append.apply(this, arguments);
   }
-  
+
   set(a) {
     this.clear();
     this.append(a);

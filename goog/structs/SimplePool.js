@@ -1,4 +1,5 @@
 import Disposable from "../Disposable.js";
+import { isFunction, isObject } from '../goog.js';
 
 export default class SimplePool extends Disposable {
   createObjectFn_ = null;
@@ -35,8 +36,8 @@ export default class SimplePool extends Disposable {
 
   disposeObject(a) {
     if (this.disposeObjectFn_) this.disposeObjectFn_(a);
-    else if (goog.isObject(a))
-      if (goog.isFunction(a.dispose)) a.dispose();
+    else if (isObject(a))
+      if (isFunction(a.dispose)) a.dispose();
       else for (var b in a) delete a[b];
   }
 

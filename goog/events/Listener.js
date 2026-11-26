@@ -9,7 +9,7 @@ export default class Listener {
   constructor() { }
 
   init(a, b, c, d, e, f) {
-    if (goog.isFunction(a)) this.isFunctionListener_ = true;
+    if (isFunction(a)) this.isFunctionListener_ = true;
     else if (a && a.handleEvent && isFunction(a.handleEvent)) this.isFunctionListener_ = false;
     else throw Error("Invalid listener argument");
     this.listener = a;

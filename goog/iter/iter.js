@@ -1,6 +1,5 @@
 import Iterator from './Iterator.js';
 import { assert } from '../asserts/asserts.js';
-import { isArrayLike } from '../goog.js';
 import * as GoogArray from '../array.js';
 
 export const StopIteration = Error("StopIteration");
@@ -41,7 +40,7 @@ export const filter = function (a, b, c) {
     for (; ;) {
       var d = a.next();
       if (b.call(c, d, void 0, a)) return d
-    } 
+    }
   };
   return d
 };
@@ -51,7 +50,7 @@ export const range = function (a, b, c) {
   if (0 == f) throw Error("Range step argument must not be zero");
   var g = new Iterator;
   g.next = function () {
-    if (f > 0 && d >= e || f < 0 && d <= e) throw  StopIteration;
+    if (f > 0 && d >= e || f < 0 && d <= e) throw StopIteration;
     var a = d;
     d = d + f;
     return a
