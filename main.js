@@ -3,16 +3,22 @@ import { forEach, forEachRight } from './goog/array.js';
 import { randomInt } from './goog/math/math.js';
 import { getKeys } from './goog/object/object.js';
 import * as goog from './goog/goog.js';
+import { CatchItemEvent, MatchPatternEvent, DirectionEvent } from './js/events.js';
 import Disposable from './goog/Disposable.js';
 import GoogSet from './goog/structs/GoogSet.js';
+import GoogMap from './goog/structs/GoogMap.js';
 import EventHandler from './goog/events/EventHandler.js';
 import EventTarget from './goog/events/EventTarget.js';
 import Event from './goog/events/Event.js';
-import { getTime, getVendorPropertyName, setPosition, createDiv, defineSingleton } from './js/utils/utils.js';
+import { getTime, setPosition, createDiv, defineSingleton } from './js/utils/utils.js';
+import { updateCellUsage, selectRandomAvailableCell, getActiveLinkedCells, generatePatternedCellSequence } from './js/utils/GridUtils.js';
+import AudioPlayer from './js/audio/AudioPlayer.js';
 import InputController from './js/controllers/InputController.js';
 import ObjectPoolManager from './js/manager/ObjectPoolManager.js';
 import DirectionManager from './js/manager/DirectionManager.js';
+import GridPatternManager from './js/manager/GridPatternManager.js';
 import ConditionalTrigger from './js/backend/ConditionalTrigger.js';
+import VisibilityTimer from './js/backend/VisibilityTimer.js';
 import SpriteSheet from './js/backend/SpriteSheet.js';
 
 var minutes = 6E4;
@@ -121,81 +127,6 @@ function createOpacityAnimator(element, start, end) {
     if (shouldRound) value = Math.ceil(value);
     element.style.opacity = String(value);
     return value;
-  };
-}
-
-class VisibilityTimer extends Disposable {
-  constructor(timeoutMs, onVisible, onHidden) {
-    super();
-    this.timeoutMs = timeoutMs;    // How long to wait (in ms)
-    this.onVisible = onVisible;    // Callback when the page becomes visible
-    this.onHidden = onHidden;      // Callback when the page becomes hidden
-
-    this.hasTriggered = false;
-    this.isHidden = false;
-    this.startTime = getTime();
-    this.hiddenProp = getVendorPropertyName("hidden");
-    this.visibilityStateProp = getVendorPropertyName("visibilityState");
-
-    // Determine the visibility change event name
-    this.visibilityChangeEvent = this.visibilityStateProp ? this.visibilityStateProp.replace(/state$/i, "change").toLowerCase() : null;
-
-    // Listen to document visibility changes
-    if (this.visibilityChangeEvent) {
-      var listener = new EventHandler(this);
-      listener.listen(document, this.visibilityChangeEvent, goog.bind(this.onVisibilityChange, this));
-    }
-
-    // Start initial timer
-    this.scheduleCheck();
-  }
-
-  disposeInternal() {
-    clearTimeout(this.timer);
-    super.disposeInternal();
-  }
-
-  // Called when timer interval passes
-  checkVisibility = () => {
-    this.timer = null;
-    // True if enough time has passed
-    this.isHidden = getTime() - this.startTime >= this.timeoutMs;
-    this.updateCallbacks();
-  }
-
-  // Schedule next visibility check
-  scheduleCheck() {
-    if (this.timer) clearTimeout(this.timer);
-    const remaining = Math.max(100, this.timeoutMs - (getTime() - this.startTime));
-    this.timer = setTimeout(goog.bind(this.checkVisibility, this), remaining);
-  }
-
-  // Called when visibility changes
-  onVisibilityChange() {
-    const state = document[this.visibilityStateProp];
-    this.isHidden = document[this.hiddenProp] || state === "hidden";
-    if (this.isHidden) this.updateCallbacks();
-    else this.resetTimer();
-  }
-
-  // Update which callback should fire
-  updateCallbacks() {
-    const condition = this.isHidden || this.hasTriggered;
-    if (this.hasTriggered && !condition) {
-      this.hasTriggered = false;
-      this.onHidden();
-      this.scheduleCheck();
-    } else if (!this.hasTriggered && condition) {
-      this.hasTriggered = true;
-      this.onVisible();
-    }
-  }
-
-  // Reset time tracking
-  resetTimer() { // Mb
-    this.startTime = getTime();
-    this.hasTriggered = false;
-    this.updateCallbacks();
   }
 }
 
@@ -206,176 +137,8 @@ function setOpacity(el, value) {
   else if ('filter' in s) s.filter = value === "" ? "" : `alpha(opacity=${value * 100})`;
 }
 
-class MediaSequence extends Disposable {
-  constructor() {
-    super();
-
-    this.items = [];            // pb
-    this.index = 0;             // ua
-    this.isLoaded = false;      // qb
-    this.isPlaying = false;     // ia
-  }
-
-  disposeInternal() {
-    this.items = [];
-    this.index = 0;
-    this.isLoaded = false;
-    this.isPlaying = false;
-
-    super.disposeInternal();
-  }
-
-  /**
-   * Returns whether the item is currently playing.
-   */
-  isActive() {
-    return this.isPlaying;
-  }
-
-  /**
-   * Move to next item in sequence.
-   */
-  next(loop, onLoad, onEnd) {
-    this.index++;
-    if (this.index >= this.items.length) {
-      this.index = loop ? 0 : this.items.length - 1;
-    }
-    this.load(loop, onLoad, onEnd);
-  }
-}
-
-class AudioPlayer extends MediaSequence {
-  /**
-   * @param {string[]} audioPaths
-   * @param {HTMLElement=} parent
-   */
-  constructor(audioPaths, parent) {
-    super();
-
-    this.items = audioPaths; // pb
-    this.audioElement = null; // H
-    this.parent = parent || document.body; // Dc
-    this.autoplay = false; // Cc
-
-    this.onLoadedCallback = null; // Lb
-    this.onPlayCallback = null; // Wa
-    this.lastLoadedIndex = this.index; // ud
-  }
-
-  disposeInternal() {
-    this.pause();
-    this.autoplay = false;
-    this.onPlayCallback = this.onLoadedCallback = null;
-
-    if (this.audioElement) this.parent.removeChild(this.audioElement);
-    super.disposeInternal();
-  }
-
-  /**Triggered when audio is ready to play. (wd)*/
-  handleCanPlay() {
-    this.isLoaded = true;
-    if (this.onLoadedCallback) this.onLoadedCallback();
-
-    if (this.autoplay && !this.isPlaying) {
-      this.play(this.onPlayCallback);
-    }
-  }
-
-  /**Triggered when audio ends. (Ce)*/
-  handleEnded() {
-    this.isPlaying = false;
-    if (this.onPlayCallback) this.onPlayCallback();
-  }
-
-  /**Load the current audio item.*/
-  load(autoplay, onLoaded = null, onPlay = null) {
-    this.autoplay = autoplay;
-    this.onLoadedCallback = onLoaded;
-    this.onPlayCallback = onPlay;
-
-    // If we already loaded this track earlier
-    if (this.audioElement && this.lastLoadedIndex === this.index) {
-      if (this.isLoaded) {
-        this.pause();
-        this.audioElement.currentTime = 0;
-        this.handleCanPlay();
-      }
-      return;
-    }
-
-    // Replace old audio element
-    if (this.audioElement) {
-      this.parent.removeChild(this.audioElement);
-    }
-
-    this.isLoaded = false;
-    this.audioElement = document.createElement("audio");
-    this.audioElement.setAttribute("controls", "false");
-    this.audioElement.setAttribute("preload", "auto");
-    this.audioElement.style.display = "none";
-
-    // Events
-    goog.events.listen(this.audioElement, "canplay", this.handleCanPlay, false, this);
-    goog.events.listen(this.audioElement, "ended", this.handleEnded, false, this);
-
-    // Build source list (.mp3, .ogg)
-    const basePath = this.items[this.index];
-
-    for (const info of AUDIO_FORMATS) {
-      const source = document.createElement("source");
-      source.setAttribute("src", basePath + info.extension);
-      source.setAttribute("type", info.type);
-      this.audioElement.appendChild(source);
-    }
-
-    this.parent.appendChild(this.audioElement);
-    this.lastLoadedIndex = this.index;
-  }
-
-  play(onPlay = null) {
-    if (this.isLoaded && !this.isPlaying) {
-      this.onPlayCallback = onPlay;
-      this.audioElement.play();
-      this.isPlaying = true;
-    }
-  }
-
-  pause() {
-    if (this.isPlaying) {
-      this.audioElement.pause();
-      this.isPlaying = false;
-    }
-  }
-
-  getCurrentTime() {
-    return this.isPlaying ? this.audioElement.currentTime : 0;
-  }
-}
-
-const AUDIO_FORMATS = [
-  { extension: ".mp3", type: "audio/mpeg" },
-  { extension: ".ogg", type: "audio/ogg" }
-];
-
-/**
- * Returns a list of valid grid cell indices.
- * 
- * @param {boolean} excludeBlocked - If true, excludes blocked cell indices listed in `blockedCells`.
- * @returns {number[]} Array of valid cell indices (0–206).
- */
-function getAllGridCells(excludeBlocked = false) {
-  const cells = [];
-  for (let i = 0; i < 207; i++) {
-    if (!excludeBlocked || !blockedCells.includes(i)) {
-      cells.push(i);
-    }
-  }
-  return cells;
-}
-const blockedCells = [0, 22, 184, 206];
-
 class Sprite extends EventTarget {
-  constructor(sprmanager, frameId) {
+  constructor(frameId) {
     super();
 
     // Current frame identifier (like image or tile type)
@@ -648,7 +411,10 @@ class Sprite extends EventTarget {
     }
   }
 }
-let SpriteManager = null;
+
+// Sprite / resource loader for the doodle
+let SpriteManager = new SpriteSheet("spritesheet");
+SpriteManager.load();
 
 function stopAllAnimations(target) {
   if (target.animation) {
@@ -731,13 +497,13 @@ var ITEM_IDS = {
   LANTERNE: 79,
   STEAMER: 67,
   ENVELOPE: 63
-};
+}
 var LANTERN_ICONS = {
   G: 33,
   O: 35,
   L: 34,
   E: 32
-};
+}
 var TIMER_DIGITS = [39, 40, 41, 42, 43, 44, 45, 46, 47, 48];
 var SCORE_EFFECT_DIGITS = [20, 21, 22, 23, 24, 25, 26, 27, 28, 29];
 var SCORE_DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -1416,7 +1182,7 @@ function initializeObjectCounter(target, typeId) {
   }, target)
 }
 
-var LootTable = {
+var LootTable = Object.freeze({
   firecraker: "firecraker",
   dumpling: "dumpling",
   steamer: "steamer",
@@ -1428,75 +1194,10 @@ var LootTable = {
   papercut: "papercut",
   envelope: "envelope",
   lantern: "lantern"
-};
-var LetterShapes = {
-  G: [new Point(2, 3), new Point(3, 3), new Point(3, 4), new Point(3, 5), new Point(2, 5), new Point(1, 5), new Point(0, 5), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(), new Point(1), new Point(2), new Point(3)],
-  G1: [new Point(0, 4), new Point(1, 4), new Point(2, 4), new Point(3, 4), new Point(3, 3), new Point(3, 2), new Point(3, 1), new Point(3), new Point(2), new Point(1), new Point(), new Point(0, 1), new Point(0, 2), new Point(1, 2), new Point(2, 2)],
-  O: [new Point(), new Point(1), new Point(2), new Point(3), new Point(3, 1), new Point(3, 2), new Point(3, 3), new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1)],
-  O2: [new Point(), new Point(1), new Point(2), new Point(3), new Point(3, 1), new Point(3, 2), new Point(3, 3), new Point(2, 3), new Point(1, 3), new Point(0, 3), new Point(0, 2), new Point(0, 1)],
-  L: [new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(), new Point(1), new Point(2), new Point(3), new Point(3, 1), new Point(3, 2), new Point(2, 2), new Point(1, 2)],
-  E: [new Point(3, 4), new Point(2, 4), new Point(1, 4), new Point(0, 4), new Point(0, 3), new Point(0, 2), new Point(0, 1), new Point(), new Point(1), new Point(1, 1), new Point(1, 2), new Point(1, 3), new Point(2, 3), new Point(3, 3)]
-};
+});
 
 var phase = 1;
 var ObjectRegistry = {};
-
-class GridPatternManager {
-  constructor() {
-    this.cellMap = null;  // Map of cell -> usage counters (g)
-    this.availableCells = null; // Set of free cells (wa)
-    this.activeCells = null; // Set of active/special cells (Xa)
-
-    this.patterns = {}; // Predefined shape patterns (Kc)
-  }
-
-  init() {
-    this.cellMap = new Map();
-    getAllGridCells().forEach(function(a) {
-      this.cellMap.set(a, {
-        usedCount: 0, // Gc
-        specialCount: 0, // Ic
-        totalCount: 0 // Jc
-      })
-    }, this);
-
-    this.availableCells = new GoogSet();
-    this.availableCells.addAll(getAllGridCells(true));
-    this.activeCells = new GoogSet();
-    forEach(LetterShapes, function (a, b) {
-      var c = new Set();
-      a.forEach(function (a) {
-        c.add(23 * a.y + a.x);
-      });
-      this.patterns[b] = c;
-    }, this)
-  }
-
-  markCell(cellIndex, isSpecial) {
-    this.availableCells.remove(cellIndex);
-    const info = this.cellMap.get(cellIndex);
-    info.totalCount++;
-
-    if (isSpecial) {
-      info.specialCount++;
-      this.activeCells.add(cellIndex);
-    } else info.usedCount++;
-  }
-
-  match() {
-    var a = new Set();
-    var b = getLowestActiveCellIndex(this);
-    this.activeCells.forEach(function (c) {
-      a.add(c - b);
-    }, this)
-    var c = "";
-    this.patterns.forEach(function (b, e) {
-      b.equals(a) && (c = e);
-    });
-    return c;
-  }
-}
-defineSingleton(GridPatternManager);
 
 /**
  * Finds a 2x2 block of available cells in the grid.
@@ -1528,93 +1229,6 @@ function find2x2Block(gridManager) {
   return [start, start + 1, start + 23, start + 23 + 1];
 }
 
-/**
- * Selects a random available cell index from the grid.
- * 
- * @param {GridPatternManager} grid - The grid or cell manager.
- * @returns {number} The selected cell index, or -1 if none available.
- */
-function selectRandomAvailableCell(grid) {
-  if (grid.availableCells.isEmpty()) return -1;
-
-  const available = grid.availableCells.getValues();
-  return available[randomInt(available.length)];
-}
-
-/**
- * Updates a specific cell's usage counters after an operation.
- * 
- * @param {GridPatternManager} grid - The grid or cell manager.
- * @param {number} cellIndex - The target cell index.
- * @param {boolean} isActive - Whether the operation was active (true) or passive (false).
- */
-function updateCellUsage(grid, cellIndex, isActive) {
-  const cell = grid.cellMap.get(cellIndex);
-
-  // Decrease reference counters
-  cell.totalCount--;
-
-  // If cell is now unused and not blocked, mark it as available
-  if (cell.totalCount === 0 && blockedCells.indexOf(cellIndex) === -1) {
-    grid.availableCells.add(cellIndex);
-  }
-
-  // Adjust active/passive counts
-  if (isActive) {
-    cell.specialCount--;
-    if (cell.specialCount === 0) grid.activeCells.remove(cellIndex);
-  } else cell.usedCount--;
-}
-
-/**
- * Returns a list of currently active cells that still have active links.
- * 
- * @param {GridPatternManager} grid - The grid or cell manager.
- * @returns {Array<number>} Active cell indices.
- */
-function getActiveLinkedCells(grid) {
-  const result = new Set();
-  grid.activeCells.forEach((cellIndex) => {
-    if (grid.cellMap.get(cellIndex).usedCount > 0) result.add(cellIndex);
-  }, grid);
-  return result.getValues();
-}
-
-/**
- * Finds the smallest (earliest) active cell index.
- * 
- * @param {GridPatternManager} grid - The grid or cell manager.
- * @returns {number} Minimum active cell index.
- */
-function getLowestActiveCellIndex(grid) {
-  let min = Infinity;
-  grid.activeCells.forEach(cellIndex => {
-    if (cellIndex < min) min = cellIndex;
-  });
-  return min;
-}
-
-/**
- * Generates a pattern-based cell sequence starting from a random available cell.
- * 
- * @param {GridPatternManager} grid - The grid or cell manager.
- * @param {string|number} patternId - The ID of the pattern to use.
- * @returns {Array<number>} Array of valid target cell indices.
- */
-function generatePatternedCellSequence(grid, patternId) {
-  const startCell = selectRandomAvailableCell(grid);
-  const result = [];
-
-  grid.patterns[patternId].forEach(function (offset) {
-    let target = (offset + startCell) % 207;
-    if (this.availableCells.contains(target)) {
-      result.push(target);
-    }
-  }, grid);
-
-  return result;
-}
-
 class TileSpawner extends Disposable { // se
   constructor() {
     super();
@@ -1632,8 +1246,8 @@ class TileSpawner extends Disposable { // se
   init(parentElement) {
     this.rootElement = parentElement;
 
-    this.itemMap = new Map(); // stores all items by ID (Ra)
-    this.activeItems = new Set(); // stores active items (Ca)
+    this.itemMap = new GoogMap(); // stores all items by ID (Ra)
+    this.activeItems = new GoogSet(); // stores active items (Ca)
 
     this.lastSpawnTime = getTime();
     this.spawnRate = 1;
@@ -1735,7 +1349,7 @@ function spawnItem(tileSpawner, item, positions) {
     tileSpawner.itemMap.set(pos, it); // Map grid position → item
     tileSpawner.activeItems.add(it); // Track active items
     tileSpawner.gridManager.markCell(pos); // Mark cell as occupied
-  };
+  }
 
   if (Array.isArray(positions)) {
     positions.forEach(pos => addItemToGrid.call(tileSpawner, item, pos));
@@ -1791,7 +1405,7 @@ function runIntroStep(snake) {
     }
   }
   snakeBodyVisible++;
-};
+}
 
 var Ge = [Uc, Tc, Sc, Tc, Uc];
 var Be = [Uc, Tc, Sc],
@@ -1998,7 +1612,7 @@ class SnakeController extends EventTarget {
           if (rot === 270) y -= 2;
         }
         Sprite.setPosition(sprite, x, y);
-      };
+      }
 
       // If head and its follower face same direction, use special head sprite
       if (this.segments[0].currentDirection === this.segments[1].currentDirection) {
@@ -2169,7 +1783,7 @@ const SegmentFrames = {
   0: NORMAL_HEAD,  // Head
   1: NORMAL_BODY,  // Body
   2: Bc   // Tail
-};
+}
 
 /**
  * SnakeSegment class
@@ -2825,7 +2439,7 @@ function createFrameAnimation(sprite, frames, position, offsetY) {
       anim.addPauseStep(80);
     });
     anim.play();
-  };
+  }
 }
 
 /** @param {GameController} game */
@@ -2849,7 +2463,7 @@ function ResetGame(game) {
   game.soundButton.show(true);
   game.music.play();
   game.music.audioElement.muted = game.muted;
-};
+}
 
 /**
  * Resets combo counters for all item definitions.
@@ -2859,7 +2473,7 @@ function resetComboData(game) {
   getKeys(ItemDefinitions).forEach(function (key) {
     this.comboData[key] = 0
   }, game);
-};
+}
 
 /**
  * Updates the icon sprites to match the current sequence.
@@ -2909,7 +2523,7 @@ function stopGame(game) {
     }
     setOpacity(game.gridContainer, .3)
   }
-};
+}
 
 /** @param {GameController} game */
 function initTutorial(game) {
@@ -2922,14 +2536,14 @@ function initTutorial(game) {
   game.state = "tutorial_start";
   game.eventHandler.listen(game.tutorialRoot, "click", game.handleClick);
   game.playTutorialSequence()
-};
+}
 
 /** @param {GameController} game */
 function hideTutorialUI(game) {
   Sprite.fadeOut(game.tutorialRoot);
   game.tutorialButtons.forEach((a) => Sprite.fadeOut(a));
   game.tutorialRoot.show(false)
-};
+}
 
 var Logo = null;
 var gameController = null;
@@ -2939,12 +2553,9 @@ var gameController = null;
  */
 function init() {
   if (Logo = document.getElementById("hplogo")) {
-    // Sprite / resource loader for the doodle
-    SpriteManager = new SpriteSheet("spritesheet");
-    SpriteManager.load();
 
     // Build a configuration set (rc) with many keys enabled
-    var enabledSet = new Map();
+    var enabledSet = new GoogMap();
     enabledSet.set(Bc, true);
     enabledSet.set(pc, true);
     enabledSet.set(id, true);
@@ -2960,7 +2571,7 @@ function init() {
     rc = enabledSet;
 
     // Another configuration set (sc) with a different set of keys
-    var otherSet = new Map();
+    var otherSet = new GoogMap();
     otherSet.set(Zc, true);
     otherSet.set($c, true);
     otherSet.set(ad, true);

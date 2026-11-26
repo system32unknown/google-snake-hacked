@@ -4,293 +4,442 @@ import { forEach, getCount, extend } from '../object/object.js';
 import { remove, some } from '../array.js';
 import BrowserEvent from './BrowserEvent.js';
 import Event from './Event.js';
-import { isArray, getUid, isDef, isString, getObjectByName } from "../goog.js";
+import { isArray, getUid, isDef, isString } from '../goog.js';
 
-const listeners_ = {};
-const listenerTree_ = {};
-const sources_ = {};
-const onString_ = "on";
-const onStringMap_ = {};
+const listeners = {};
+const listenerTree = {};
+const sources = {};
+const onStringCache = new Map();
 
-export const listen = function (a, b, c, d, e) {
-  if (!b) throw Error("Invalid event type");
-  if (isArray(b)) {
-    for (var f = 0; f < b.length; f++) listen(a, b[f], c, d, e);
-    return null
-  }
+let uniqueIdCounter = 0;
+let requiresSyntheticPropagation;
 
-  var d = !!d, g = listenerTree_;
-  b in g || (g[b] = Pools.getObject());
-  g = g[b];
-  d in g || (g[d] = Pools.getObject(), g.count_++);
-  var g = g[d], h = getUid(a), j;
-  g.remaining_++;
-  if (g[h]) {
-    j = g[h];
-    for (f = 0; f < j.length; f++)
-      if (g = j[f], g.listener == c && g.handler == e) {
-        if (g.removed) break;
-        return j[f].key
-      }
-  } else j = g[h] = Pools.getArray(), g.count_++;
-  f = Pools.getProxy();
-  f.src = a;
-  g = Pools.getListener();
-  g.init(c, f, a, b, d, e);
-  c = g.key;
-  f.key = c;
-  j.push(g);
-  listeners_[c] = g;
-  sources_[h] || (sources_[h] = Pools.getArray());
-  sources_[h].push(g);
-  a.addEventListener ? (a == document || !a.customEvent_) && a.addEventListener(b, f, d) : a.attachEvent(getOnString_(b), f);
-  return c
+const own = (object, key) => (Object.hasOwn(object, key) ? object[key] : undefined);
+const isDocument = (target) => typeof document !== 'undefined' && target === document;
+const matches = (entry, listener, capture, handler) => entry.listener === listener && entry.capture === capture && (entry.handler ?? null) === (handler ?? null);
+
+export const getOnString_ = (type) => {
+  if (!onStringCache.has(type)) onStringCache.set(type, `on${type}`);
+  return onStringCache.get(type);
 };
-export const listenOnce = function (a, b, c, d, e) {
-  if (isArray(b)) {
-    for (var f = 0; f < b.length; f++) listenOnce(a, b[f], c, d, e);
-    return null
-  }
-  a = listen(a, b, c, d, e);
-  listeners_[a].callOnce = true;
-  return a
+
+export const getUniqueId = (prefix) => `${prefix}_${uniqueIdCounter++}`;
+
+export const synthesizeEventPropagation_ = () => {
+  requiresSyntheticPropagation ??= IE && !document.addEventListener;
+  return requiresSyntheticPropagation;
 };
-export const listenWithWrapper = function (a, b, c, d, e) {
-  b.listen(a, c, d, e)
-};
-export const unlisten = function (a, b, c, d, e) {
-  if (isArray(b)) {
-    for (var f = 0; f < b.length; f++) unlisten(a, b[f], c, d, e);
-    return null
-  }
-  d = !!d;
-  a = getListeners_(a, b, d);
-  if (!a) return false;
-  for (f = 0; f < a.length; f++)
-    if (a[f].listener == c && a[f].capture == d && a[f].handler == e) return unlistenByKey(a[f].key);
-  return false
-};
-export const unlistenByKey = function (a) {
-  if (!listeners_[a]) return false;
-  var b = listeners_[a];
-  if (b.removed) return false;
-  var c = b.src,
-    d = b.type,
-    e = b.proxy,
-    f = b.capture;
-  c.removeEventListener ? (c == document || !c.customEvent_) && c.removeEventListener(d, e, f) : c.detachEvent && c.detachEvent(getOnString_(d), e);
-  c = getUid(c);
-  e = listenerTree_[d][f][c];
-  if (sources_[c]) {
-    var g = sources_[c];
-    remove(g, b);
-    0 == g.length && delete sources_[c];
-  }
-  b.removed = true;
-  e.needsCleanup_ = true;
-  cleanUp_(d, f, c, e);
-  delete listeners_[a];
-  return true
-};
-export const unlistenWithWrapper = function (a, b, c, d, e) {
-  b.unlisten(a, c, d, e)
-};
-export const cleanUp_ = function (a, b, c, d) {
-  if (!d.locked_ && d.needsCleanup_) {
-    for (var e = 0, f = 0; e < d.length; e++)
-      if (d[e].removed) {
-        var g = d[e].proxy;
-        g.src = null;
-        Pools.releaseProxy(g);
-        Pools.releaseListener(d[e])
-      } else e != f && (d[f] = d[e]), f++;
-    d.length = f;
-    d.needsCleanup_ = false;
-    if (0 == f && (Pools.releaseArray(d), delete listenerTree_[a][b][c], listenerTree_[a][b].count_--, 0 == listenerTree_[a][b].count_ && (Pools.releaseObject(listenerTree_[a][b]),
-      delete listenerTree_[a][b], listenerTree_[a].count_--), 0 == listenerTree_[a].count_)) Pools.releaseObject(listenerTree_[a]), delete listenerTree_[a]
-  }
-};
-export const removeAll = function (a, b, c) {
-  var d = 0,
-    e = null == b,
-    f = null == c,
-    c = !!c;
-  if (null == a) forEach(sources_, function (a) {
-    for (var g = a.length - 1; 0 <= g; g--) {
-      var h = a[g];
-      if ((e || b == h.type) && (f || c == h.capture)) unlistenByKey(h.key), d++
-    }
-  });
-  else if (a = getUid(a), sources_[a])
-    for (var a = sources_[a], g = a.length - 1; 0 <= g; g--) {
-      var h = a[g];
-      if ((e || b == h.type) && (f || c == h.capture)) unlistenByKey(h.key), d++
-    }
-  return d
-};
-export const getListeners = function (a, b, c) {
-  return getListeners_(a, b, c) || []
-};
-export const getListeners_ = function (a, b, c) {
-  var d = listenerTree_;
-  return b in d && (d = d[b], c in d && (d = d[c], a = getUid(a), d[a])) ? d[a] : null
-};
-export const getListener = function (a, b, c, d, e) {
-  d = !!d;
-  if (a = getListeners_(a, b, d))
-    for (b = 0; b < a.length; b++)
-      if (a[b].listener == c && a[b].capture == d && a[b].handler == e) return a[b];
-  return null
-};
-export const hasListener = function (a, b, c) {
-  var a = getUid(a), d = sources_[a];
-  if (d) {
-    var e = isDef(b), f = isDef(c);
-    return e && f ? (d = listenerTree_[b], !!d && !!d[c] && a in d[c]) : !e && !f ? true : some(d, function (a) {
-      return e && a.type == b || f && a.capture == c
-    })
-  }
-  return false
-};
-export const expose = function (a) {
-  var b = [], c;
-  for (c in a) a[c] && a[c].id ? b.push(c + " = " + a[c] + " (" + a[c].id + ")") : b.push(c + " = " + a[c]);
-  return b.join("\n")
-};
-export const getOnString_ = function (a) {
-  return a in onStringMap_ ? onStringMap_[a] : onStringMap_[a] = onString_ + a
-};
-export const fireListeners = function (a, b, c, d) {
-  var e = listenerTree_;
-  return b in e && (e = e[b], c in e) ? fireListeners_(e[c], a, b, c, d) : true
-};
-export const fireListeners_ = function (a, b, c, d, e) {
-  var f = 1, b = getUid(b);
-  if (a[b]) {
-    a.remaining_--;
-    a = a[b];
-    a.locked_ ? a.locked_++ : a.locked_ = 1;
+
+export const BrowserFeature = Object.freeze({
+  HAS_W3C_BUTTON: !IE || isVersion('9'),
+  SET_KEY_CODE_TO_PREVENT_DEFAULT: IE && !isVersion('8')
+});
+
+export const markIeEvent_ = (event) => {
+  let useReturnValue = false;
+
+  if (event.keyCode === 0) {
     try {
-      for (var g = a.length, h = 0; h < g; h++) {
-        var j = a[h];
-        j && !j.removed && (f &= false !== fireListener(j, e))
-      }
-    } finally { a.locked_--, cleanUp_(c, d, b, a) }
+      event.keyCode = -1;
+      return;
+    } catch { useReturnValue = true; }
   }
-  return Boolean(f)
+
+  if (useReturnValue || event.returnValue === undefined) event.returnValue = true;
 };
-export const fireListener = function (a, b) {
-  var c = a.handleEvent(b);
-  a.callOnce && unlistenByKey(a.key);
-  return c
+
+export const isMarkedIeEvent_ = (event) => event.keyCode < 0 || event.returnValue !== undefined;
+
+export const getListeners_ = (source, type, capture) => {
+  const captureNode = own(listenerTree, type)?.[capture];
+  return captureNode ? own(captureNode, getUid(source)) ?? null : null;
 };
-export const getTotalListenerCount = function () {
-  return getCount(listeners_)
+
+export const getListeners = (source, type, capture) => getListeners_(source, type, capture) || [];
+
+export const getListener = (source, type, listener, capture, handler) => {
+  const useCapture = !!capture;
+  const entries = getListeners_(source, type, useCapture);
+  return entries?.find((entry) => matches(entry, listener, useCapture, handler)) ?? null;
 };
-export const dispatchEvent = function (a, b) {
-  if (isString(b)) b = new Event(b, a);
-  else if (b instanceof Event) b.target = b.target || a;
-  else {
-    var c = b, b = new Event(b.type, a);
-    extend(b, c);
-  }
-  var c = 1,
-    d, e = b.type,
-    f = listenerTree_;
-  if (!(e in f)) return true;
-  var f = f[e],
-    e = true in f,
-    g;
-  if (e) {
-    d = [];
-    for (g = a; g; g = g.getParentEventTarget()) d.push(g);
-    g = f[true];
-    g.remaining_ = g.count_;
-    for (var h = d.length - 1; !b.propagationStopped_ && 0 <= h && g.remaining_; h--) b.currentTarget = d[h], c &= fireListeners_(g,
-      d[h], b.type, true, b) && false != b.returnValue_
-  }
-  if (false in f)
-    if (g = f[false], g.remaining_ = g.count_, e)
-      for (h = 0; !b.propagationStopped_ && h < d.length && g.remaining_; h++) b.currentTarget = d[h], c &= fireListeners_(g, d[h], b.type, false, b) && false != b.returnValue_;
-    else
-      for (d = a; !b.propagationStopped_ && d && g.remaining_; d = d.getParentEventTarget()) b.currentTarget = d, c &= fireListeners_(g, d, b.type, false, b) && false != b.returnValue_;
-  return Boolean(c)
-};
-export const protectBrowserEventEntryPoint = function (a) {
-  handleBrowserEvent_ = a.protectEntryPoint(handleBrowserEvent_);
-  Pools.setProxyCallbackFunction(handleBrowserEvent_);
-};
-export const handleBrowserEvent_ = function (a, b) {
-  if (!listeners_[a]) return true;
-  var c = listeners_[a],
-    d = c.type,
-    e = listenerTree_;
-  if (!(d in e)) return true;
-  var e = e[d],
-    f, g;
-  if (synthesizeEventPropagation_()) {
-    f = b || getObjectByName("window.event");
-    var h = true in e,
-      j = false in e;
-    if (h) {
-      if (isMarkedIeEvent_(f)) return true;
-      markIeEvent_(f)
+
+export const cleanUp_ = (type, capture, sourceId, entries) => {
+  if (entries.locked_ || !entries.needsCleanup_) return;
+
+  let writeIndex = 0;
+  for (let readIndex = 0; readIndex < entries.length; readIndex++) {
+    const entry = entries[readIndex];
+
+    if (entry.removed) {
+      const proxy = entry.proxy;
+      proxy.src = null;
+      Pools.releaseProxy(proxy);
+      Pools.releaseListener(entry);
+    } else {
+      if (readIndex !== writeIndex) entries[writeIndex] = entry;
+      writeIndex++;
     }
-    var k = Pools.getEvent();
-    k.init(f, this);
-    f = true;
+  }
+
+  entries.length = writeIndex;
+  entries.needsCleanup_ = false;
+
+  if (writeIndex !== 0) return;
+
+  Pools.releaseArray(entries);
+
+  const typeNode = listenerTree[type];
+  const captureNode = typeNode[capture];
+
+  delete captureNode[sourceId];
+  captureNode.count_--;
+  if (captureNode.count_ !== 0) return;
+
+  Pools.releaseObject(captureNode);
+  delete typeNode[capture];
+  typeNode.count_--;
+  if (typeNode.count_ !== 0) return;
+
+  Pools.releaseObject(typeNode);
+  delete listenerTree[type];
+};
+
+export const listen = (source, type, listener, capture, handler) => {
+  if (!type) throw new Error('Invalid event type');
+
+  if (isArray(type)) {
+    for (const singleType of type) listen(source, singleType, listener, capture, handler);
+    return null;
+  }
+
+  const useCapture = !!capture;
+
+  let typeNode = own(listenerTree, type);
+  if (!typeNode) typeNode = listenerTree[type] = Pools.getObject();
+
+  let captureNode = own(typeNode, useCapture);
+  if (!captureNode) {
+    captureNode = typeNode[useCapture] = Pools.getObject();
+    typeNode.count_++;
+  }
+
+  const sourceId = getUid(source);
+  captureNode.remaining_++;
+
+  let entries = captureNode[sourceId];
+  if (entries) {
+    for (const existing of entries) {
+      if (matches(existing, listener, useCapture, handler)) {
+        if (existing.removed) break;
+        return existing.key;
+      }
+    }
+  } else {
+    entries = captureNode[sourceId] = Pools.getArray();
+    captureNode.count_++;
+  }
+
+  const proxy = Pools.getProxy();
+  proxy.src = source;
+
+  const entry = Pools.getListener();
+  entry.init(listener, proxy, source, type, useCapture, handler);
+
+  const key = entry.key;
+  proxy.key = key;
+
+  entries.push(entry);
+  listeners[key] = entry;
+
+  if (!sources[sourceId]) sources[sourceId] = Pools.getArray();
+  sources[sourceId].push(entry);
+
+  if (source.addEventListener) {
+    if (isDocument(source) || !source.customEvent_) source.addEventListener(type, proxy, useCapture);
+  } else source.attachEvent(getOnString_(type), proxy);
+
+  return key;
+};
+
+export const listenOnce = (source, type, listener, capture, handler) => {
+  if (isArray(type)) {
+    for (const singleType of type) listenOnce(source, singleType, listener, capture, handler);
+    return null;
+  }
+
+  const key = listen(source, type, listener, capture, handler);
+  listeners[key].callOnce = true;
+  return key;
+};
+
+export const listenWithWrapper = (source, wrapper, listener, capture, handler) => {
+  wrapper.listen(source, listener, capture, handler);
+};
+
+export const unlistenByKey = (key) => {
+  const entry = listeners[key];
+  if (!entry || entry.removed) return false;
+
+  const { src, type, proxy, capture } = entry;
+
+  if (src.removeEventListener) {
+    if (isDocument(src) || !src.customEvent_) src.removeEventListener(type, proxy, capture);
+  } else if (src.detachEvent) {
+    src.detachEvent(getOnString_(type), proxy);
+  }
+
+  const sourceId = getUid(src);
+  const entries = listenerTree[type][capture][sourceId];
+  const sourceEntries = sources[sourceId];
+
+  if (sourceEntries) {
+    remove(sourceEntries, entry);
+    if (sourceEntries.length === 0) delete sources[sourceId];
+  }
+
+  entry.removed = true;
+  entries.needsCleanup_ = true;
+  cleanUp_(type, capture, sourceId, entries);
+  delete listeners[key];
+
+  return true;
+};
+
+export const unlisten = (source, type, listener, capture, handler) => {
+  if (isArray(type)) {
+    for (const singleType of type) unlisten(source, singleType, listener, capture, handler);
+    return null;
+  }
+
+  const useCapture = !!capture;
+  const entries = getListeners_(source, type, useCapture);
+  const entry = entries?.find((candidate) => matches(candidate, listener, useCapture, handler));
+
+  return entry ? unlistenByKey(entry.key) : false;
+};
+
+export const unlistenWithWrapper = (source, wrapper, listener, capture, handler) => {
+  wrapper.unlisten(source, listener, capture, handler);
+};
+
+export const removeAll = (source, type, capture) => {
+  const anyType = type == null;
+  const anyCapture = capture == null;
+  const useCapture = !!capture;
+  let count = 0;
+
+  const removeMatching = (entries) => {
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const entry = entries[i];
+      if ((anyType || type === entry.type) && (anyCapture || useCapture === entry.capture)) {
+        unlistenByKey(entry.key);
+        count++;
+      }
+    }
+  };
+
+  if (source == null) {
+    forEach(sources, (entries) => removeMatching(entries));
+  } else {
+    const entries = sources[getUid(source)];
+    if (entries) removeMatching(entries);
+  }
+
+  return count;
+};
+
+export const hasListener = (source, type, capture) => {
+  const sourceId = getUid(source);
+  const entries = sources[sourceId];
+  if (!entries) return false;
+
+  const hasType = isDef(type);
+  const hasCapture = isDef(capture);
+
+  if (hasType && hasCapture) {
+    const captureNode = own(listenerTree, type)?.[!!capture];
+    return !!captureNode && sourceId in captureNode;
+  }
+
+  if (!hasType && !hasCapture) return true;
+
+  return some(entries, (entry) => (hasType && entry.type === type) || (hasCapture && entry.capture === !!capture));
+};
+
+export const expose = (object) => {
+  const lines = [];
+
+  for (const key in object) {
+    const value = object[key];
+    lines.push(value && value.id ? `${key} = ${value} (${value.id})` : `${key} = ${value}`);
+  }
+
+  return lines.join('\n');
+};
+
+export const fireListener = (entry, event) => {
+  const returnValue = entry.handleEvent(event);
+  if (entry.callOnce) unlistenByKey(entry.key);
+  return returnValue;
+};
+
+export const fireListeners_ = (captureNode, source, type, capture, event) => {
+  let result = true;
+  const sourceId = getUid(source);
+  const entries = captureNode[sourceId];
+
+  if (entries) {
+    captureNode.remaining_--;
+    entries.locked_ = (entries.locked_ || 0) + 1;
+
     try {
-      if (h) {
-        for (var l = Pools.getArray(), n = k.currentTarget; n; n = n.parentNode) l.push(n);
-        g = e[true];
-        g.remaining_ = g.count_;
-        for (var m = l.length - 1; !k.propagationStopped_ && 0 <= m && g.remaining_; m--) k.currentTarget = l[m], f &= fireListeners_(g, l[m], d, true, k);
-        if (j) {
-          g = e[false];
-          g.remaining_ = g.count_;
-          for (m = 0; !k.propagationStopped_ && m < l.length && g.remaining_; m++) k.currentTarget = l[m], f &= fireListeners_(g, l[m], d, false, k)
-        }
-      } else f = fireListener(c, k)
+      const length = entries.length;
+      for (let i = 0; i < length; i++) {
+        const entry = entries[i];
+        if (entry && !entry.removed && fireListener(entry, event) === false) result = false;
+      }
     } finally {
-      l && (l.length = 0, Pools.releaseArray(l)), k.dispose(), Pools.releaseEvent(k)
+      entries.locked_--;
+      cleanUp_(type, capture, sourceId, entries);
     }
-    return f
   }
-  d = new BrowserEvent(b, this);
-  try {
-    f = fireListener(c, d)
-  } finally {
-    d.dispose()
-  }
-  return f
+
+  return result;
 };
+
+export const fireListeners = (source, type, capture, event) => {
+  const captureNode = own(listenerTree, type)?.[capture];
+  return captureNode ? fireListeners_(captureNode, source, type, capture, event) : true;
+};
+
+export const getTotalListenerCount = () => getCount(listeners);
+
+export const dispatchEvent = (source, eventOrType) => {
+  let event;
+
+  if (isString(eventOrType)) {
+    event = new Event(eventOrType, source);
+  } else if (eventOrType instanceof Event) {
+    event = eventOrType;
+    event.target = event.target || source;
+  } else {
+    event = new Event(eventOrType.type, source);
+    extend(event, eventOrType);
+  }
+
+  const typeNode = own(listenerTree, event.type);
+  if (!typeNode) return true;
+
+  let result = true;
+
+  const fire = (node, target, capture) => {
+    event.currentTarget = target;
+    const handled = fireListeners_(node, target, event.type, capture, event);
+    if (!handled || event.returnValue_ === false) result = false;
+  };
+
+  const captureNode = own(typeNode, true);
+  const bubbleNode = own(typeNode, false);
+  let ancestors;
+
+  if (captureNode) {
+    ancestors = [];
+    for (let target = source; target; target = target.getParentEventTarget()) {
+      ancestors.push(target);
+    }
+
+    captureNode.remaining_ = captureNode.count_;
+    for (let i = ancestors.length - 1; !event.propagationStopped_ && i >= 0 && captureNode.remaining_; i--) {
+      fire(captureNode, ancestors[i], true);
+    }
+  }
+
+  if (bubbleNode) {
+    bubbleNode.remaining_ = bubbleNode.count_;
+
+    if (captureNode) {
+      for (let i = 0; !event.propagationStopped_ && i < ancestors.length && bubbleNode.remaining_; i++) {
+        fire(bubbleNode, ancestors[i], false);
+      }
+    } else {
+      for (let target = source; !event.propagationStopped_ && target && bubbleNode.remaining_; target = target.getParentEventTarget()) {
+        fire(bubbleNode, target, false);
+      }
+    }
+  }
+
+  return result;
+};
+
+export let handleBrowserEvent_ = function (key, browserEvent) {
+  const entry = listeners[key];
+  if (!entry) return true;
+
+  const type = entry.type;
+  const typeNode = own(listenerTree, type);
+  if (!typeNode) return true;
+
+  if (!synthesizeEventPropagation_()) {
+    const wrapped = new BrowserEvent(browserEvent, this);
+    try {
+      return fireListener(entry, wrapped);
+    } finally {
+      wrapped.dispose();
+    }
+  }
+
+  const nativeEvent = browserEvent || globalThis.event;
+  const captureNode = own(typeNode, true);
+  const bubbleNode = own(typeNode, false);
+
+  if (captureNode) {
+    if (isMarkedIeEvent_(nativeEvent)) return true;
+    markIeEvent_(nativeEvent);
+  }
+
+  const wrapped = Pools.getEvent();
+  wrapped.init(nativeEvent, this);
+
+  let result = true;
+  let path;
+
+  const fire = (node, target, capture) => {
+    wrapped.currentTarget = target;
+    if (!fireListeners_(node, target, type, capture, wrapped)) result = false;
+  };
+
+  try {
+    if (captureNode) {
+      path = Pools.getArray();
+      for (let node = wrapped.currentTarget; node; node = node.parentNode) path.push(node);
+
+      captureNode.remaining_ = captureNode.count_;
+      for (let i = path.length - 1; !wrapped.propagationStopped_ && i >= 0 && captureNode.remaining_; i--) {
+        fire(captureNode, path[i], true);
+      }
+
+      if (bubbleNode) {
+        bubbleNode.remaining_ = bubbleNode.count_;
+        for (let i = 0; !wrapped.propagationStopped_ && i < path.length && bubbleNode.remaining_; i++) {
+          fire(bubbleNode, path[i], false);
+        }
+      }
+    } else result = fireListener(entry, wrapped);
+  } finally {
+    if (path) {
+      path.length = 0;
+      Pools.releaseArray(path);
+    }
+    wrapped.dispose();
+    Pools.releaseEvent(wrapped);
+  }
+
+  return result;
+};
+
 Pools.setProxyCallbackFunction(handleBrowserEvent_);
 
-export const markIeEvent_ = function (a) {
-  var b = false;
-  if (0 == a.keyCode) try {
-    a.keyCode = -1;
-    return
-  } catch { b = true; }
-  if (b || undefined == a.returnValue) a.returnValue = true
-};
-
-export const isMarkedIeEvent_ = function (a) {
-  return 0 > a.keyCode || undefined != a.returnValue
-};
-
-let uniqueIdCounter_ = 0;
-export const getUniqueId = function (a) {
-  return a + "_" + uniqueIdCounter_++
-};
-
-let requiresSyntheticEventPropagation_ = undefined;
-export const synthesizeEventPropagation_ = function () {
-  undefined === requiresSyntheticEventPropagation_ && (requiresSyntheticEventPropagation_ = IE && !document.addEventListener);
-  return requiresSyntheticEventPropagation_
-};
-
-export const BrowserFeature = {
-  HAS_W3C_BUTTON: !IE || isVersion("9"),
-  SET_KEY_CODE_TO_PREVENT_DEFAULT: IE && !isVersion("8")
+export const protectBrowserEventEntryPoint = (entryPointRegistry) => {
+  handleBrowserEvent_ = entryPointRegistry.protectEntryPoint(handleBrowserEvent_);
+  Pools.setProxyCallbackFunction(handleBrowserEvent_);
 };

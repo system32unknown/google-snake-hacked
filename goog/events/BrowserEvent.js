@@ -114,7 +114,7 @@ export default class BrowserEvent extends Event {
     try {
       const isFunctionKey = nativeEvent.keyCode >= FUNCTION_KEY_MIN && nativeEvent.keyCode <= FUNCTION_KEY_MAX;
       if (nativeEvent.ctrlKey || isFunctionKey) nativeEvent.keyCode = -1;
-    } catch {}
+    } catch { }
   }
 
   getBrowserEvent() {

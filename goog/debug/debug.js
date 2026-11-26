@@ -175,7 +175,7 @@ export const enhanceError = (error, extraMessage) => {
   }
 
   return enhanced;
-};
+}
 
 export class EntryPointRegistry {
   static #entryPoints = [];

@@ -3,4 +3,4 @@ export default class Iterator {
 
   next() { throw Error("StopIteration"); }
   __iterator__() { return this; }
-};
+}

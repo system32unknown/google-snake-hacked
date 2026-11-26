@@ -62,9 +62,7 @@ export const filter = (collection, fn, context) => {
   const keys = getKeys(collection);
   const values = getValues(collection);
 
-  if (!keys) {
-    return values.filter((value) => fn.call(context, value, undefined, collection));
-  }
+  if (!keys) return values.filter((value) => fn.call(context, value, undefined, collection));
 
   const result = {};
   values.forEach((value, index) => {
@@ -80,9 +78,7 @@ export const map = (collection, fn, context) => {
   const keys = getKeys(collection);
   const values = getValues(collection);
 
-  if (!keys) {
-    return values.map((value) => fn.call(context, value, undefined, collection));
-  }
+  if (!keys) return values.map((value) => fn.call(context, value, undefined, collection));
 
   const result = {};
   values.forEach((value, index) => {

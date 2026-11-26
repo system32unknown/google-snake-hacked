@@ -1,5 +1,5 @@
 import ImageLoader from "./ImageLoader.js";
-import { parseSpriteSheetXML, fetchTextFile, createDiv } from "../utils/utils.js";
+import { parseSpriteSheetXML, readTextFile, createDiv } from "../utils/utils.js";
 
 function onImageLoaded(loader, callback) {
   loader.loaded ? callback() : loader.callbacks.push(callback);
@@ -7,18 +7,16 @@ function onImageLoaded(loader, callback) {
 
 export default class SpriteSheet {
   ASSET_FOLDER = "assets";
-
   constructor(url) {
-    this.imageUrl = `${url}.png`;
-    this.frameUrl = `${url}.xml`;
+    this.imageUrl = url + ".png";
+    this.frameUrl = url + ".xml";
     this.imgPath = `./${this.ASSET_FOLDER}/${this.imageUrl}`;
 
-    this.frames = [];
-    this.isReady = false;
+    this.frames = parseSpriteSheetXML(readTextFile(`assets/${this.frameUrl}`));
     this.imageLoader = new ImageLoader(this.imgPath);
+    this.isReady = false;
 
-    this.framesPromise = fetchTextFile(`${this.ASSET_FOLDER}/${this.frameUrl}`).then(parseSpriteSheetXML).then((frames) => this.frames = frames);
-    this.framesPromise.catch(() => { });
+    onImageLoaded(this.imageLoader, () => this.isReady = true);
   }
 
   getWidth(index) {

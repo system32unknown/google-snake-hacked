@@ -166,11 +166,8 @@ export const toArray = (array) => clone(array);
 
 export const extend = (array, ...items) => {
   for (const item of items) {
-    if (isArrayLike(item)) {
-      for (let i = 0; i < item.length; i++) array.push(item[i]);
-    } else {
-      array.push(item);
-    }
+    if (isArrayLike(item)) for (let i = 0; i < item.length; i++) array.push(item[i]);
+    else array.push(item);
   }
 };
 
@@ -197,9 +194,7 @@ const binarySearchImpl = (array, compareFn, isEvaluator, target, context) => {
 
   while (low < high) {
     const middle = (low + high) >> 1;
-    const comparison = isEvaluator
-      ? compareFn.call(context, array[middle], middle, array)
-      : compareFn(target, array[middle]);
+    const comparison = isEvaluator ? compareFn.call(context, array[middle], middle, array) : compareFn(target, array[middle]);
 
     if (comparison > 0) {
       low = middle + 1;
@@ -212,11 +207,8 @@ const binarySearchImpl = (array, compareFn, isEvaluator, target, context) => {
   return found ? low : ~low;
 };
 
-export const binarySearch = (array, target, compareFn) =>
-  binarySearchImpl(array, compareFn || defaultCompare, false, target);
-
-export const binarySelect = (array, evaluator, context) =>
-  binarySearchImpl(array, evaluator, true, undefined, context);
+export const binarySearch = (array, target, compareFn) => binarySearchImpl(array, compareFn || defaultCompare, false, target);
+export const binarySelect = (array, evaluator, context) => binarySearchImpl(array, evaluator, true, undefined, context);
 
 export const sort = (array, compareFn) => {
   assertArrayLike(array);
