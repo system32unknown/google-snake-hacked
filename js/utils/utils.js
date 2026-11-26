@@ -29,7 +29,7 @@ export function getVendorPropertyName(property) {
     let prefix = vendorPrefixesLower[i];
     let candidate = property;
 
-    if (prefix.length > 0)  candidate = prefix + property.charAt(0).toUpperCase() + property.slice(1); // Capitalize first letter for camelCase vendor properties
+    if (prefix.length > 0) candidate = prefix + property.charAt(0).toUpperCase() + property.slice(1); // Capitalize first letter for camelCase vendor properties
     if (typeof doc[candidate] !== undefined) return candidate; // Return the first supported property name
   }
 
@@ -80,36 +80,22 @@ export function createDiv() {
   div.style.webkitTapHighlightColor = "rgba(0,0,0,0)";
   div.unselectable = "on";
   return div
-};
+}
 
 const FRAME_ATTRIBUTES = ["x", "y", "width", "height"];
 
 export function parseSpriteSheetXML(xmlText) {
   const xml = new DOMParser().parseFromString(xmlText, "application/xml");
-
-  if (xml.querySelector("parsererror")) {
-    throw new Error("Invalid spritesheet XML: could not be parsed");
-  }
+  if (xml.querySelector("parsererror")) throw new Error("Invalid spritesheet XML: could not be parsed");
 
   const atlas = xml.querySelector("TextureAtlas");
   if (!atlas) throw new Error("Invalid spritesheet XML: missing <TextureAtlas>");
 
   return Array.from(atlas.querySelectorAll("SubTexture"), (node) => {
     const frame = {};
-    for (const attribute of FRAME_ATTRIBUTES) {
-      frame[attribute] = parseInt(node.getAttribute(attribute), 10);
-    }
+    for (const attribute of FRAME_ATTRIBUTES) frame[attribute] = parseInt(node.getAttribute(attribute), 10);
     return frame;
   });
-}
-
-export function readTextFile(file) {
-  const request = new XMLHttpRequest();
-  request.open("GET", file, false);
-  request.send();
-
-  const ok = request.status === 200 || request.status === 0;
-  return ok ? request.responseText : "";
 }
 
 export async function fetchTextFile(file) {

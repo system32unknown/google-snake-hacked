@@ -18,15 +18,14 @@ import ObjectPoolManager from './js/manager/ObjectPoolManager.js';
 import DirectionManager from './js/manager/DirectionManager.js';
 import GridPatternManager from './js/manager/GridPatternManager.js';
 import ConditionalTrigger from './js/backend/ConditionalTrigger.js';
+import AnimationSequence from './js/backend/AnimationSequence.js';
 import VisibilityTimer from './js/backend/VisibilityTimer.js';
-import SpriteSheet from './js/backend/SpriteSheet.js';
+import Sprite from './js/objects/Sprite.js';
 
 var minutes = 6E4;
 
 var ItemDefinitions = {}; // Registry of base item data
 var ItemClasses = null; // Registry mapping item names to their constructors
-
-var isAnimationPaused = false;
 
 /**
  * @param {number} dir 
@@ -35,79 +34,6 @@ var isAnimationPaused = false;
 function swapDirection(dir) {
   const map = { 1: 2, 2: 1, 3: 4, 4: 3 };
   return map[dir] || dir;
-}
-
-class AnimationSequence {
-  constructor() {
-    this.startTime = 0;
-    this.currentIndex = 0;
-    this.intervalId = 0;
-    this.steps = [];
-  }
-
-  // Checks if animation is currently running
-  isPlaying() {
-    return !!this.intervalId;
-  }
-
-  // Starts playback of all animation steps in sequence
-  play() {
-    if (isAnimationPaused) return;
-
-    this.stop();
-    this.currentIndex = 0;
-    this.startTime = getTime();
-    this.intervalId = setInterval(goog.bind(this.update, this), 16); // ~60fps
-    this.update();
-  }
-
-  // Stops the animation and finalizes all remaining steps
-  stop() {
-    if (this.intervalId) {
-      let step;
-      while ((step = this.steps[this.currentIndex++])) {
-        if (step.update !== null) step.update(1);
-      }
-      clearInterval(this.intervalId);
-      this.intervalId = 0;
-    }
-  }
-
-  // Called every frame
-  update = () => {
-    const now = getTime();
-
-    if (isAnimationPaused) return;
-
-    let step;
-    while ((step = this.steps[this.currentIndex])) {
-      const elapsed = now - this.startTime;
-
-      if (elapsed < step.duration) {
-        step.update(elapsed / step.duration);
-        return; // wait until next frame
-      }
-
-      if (step.update != undefined) step.update(1); // complete this step
-      if (step.duration > 0) this.startTime += step.duration;
-
-      this.currentIndex++;
-    }
-
-    this.stop(); // all done
-  }
-
-  // Add a step (duration in ms, update callback)
-  addStep(callback, duration = 0) {
-    this.steps.push({
-      duration: duration,
-      update: callback
-    });
-  }
-
-  addPauseStep(duration) {
-    this.addStep(function () { }, duration);
-  }
 }
 
 /**
@@ -136,285 +62,6 @@ function setOpacity(el, value) {
   else if ('MozOpacity' in s) s.MozOpacity = value;
   else if ('filter' in s) s.filter = value === "" ? "" : `alpha(opacity=${value * 100})`;
 }
-
-class Sprite extends EventTarget {
-  constructor(frameId) {
-    super();
-
-    // Current frame identifier (like image or tile type)
-    this.frameId = frameId; // Q
-
-    // Rotation (0, 90, 180, 270 degrees)
-    this.rotation = 0; // T
-
-    // DOM element (the sprite's visual)
-    this.element = SpriteManager.createFrame(this._getFrameSource()); // s
-
-    // Position and movement state
-    this.gridX = 0;
-    this.gridY = 0;
-    this.pixelX = 0;
-    this.pixelY = 0;
-
-    // Flip / mirror state
-    this.isFlipped = false;
-
-    // Visible flag
-    this.visible = true;
-
-    // Cached dimensions
-    this.height = SpriteManager.getHeight(this._getFrameSource());
-    this.width = SpriteManager.getWidth(this._getFrameSource());
-
-    // Active animation and effect references
-    this.animation = null;
-    this.transition = null;
-
-    // Flags
-    this.isTransitioning = false;
-    this.isLooping = false;
-
-    // Timers for queued animations
-    this.timeouts = [];
-  }
-
-  // Returns DOM element of the sprite
-  getElement() { // aa
-    return this.element;
-  }
-
-  // Get width / height from manager
-  getWidth() {
-    return SpriteManager.getWidth(this._getFrameSource());
-  }
-  getHeight() {
-    return SpriteManager.getHeight(this._getFrameSource());
-  }
-
-  // Private: frame source (can change by rotation or animation)
-  _getFrameSource(sourceOverride) {
-    const src = sourceOverride === undefined ? this.frameId : sourceOverride;
-    return Array.isArray(src) ? src[Math.floor(this.rotation / 90)] : src;
-  }
-
-  // Returns frameId
-  getFrameId() { // Ua
-    return this.frameId;
-  }
-
-  // Returns current rotation
-  getRotation() { // Na
-    return this.rotation;
-  }
-
-  // Update position (absolute)
-  static setPosition(sprite, x, y) {
-    if (sprite.element) {
-      sprite.pixelX = Math.floor(x);
-      sprite.pixelY = Math.floor(y);
-      setPosition(sprite.element, sprite.pixelX, sprite.pixelY);
-    }
-  }
-
-  // Move to grid coordinates (translates grid→pixel position)
-  static moveToGrid(sprite, gridX, gridY) {
-    if (!sprite.element) return;
-
-    sprite.gridX = gridX;
-    sprite.gridY = gridY;
-
-    sprite.pixelX = Math.floor(20 * gridX);
-    sprite.pixelY = Math.floor(20 * gridY);
-
-    if (sprite.frameId === NORMAL_BODY || sprite.frameId === pc) {
-      if (sprite.frameId === NORMAL_BODY) {
-        if (sprite.rotation === 180 || sprite.rotation === 0) sprite.pixelX--;
-        else sprite.pixelY--;
-      } else {
-        sprite.pixelX--;
-        sprite.pixelY--;
-      }
-    } else {
-      var b = rc.get(sprite.frameId);
-      var c = sc.get(sprite.frameId);
-
-      var widthOffset = sprite.width - 20;
-      var heightOffset = sprite.height - 20;
-
-      switch (sprite.rotation) {
-        case 0:
-          sprite.pixelY -= b ? widthOffset : 0;
-          sprite.pixelX -= c ? heightOffset : 0;
-          break;
-        case 90:
-          sprite.pixelY -= c ? 0 : widthOffset;
-          sprite.pixelX -= b ? heightOffset : 0;
-          break;
-        case 180:
-          if (sprite.isFlipped) c = !c;
-          sprite.pixelY -= b ? 0 : widthOffset;
-          sprite.pixelX -= c ? 0 : heightOffset;
-          break;
-        case 270:
-          sprite.pixelY -= c ? widthOffset : 0;
-          sprite.pixelX -= b ? 0 : heightOffset;
-          break;
-      }
-
-      if (tc[0].indexOf(sprite.frameId) !== -1 || tc[1].indexOf(sprite.frameId) !== -1) {
-        if (sprite.rotation === 0) sprite.pixelX -= 1;
-        else if (sprite.rotation === 180) sprite.pixelX += 1;
-
-        if (sprite.rotation === 90) sprite.pixelY -= 1;
-        else if (sprite.rotation === 270) sprite.pixelY += 1;
-      }
-    }
-
-    Sprite.setPosition(sprite, sprite.pixelX, sprite.pixelY);
-  }
-
-  // Change z-isndex
-  setZIndex(z) {
-    this.element.style.zIndex = z;
-  }
-
-  // Change frame
-  static setFrame(sprite, frameId) {
-    if (!sprite.element) return;
-
-    Sprite._updateSize(sprite, frameId);
-    if (sprite.frameId !== frameId) {
-      sprite.frameId = frameId;
-      Sprite._updateBackground(sprite);
-    }
-  }
-
-  // Private: refresh background position for current frame
-  static _updateBackground(sprite) {
-    const frame = SpriteManager.frames[sprite._getFrameSource(sprite.frameId)];
-    const pos = frame ? `-${frame.x}px -${frame.y}px` : undefined;
-    sprite.element.style.backgroundPosition = pos;
-    if (sprite.isLooping) Sprite.moveToGrid(sprite, sprite.gridX, sprite.gridY);
-  }
-
-  // Cleanup
-  disposeInternal() {
-    if (this.element && this.element.parentNode) {
-      this.element.parentNode.removeChild(this.element);
-    }
-    this.element = null;
-    super.disposeInternal();
-  }
-
-  // Rotation logic
-  rotate(angle) {
-    if (this.rotation !== angle || this.isFlipped) {
-      this.rotation = angle;
-      this.isFlipped = false;
-      Sprite._updateSize(this, this.frameId);
-      Sprite._updateBackground(this);
-    }
-  }
-
-  // Flip vertically
-  flip() {
-    if (!this.isFlipped) {
-      this.rotation = 180;
-      this.isFlipped = true;
-      Sprite._updateSize(this, this.frameId);
-      Sprite._updateBackground(this);
-    }
-  }
-
-  // Apply scale transform
-  scale(scaleX, scaleY) {
-    let transform = "";
-    if (scaleX !== undefined) transform += ` scaleX(${scaleX})`;
-    if (scaleY !== undefined) transform += ` scaleY(${scaleY})`;
-
-    for (const prefix of ["Moz", "ms", "O", "webkit"]) {
-      this.element.style[`${prefix}Transform`] = transform;
-    }
-  }
-
-  // Show / hide sprite
-  show(visible) {
-    if (this.visible !== visible) {
-      this.visible = visible;
-      this.element.style.display = visible ? "" : "none";
-    }
-  }
-
-  // Fade out
-  static fadeOut(sprite) {
-    Sprite.animateOpacity(sprite, 300, 1, 0);
-  }
-
-  // Fade animation helper
-  static animateOpacity(sprite, duration, from, to) {
-    if (sprite.animation && sprite.animation.stop) sprite.animation.stop();
-    sprite.animation = new AnimationSequence();
-    sprite.animation.addStep(createOpacityAnimator(sprite.element, from, to), duration);
-    sprite.animation.play();
-  }
-
-  // Play frame animation sequence (K)
-  playFrameSequence(frames, delay, repeatDelay, repeatCount = 1, looping = false) {
-    if (repeatDelay) {
-      this.timeouts.push(setTimeout(goog.bind(() => {
-        this.playFrameSequence(frames, delay, 0, repeatCount, looping);
-      }, this), repeatDelay));
-      return;
-    }
-
-    if (this.transition && this.transition.isPlaying()) {
-      if (this.isTransitioning) return;
-      this.transition.stop();
-    }
-
-    this.transition = new AnimationSequence();
-
-    for (let i = 0; i < repeatCount; i++) {
-      frames.forEach(frame => {
-        this.transition.addStep(goog.bind(function () {
-          Sprite.setFrame(this, frame);
-        }, this));
-        this.transition.addPauseStep(delay);
-      });
-    }
-
-    this.transition.play();
-    this.isTransitioning = looping;
-  }
-
-  /**
-   * Internal helper to update size when frame changes.
-   * @param {Sprite} sprite 
-   * @param {number} frameId 
-   */
-  static _updateSize(sprite, frameId) {
-    const frameSource = sprite._getFrameSource(frameId);
-    sprite.setWidth(SpriteManager.getWidth(frameSource));
-    sprite.setHeight(SpriteManager.getHeight(frameSource));
-  }
-
-  setWidth(value) {
-    if (this.width != value && this.element) {
-      this.width = value;
-      this.element.style.width = `${value + 1}px`;
-    }
-  }
-  setHeight(value) {
-    if (this.height != value && this.element) {
-      this.height = value;
-      this.element.style.height = `${value + 1}px`;
-    }
-  }
-}
-
-// Sprite / resource loader for the doodle
-let SpriteManager = new SpriteSheet("spritesheet");
-SpriteManager.load();
 
 function stopAllAnimations(target) {
   if (target.animation) {
@@ -2000,7 +1647,7 @@ class GameController extends Disposable {
     this.uiSeq = null; // this.dc
 
     this.visibilityTimer = new VisibilityTimer(3E4, goog.bind(this.onVisibilityLost, this), goog.bind(this.onVisibilityReturn, this));
-    isAnimationPaused = false;
+    AnimationSequence.isAnimationPaused = false;
 
     new SpriteGroup(19, BG_LEFT_POS.x, BG_LEFT_POS.y, this.root, 100);
     this.leftFrame = new SpriteGroup(36, FRAME_LEFT_POS.x + 99, FRAME_LEFT_POS.y, this.root, -1); // Cb
@@ -2316,7 +1963,7 @@ class GameController extends Disposable {
     if (this.introSeq) this.introSeq.stop();
     if (this.tutSeq) this.tutSeq.stop();
     if (this.uiSeq) this.uiSeq.stop();
-    isAnimationPaused = true;
+    AnimationSequence.isAnimationPaused = true;
     this.comboData = null;
     this.timerDisplay.disposeInternal();
     this.scoreDisplay.disposeInternal();

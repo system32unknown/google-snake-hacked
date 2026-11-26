@@ -1,22 +1,25 @@
 import ImageLoader from "./ImageLoader.js";
-import { parseSpriteSheetXML, readTextFile, createDiv } from "../utils/utils.js";
+import { parseSpriteSheetXML, createDiv, fetchTextFile } from "../utils/utils.js";
 
-function onImageLoaded(loader, callback) {
-  loader.loaded ? callback() : loader.callbacks.push(callback);
-}
+const ASSET_FOLDER = "assets";
+
+const whenImageLoaded = (loader) => new Promise((resolve) => loader.loaded ? resolve() : loader.callbacks.push(resolve));
 
 export default class SpriteSheet {
-  ASSET_FOLDER = "assets";
+  frames = [];
+  isReady = false;
+  #loadPromise = null;
+
   constructor(url) {
-    this.imageUrl = url + ".png";
-    this.frameUrl = url + ".xml";
-    this.imgPath = `./${this.ASSET_FOLDER}/${this.imageUrl}`;
-
-    this.frames = parseSpriteSheetXML(readTextFile(`assets/${this.frameUrl}`));
+    this.imageUrl = `${url}.png`;
+    this.frameUrl = `${url}.xml`;
+    this.imgPath = `./${ASSET_FOLDER}/${this.imageUrl}`;
+    this.framePath = `./${ASSET_FOLDER}/${this.frameUrl}`;
     this.imageLoader = new ImageLoader(this.imgPath);
-    this.isReady = false;
+  }
 
-    onImageLoaded(this.imageLoader, () => this.isReady = true);
+  static async create(url, callback) {
+    return new SpriteSheet(url).load(callback);
   }
 
   getWidth(index) {
@@ -28,24 +31,33 @@ export default class SpriteSheet {
   }
 
   async load(callback) {
-    const imageReady = new Promise((resolve) => onImageLoaded(this.imageLoader, resolve));
-    this.imageLoader.load();
-
-    return Promise.all([imageReady, this.framesPromise]).then(() => {
-      this.isReady = true;
-      callback?.();
-      return this;
+    this.#loadPromise ??= this.#loadAssets().catch((error) => {
+      this.#loadPromise = null;
+      throw error;
     });
+    await this.#loadPromise;
+    callback?.();
+    return this;
+  }
+
+  async #loadAssets() {
+    const imageReady = whenImageLoaded(this.imageLoader);
+    this.imageLoader.load();
+    const [xml] = await Promise.all([fetchTextFile(this.framePath), imageReady]);
+    this.frames = parseSpriteSheetXML(xml);
+    this.isReady = true;
   }
 
   createFrame(index) {
-    const frame = this.frames[index];
     const div = createDiv();
-    if (frame !== undefined) {
-      div.style.width = `${frame.width}px`;
-      div.style.height = `${frame.height}px`;
-      div.style.background = `url("${this.imgPath}") -${frame.x}px -${frame.y}px no-repeat`;
-    }
+    const frame = this.frames[index];
+    if (!frame) return div;
+
+    Object.assign(div.style, {
+      width: `${frame.width}px`,
+      height: `${frame.height}px`,
+      background: `url("${this.imgPath}") -${frame.x}px -${frame.y}px no-repeat`,
+    });
     return div;
   }
 }
