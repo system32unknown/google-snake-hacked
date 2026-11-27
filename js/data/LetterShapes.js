@@ -99,3 +99,5 @@ export const LetterShapes = Object.freeze({
     new Point(3, 3)
   ]
 });
+
+export const LANTERN_ICONS = Object.freeze({ G: 33, O: 35, L: 34, E: 32 });

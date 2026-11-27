@@ -1,4 +1,5 @@
 import { LOOT_TABLE as Loot } from './data.js';
+import { forEach } from '../../goog/array.js';
 
 const createEntry = (data, V = 200, U = 1) => ({ data: { ...data }, V, U });
 
@@ -56,5 +57,13 @@ export const ObjectRegistry = {
     [Loot.ingot]: 50,
   }),
 };
+
+export function initObjCounter(target, typeId) {
+  target.count = 0;
+  target.objects = (typeId in ObjectRegistry) ? ObjectRegistry[typeId].data : ObjectRegistry[1].data;
+  forEach(target.objects, function (value) {
+    this.count += value;
+  }, target)
+}
 
 export default ObjectRegistry;

@@ -1,9 +1,9 @@
 import Event from '../../goog/events/Event.js';
-import { NORMAL_BODY, LOWBODY_TURN, Oe, Pe, Qe, Re, SegmentFrames } from '../data/Anim_Data.js';
+import { LOWBODY_TURN, NORMAL_BODY, Oe, Pe, Qe, Re, SegmentFrames } from '../data/Anim_Data.js';
 import { DIZZY } from '../data/Expressions.js';
-import { createSprite } from '../utils/utils.js';
 import DirectionManager from '../manager/DirectionManager.js';
 import Sprite from '../objects/Sprite.js';
+import { createSprite } from '../utils/SprUtils.js';
 
 const GRID_COLUMNS = 23;
 const GRID_ROWS = 9;

@@ -53,19 +53,8 @@ export const filter = (array, fn, context) => Array.prototype.filter.call(array,
 
 export const map = (array, fn, context) => Array.prototype.map.call(array, fn, context);
 
-export const reduce = (array, fn, initialValue, context) =>
-  Array.prototype.reduce.call(
-    array,
-    (accumulator, value, index) => fn.call(context, accumulator, value, index, array),
-    initialValue
-  );
-
-export const reduceRight = (array, fn, initialValue, context) =>
-  Array.prototype.reduceRight.call(
-    array,
-    (accumulator, value, index) => fn.call(context, accumulator, value, index, array),
-    initialValue
-  );
+export const reduce = (array, fn, initialValue, context) => Array.prototype.reduce.call(array, (accumulator, value, index) => fn.call(context, accumulator, value, index, array), initialValue);
+export const reduceRight = (array, fn, initialValue, context) => Array.prototype.reduceRight.call(array, (accumulator, value, index) => fn.call(context, accumulator, value, index, array), initialValue);
 
 export const some = (array, fn, context) => Array.prototype.some.call(array, fn, context);
 

@@ -4,6 +4,26 @@ import { ScoreDisplay } from '../ui/ScoreDisplay.js';
 import { Coordinate as Point } from '../../goog/math/Coordinate.js';
 
 /**
+ * @param {Sprite} sprite 
+ * @param {number[]|number} frames 
+ * @param {Point[]|Point} position 
+ * @param {number} offsetY 
+ */
+export function createFrameAnimation(sprite, frames, position, offsetY) {
+  return function () {
+    const anim = new AnimationSequence();
+    frames.forEach(frame => {
+      anim.addStep(() => {
+        Sprite.setFrame(sprite, frame);
+        Sprite.setPosition(sprite, position.x, position.y + offsetY - sprite.getHeight());
+      });
+      anim.addPauseStep(80);
+    });
+    anim.play();
+  }
+}
+
+/**
  * Plays a swap/transition animation between two sprites.
  * @param {ScoreDisplay} ctx - The context containing sprite `A` and its animation state.
  * @param {Point} startPos - Object with `{x, y}` representing the base position.

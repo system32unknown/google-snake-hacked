@@ -1,11 +1,11 @@
-import * as structs from '../../goog/structs/structs.js';
-import * as object from '../../goog/object/object.js';
 import * as GoogArray from '../../goog/array.js';
-import { LetterShapes } from '../data/LetterShapes.js';
-import { defineSingleton } from '../utils/utils.js';
-import { getAllGridCells, getLowestActiveCellIndex } from '../utils/GridUtils.js';
-import GoogSet from '../../goog/structs/GoogSet.js';
+import * as object from '../../goog/object/object.js';
 import GoogMap from '../../goog/structs/GoogMap.js';
+import GoogSet from '../../goog/structs/GoogSet.js';
+import * as structs from '../../goog/structs/structs.js';
+import { LetterShapes } from '../data/LetterShapes.js';
+import { getAllGridCells, getLowestActiveCellIndex } from '../utils/GridUtils.js';
+import { defineSingleton } from '../utils/utils.js';
 
 export default class GridPatternManager {
   constructor() {

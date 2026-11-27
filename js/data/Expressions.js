@@ -1,7 +1,7 @@
 import { BLINK_1, BLINK_2, BLINK_3, SHOCK_1, SHOCK_2, DIZZY_1, DIZZY_2, DIZZY_3, DIZZY_4, LOOK_LEFT, LOOK_RIGHT } from "./Anim_Data.js";
 
 export const EYE_CLOSE = [BLINK_1, BLINK_2, BLINK_3];
-export const BLINK = EYE_CLOSE.concat([BLINK_2, BLINK_1]);
+export const BLINK = EYE_CLOSE.slice().concat([BLINK_2, BLINK_1]);
 export const NUDGE = [
   [139, 142, 140, 141],
   [135, 138, 136, 137],

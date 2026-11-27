@@ -1,6 +1,5 @@
 import { GECKO, MAC, LINUX, isVersion } from '../../goog/userAgent/userAgent.js';
 import { Coordinate as Point } from '../../goog/math/Coordinate.js';
-import Sprite from '../objects/Sprite.js';
 
 const VENDOR_PREFIXES = ['', 'moz', 'ms', 'o', 'webkit'];
 const NEEDS_ROUNDING_FIX = Boolean(GECKO && (MAC || LINUX) && isVersion('1.9'));
@@ -14,15 +13,6 @@ export function defineSingleton(cls) {
 
 export function getTime() {
   return Date.now();
-}
-
-export function createSprite(spriteType, zIndex, parent) {
-  const sprite = new Sprite(spriteType);
-  sprite.show(false);
-  sprite.setZIndex(zIndex);
-  sprite.isLooping = true;
-  parent.appendChild(sprite.getElement());
-  return sprite;
 }
 
 export function getVendorPropertyName(property) {
@@ -77,4 +67,11 @@ export async function fetchTextFile(file) {
   const response = await fetch(file);
   if (!response.ok) throw new Error(`Failed to load ${file}: ${response.status}`);
   return response.text();
+}
+
+export function setOpacity(el, value) {
+  const s = el.style;
+  if ('opacity' in s) s.opacity = value;
+  else if ('MozOpacity' in s) s.MozOpacity = value;
+  else if ('filter' in s) s.filter = value === "" ? "" : `alpha(opacity=${value * 100})`;
 }

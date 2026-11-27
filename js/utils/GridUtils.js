@@ -2,6 +2,7 @@ import * as structs from '../../goog/structs/structs.js';
 import * as GoogArray from '../../goog/array.js';
 import { randomInt } from '../../goog/math/math.js';
 import GoogSet from '../../goog/structs/GoogSet.js';
+import GridPatternManager from '../manager/GridPatternManager.js';
 
 const blockedCells = [0, 22, 184, 206];
 
@@ -102,4 +103,34 @@ export function generatePatternedCellSequence(grid, patternId) {
   }, grid);
 
   return result;
+}
+
+/**
+ * Finds a 2x2 block of available cells in the grid.
+ * @param {GridPatternManager} gridManager - Object containing availableCells (with values method)
+ * @returns {Array|number} - Array of 4 cell indices or -1 if none found
+ */
+export function find2x2Block(gridManager) {
+  // Get all available cell indices
+  const cells = gridManager.availableCells.getValues();
+
+  // Filter cells that can form a valid 2x2 block
+  const validCells = cells.filter(index => {
+    // Check right and bottom neighbors exist
+    const right = cells.includes(index + 1);
+    const bottom = cells.includes(index + 23);
+    const bottomRight = cells.includes(index + 23 + 1);
+
+    // Prevent wrapping to next row
+    const notLastColumn = index % 23 !== 22;
+    return notLastColumn && right && bottom && bottomRight;
+  });
+
+  if (validCells.length === 0) return -1;
+
+  // Pick a random starting cell
+  const start = validCells[Math.floor(Math.random() * validCells.length)];
+
+  // Return the 4 indices forming the 2x2 block
+  return [start, start + 1, start + 23, start + 23 + 1];
 }

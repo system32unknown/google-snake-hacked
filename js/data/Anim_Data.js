@@ -43,7 +43,7 @@ export const tc = [
   [Zc, $c, ad, bd, cd],
   [dd, ed, fd, gd, hd],
   [nd, od, pd, qd, rd],
-  [id, jd, kd, ld, md],
+  [id, jd, kd, ld, md]
 ];
 
 export const Oe = tc[0];

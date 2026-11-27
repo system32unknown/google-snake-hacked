@@ -1,15 +1,16 @@
-import { CatchItemEvent, MatchPatternEvent } from '../events.js';
 import EventTarget from '../../goog/events/EventTarget.js';
+import { LOOK_LEFT, LOOK_RIGHT, NORMAL_BODY, NORMAL_HEAD, Oe, Pe, Qe, Re } from '../data/Anim_Data.js';
+import { BLINK, DIZZY, EAT_ANIM, LOOK_AROUND, NUDGE, REVERSAL, SHOCK } from '../data/Expressions.js';
+import ObjectRegistry from '../data/ObjectRegistry.js';
+import { CatchItemEvent, MatchPatternEvent } from '../events.js';
 import DirectionManager from '../manager/DirectionManager.js';
 import GridPatternManager from '../manager/GridPatternManager.js';
+import SnakeSegment, { isSpecialFrame, updateSegmentSprite } from '../objects/SnakeSegment.js';
 import Sprite from '../objects/Sprite.js';
-import { updateCellUsage, getActiveLinkedCells } from '../utils/GridUtils.js';
-import { getTime, createSprite } from '../utils/utils.js';
-import { NORMAL_BODY, NORMAL_HEAD, LOOK_LEFT, LOOK_RIGHT, Oe, Pe, Qe, Re } from '../data/Anim_Data.js';
-import { LOOK_AROUND, REVERSAL, NUDGE, SHOCK, DIZZY, EAT_ANIM, BLINK } from '../data/Expressions.js';
 import { stopAllAnimations } from '../utils/AnimUtils.js';
-import ObjectRegistry from '../data/ObjectRegistry.js';
-import SnakeSegment, { updateSegmentSprite, isSpecialFrame } from '../objects/SnakeSegment.js';
+import { getActiveLinkedCells, updateCellUsage } from '../utils/GridUtils.js';
+import { createSprite } from '../utils/SprUtils.js';
+import { getTime } from '../utils/utils.js';
 
 const GRID_COLUMNS = 23;
 const GRID_ROWS = 9;
