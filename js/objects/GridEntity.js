@@ -3,6 +3,7 @@ import Sprite from './Sprite.js';
 import SpritePool from './SpritePool.js';
 import { getTime } from '../utils/utils.js';
 import ConditionalTrigger from '../backend/ConditionalTrigger.js';
+import { stopAllAnimations } from '../utils/AnimUtils.js';
 
 const GRID_COLUMNS = 23;
 const CELL_SIZE = 20;
@@ -146,7 +147,7 @@ export default class GridEntity extends Disposable {
 
     for (const sprite of [this.mainSprite, this.shadowSprite]) {
       sprite.show(false);
-      Sprite.stopAllAnimations(sprite);
+      stopAllAnimations(sprite);
       sprite.Eb = false;
       this.spritePool.pool.push(sprite);
     }

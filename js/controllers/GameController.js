@@ -1,407 +1,425 @@
 import Disposable from '../../goog/Disposable.js';
 import EventHandler from '../../goog/events/EventHandler.js';
-import * as goog from '../../goog/goog.js';
 import { randomInt } from '../../goog/math/math.js';
-import { getKeys } from '../../goog/object/object.js';
 import AudioPlayer from '../audio/AudioPlayer.js';
 import AnimationSequence from '../backend/AnimationSequence.js';
-import TileSpawner from '../backend/TileSpawner.js';
 import VisibilityTimer from '../backend/VisibilityTimer.js';
 import InputController from '../controllers/InputController.js';
 import SnakeController from '../controllers/SnakeController.js';
 import { NORMAL_HEAD } from '../data/Anim_Data.js';
-import { BITTER, EYE_CLOSE, HAPPY_HEAD, LOST_HEAD } from '../data/Expressions.js';
-import { ItemDefinitions } from '../data/Item.js';
+import { BITTER, BLINK, DIZZY, EYE_CLOSE, HAPPY_HEAD, LOST_HEAD, SHOCK } from '../data/Expressions.js';
 import { LANTERN_ICONS } from '../data/LetterShapes.js';
-import { initObjCounter, ObjectRegistry } from '../data/ObjectRegistry.js';
-import { SCORE_DIGITS } from '../data/data.js';
+import ObjectRegistry, { initObjCounter } from '../data/ObjectRegistry.js';
+import { LOOT_TABLE, SCORE_DIGITS, TIMER_DIGITS } from '../data/data.js';
 import * as UI_POS from '../data/ui.js';
-import { DirectionEvent } from '../events.js';
 import ObjectPoolManager from '../manager/ObjectPoolManager.js';
+import TileSpawner from '../manager/TileSpawner.js';
 import ClickableElement from '../objects/ClickableElement.js';
 import Sprite from '../objects/Sprite.js';
 import SpriteGroup from '../objects/SpriteGroup.js';
-import { ScoreDisplay } from '../ui/ScoreDisplay.js';
+import { ScoreDisplay, createDigitSprites } from '../ui/ScoreDisplay.js';
 import TimerDisplay from '../ui/TimerDisplay.js';
 import { createFrameAnimation } from '../utils/AnimUtils.js';
 import { generatePatternedCellSequence } from '../utils/GridUtils.js';
 import { createItem, generateRandomItem } from '../utils/ItemUtils.js';
-import { snapPos, attachSpritesToContainer } from '../utils/SprUtils.js';
+import { attachSpritesToContainer, snapPos } from '../utils/SprUtils.js';
 import { createDiv, getTime, setOpacity, setPosition } from '../utils/utils.js';
 
-let lanternSequence = [];
-let phase = 0;
+const {
+  START_POS,
+  START_BUTTON_POS,
+  SOUND_BUTTON_POS,
+  MAIN_SPR_POS,
+  BG_LEFT_POS,
+  FRAME_LEFT_POS,
+  FRAME_RIGHT_POS,
+  TIMER_POS,
+  SCORE_DIGIT_POS,
+  SIDE_ICON_POS,
+  TUTORIAL_ROOT_POS,
+  TUTORIAL_BUTTON_FRAMES,
+  TUTORIAL_BUTTON_POS,
+  RESULT_FRAMES,
+  RESULT_POS,
+  REPLAY_POS,
+  MEDAL_POS,
+  SCORE_POS,
+  HOVER_FRAMES,
+  OUT_FRAMES,
+  PLAY_FRAME_ANIM,
+} = UI_POS;
 
-let snakeStepIndex = 0;
-let snakeBodyVisible = 0;
+const GameState = Object.freeze({
+  UNSTARTED: 'unstarted',
+  INIT: 'init',
+  TUTORIAL_START: 'tutorial_start',
+  TUTORIAL_END: 'tutorial_end',
+  RUNNING: 'running',
+  STOP: 'stop',
+});
 
-const introSteps = [ // was: ye
+const GAME_DURATION_MS = 60000;
+const MAX_FRAME_DELTA_MS = 50;
+const INTRO_DELAY_MS = 1500;
+const INTRO_STEP_COUNT = 38;
+const INTRO_STEP_PAUSE_MS = 150;
+const SEGMENT_COUNT = 15;
+const MAX_SCORE = 999;
+const SILVER_SCORE = 80;
+const GOLD_SCORE = 150;
+const PHASE_TWO_TIME_MS = 40000;
+const PHASE_THREE_TIME_MS = 20000;
+const RESULT_OPACITY = 0.3;
+const BUTTON_FLASH_INTERVAL_MS = 3000;
+const TUTORIAL_REPEAT_MS = 3000;
+const TUTORIAL_BUTTON_PAUSE_MS = 300;
+const EXPRESSION_DELAY_MS = 80;
+const GOOGLE_WORD = 'GOOGLE';
+const TRIPLE_FINAL_LENGTH = 2;
+const GOOGLE_FINAL_LENGTH = 5;
+
+const INTRO_STEPS = Object.freeze([
   { point: [3, 7], dir: 1 },
   { point: [2, 6], dir: 4 },
   { point: [4, 5], dir: 2 },
   { point: [5, 6], dir: 3 },
   { point: [3, 7], dir: 1 },
   { point: [2, 3], dir: 4 },
-  { point: [4, 2], dir: 4 }
-];
+  { point: [4, 2], dir: 4 },
+]);
 
-/** @param {SnakeController} snake */
-function runIntroStep(snake) {
-  const step = introSteps[snakeStepIndex];
-  const point = step.point;
+const getMedalIndex = (score) => {
+  if (score < SILVER_SCORE) return 0;
+  return score < GOLD_SCORE ? 1 : 2;
+};
 
-  if (snake.getY() === point[1] && snake.getX() === point[0]) {
-    snake.enqueueDirection(step.dir);
+function createIntroStepRunner(snake) {
+  let stepIndex = 0;
+  let visibleSegments = 0;
 
-    snakeStepIndex++;
+  return () => {
+    const step = INTRO_STEPS[stepIndex];
 
-    // If reached end of tutorial steps
-    if (snakeStepIndex === introSteps.length) {
-      snake.setSpeedParameters(getTime(), Infinity);
-      snake.segments[0].playAnimation(EYE_CLOSE, 80);
+    if (step) {
+      const [x, y] = step.point;
+
+      if (snake.getX() === x && snake.getY() === y) {
+        snake.enqueueDirection(step.dir);
+        stepIndex++;
+
+        if (stepIndex === INTRO_STEPS.length) {
+          snake.setSpeedParameters(getTime(), Infinity);
+          snake.segments[0].playAnimation(EYE_CLOSE, EXPRESSION_DELAY_MS);
+        }
+      }
     }
-  }
 
-  // Move forward and update animation
-  snake.forward();
-  snake.updateVisualsAfterStep(); // was: Ce(a)
+    snake.forward();
+    snake.updateVisualsAfterStep();
 
-  // Gradually show more segments (max 15)
-  if (snakeBodyVisible < 15) {
-    for (let i = 0; i < 15; i++) {
-      snake.segments[i].mainSprite.show(i <= snakeBodyVisible + 1);
+    if (visibleSegments < SEGMENT_COUNT) {
+      snake.segments.forEach((segment, i) => segment.mainSprite.show(i <= visibleSegments + 1));
     }
-  }
-  snakeBodyVisible++;
+
+    visibleSegments++;
+  };
 }
 
-/**
- * Plays the game's intro animation sequence.
- * @param {GameController} game - The game controller.
- */
 function playIntroSequence(game) {
-  var seq = new AnimationSequence();
+  const seq = new AnimationSequence();
   game.uiSeq = seq;
 
-  // Animate entity 38 times with short pauses
-  for (let i = 1; i < 39; i++) {
-    seq.addStep(goog.bind(runIntroStep, game, game.snake));
-    seq.addPauseStep(150);
+  const runIntroStep = createIntroStepRunner(game.snake);
+  const buttonY = (offset) => START_BUTTON_POS.y - offset;
+
+  for (let i = 0; i < INTRO_STEP_COUNT; i++) {
+    seq.addStep(runIntroStep);
+    seq.addPauseStep(INTRO_STEP_PAUSE_MS);
   }
 
-  // Fade in secondary sprite
   seq.addPauseStep(200);
-  seq.addStep(function () {
+  seq.addStep(() => {
     game.mainSprite.show(true);
     Sprite.animateOpacity(game.mainSprite, 400, 0, 1);
   });
 
   seq.addPauseStep(600);
-  seq.addStep(function () {
-    Sprite.setPosition(game.playButton, UI_POS.START_BUTTON_POS.x, UI_POS.START_BUTTON_POS.y - 80);
+  seq.addStep(() => {
+    Sprite.setPosition(game.playButton, START_BUTTON_POS.x, buttonY(80));
     game.playButton.show(true);
   });
 
-  // Bounce animation 1
-  seq.addStep(function (t) {
-    Sprite.setPosition(game.playButton, UI_POS.START_BUTTON_POS.x, UI_POS.START_BUTTON_POS.y - 80 * (1 - t * t));
+  seq.addStep((t) => {
+    Sprite.setPosition(game.playButton, START_BUTTON_POS.x, buttonY(80 * (1 - t * t)));
   }, 700);
 
-  // Bounce animation 2
-  seq.addStep(function (t) {
-    Sprite.setPosition(game.playButton, UI_POS.START_BUTTON_POS.x, UI_POS.START_BUTTON_POS.y - 80 * (.25 - (.5 - t) * (.5 - t)));
+  seq.addStep((t) => {
+    Sprite.setPosition(game.playButton, START_BUTTON_POS.x, buttonY(80 * (0.25 - (0.5 - t) * (0.5 - t))));
   }, 700);
 
-  // Run "ready" callback
   seq.addStep(() => game.flashStartButton());
+  seq.addStep(() => game.eventHandler.listenOnce(game.playButton, 'mousedown', game.playIntroUISequence));
 
-  // Add click handler
-  seq.addStep(goog.bind(function () {
-    this.eventHandler.listenOnce(this.playButton, "mousedown", this.playIntroUISequence)
-  }, game));
   seq.play();
 }
 
-/**
- * Resets combo counters for all item definitions.
- * @param {GameController} game
- */
 function resetComboData(game) {
-  getKeys(ItemDefinitions).forEach(function (key) {
-    this.comboData[key] = 0
-  }, game);
+  game.comboData = Object.fromEntries(Object.keys(LOOT_TABLE).map((key) => [key, 0]));
 }
 
-/**
- * Switches the game to a new phase/level.
- * 
- * @param {GameController} game - The game instance.
- * @param {number} phaseId - The new phase index.
- */
 function switchGamePhase(game, phaseId) {
-  phase = phaseId;
+  const { V, U } = ObjectRegistry[phaseId];
 
-  // Reset object counters for this phase
-  initObjCounter(ObjectPoolManager.getInstance(), phaseId);
+  game.phase = phaseId;
+  initObjCounter(game.objectPool, phaseId);
 
-  // Update entity parameters from registry
-  const entity = game.snake;
-  entity.baseDuration = ObjectRegistry[phaseId].V;
-  entity.moveDuration = entity.baseDuration * entity.speedMultiplier;
-  game.TileSpawner.spawnScale = ObjectRegistry[phaseId].U;
+  game.snake.baseDuration = V;
+  game.snake.moveDuration = V * game.snake.speedMultiplier;
+  game.tileSpawner.spawnScale = U;
 }
 
-/** @param {GameController} game */
-function ResetGame(game) {
+function resetGame(game) {
   game.snake.resetSpeed(getTime());
-  game.state = "running";
-  game.remainingTime = game.minutes;
+  game.state = GameState.RUNNING;
+  game.remainingTime = game.gameDuration;
   switchGamePhase(game, 1);
 
-  game.timerDisplay.update(Math.floor(game.remainingTime / 1E3));
+  game.timerDisplay.update(Math.floor(game.remainingTime / 1000));
   game.timerDisplay.show(true);
 
   game.score = 0;
   game.scoreDisplay.update(game.score);
   game.scoreDisplay.reset();
   resetComboData(game);
+  game.resetLanternSequence();
 
-  lanternSequence = [];
-
-  game.icons.forEach(icon => icon.show(false));
+  game.icons.forEach((icon) => icon.show(false));
   game.soundButton.show(true);
   game.music.play();
   game.music.audioElement.muted = game.muted;
 }
 
-/**
- * Updates the icon sprites to match the current sequence.
- * @param {GameController} game
- */
 function updateIcons(game) {
-  game.icons.forEach(function (icon, index) {
-    if (index < lanternSequence.length) {
-      Sprite.setFrame(icon, LANTERN_ICONS[lanternSequence[index]]);
-      icon.show(true);
-    } else icon.show(false);
-  })
+  game.icons.forEach((icon, index) => {
+    const key = game.lanternSequence[index];
+
+    if (key === undefined) {
+      icon.show(false);
+      return;
+    }
+
+    Sprite.setFrame(icon, LANTERN_ICONS[key]);
+    icon.show(true);
+  });
 }
 
-/** @param {GameController} game */
 function stopGame(game) {
-  var digits = createDigitSprites(game.score, SCORE_DIGITS);
+  const digits = createDigitSprites(game.score, SCORE_DIGITS);
+  const medalFrame = RESULT_FRAMES[getMedalIndex(game.score)];
+
   if (game.resultUI) {
-    setOpacity(game.gridContainer, .3);
-    Sprite.setFrame(game.medalGroup, UI_POS.RESULT_FRAMES[(80 > game.score ? 1 : 150 > game.score ? 2 : 3) - 1]);
+    setOpacity(game.gridContainer, RESULT_OPACITY);
+    Sprite.setFrame(game.medalGroup, medalFrame);
     game.resultUI.show(true);
-    for (var i in digits) {
-      if (digits[i] != null) {
-        game.scoreDigits[i].show(true);
-        Sprite.setFrame(game.scoreDigits[i], digits[i]);
-      } else game.scoreDigits[i].show(false);
-    }
-  } else {
-    game.resultUI = new SpriteGroup(61, UI_POS.RESULT_POS.x, UI_POS.RESULT_POS.y, game.root, 100);
-    if (!game.isStandalone) {
-      var replayButton = new ClickableElement(52, UI_POS.REPLAY_POS.x, UI_POS.REPLAY_POS.y, game.root, 101);
-      game.eventHandler.listen(replayButton, "click", game.showGameplayUI);
-      game.eventHandler.listen(replayButton, "mouseover", createFrameAnimation(replayButton, UI_POS.HOVER_FRAMES, UI_POS.REPLAY_POS, 28));
-      game.eventHandler.listen(replayButton, "mouseout", createFrameAnimation(replayButton, UI_POS.OUT_FRAMES, UI_POS.REPLAY_POS, 28));
-      game.resultUI.add(replayButton);
-    }
 
-    game.medalGroup = new SpriteGroup(UI_POS.RESULT_FRAMES[(80 > game.score ? 1 : 150 > game.score ? 2 : 3) - 1], UI_POS.MEDAL_POS.x, UI_POS.MEDAL_POS.y, game.root, 101);
-    game.resultUI.add(game.medalGroup);
-    for (let i in createDigitSprites(game.score, UI_POS.SCORE_DIGITS)) {
-      const frame = digits[i];
-      game.scoreDigits[i] = new SpriteGroup(frame == null ? UI_POS.TIMER_DIGITS[0] : frame, UI_POS.SCORE_POS[i].x, UI_POS.SCORE_POS[i].y, game.root, 101);
-      if (frame == null) {
-        game.scoreDigits[i].show(false);
-        game.resultUI.add(game.scoreDigits[i]);
-      }
+    for (const i of Object.keys(digits)) {
+      const group = game.scoreDigits[i];
+      group.show(digits[i] != null);
+      if (digits[i] != null) Sprite.setFrame(group, digits[i]);
     }
-    setOpacity(game.gridContainer, .3)
+    return;
   }
+
+  game.resultUI = new SpriteGroup(61, RESULT_POS.x, RESULT_POS.y, game.root, 100);
+
+  if (!game.isStandalone) {
+    const replayButton = new ClickableElement(52, REPLAY_POS.x, REPLAY_POS.y, game.root, 101);
+    game.eventHandler.listen(replayButton, 'click', game.showGameplayUI);
+    game.eventHandler.listen(replayButton, 'mouseover', createFrameAnimation(replayButton, HOVER_FRAMES, REPLAY_POS, 28));
+    game.eventHandler.listen(replayButton, 'mouseout', createFrameAnimation(replayButton, OUT_FRAMES, REPLAY_POS, 28));
+    game.resultUI.add(replayButton);
+  }
+
+  game.medalGroup = new SpriteGroup(medalFrame, MEDAL_POS.x, MEDAL_POS.y, game.root, 101);
+  game.resultUI.add(game.medalGroup);
+
+  for (const i of Object.keys(digits)) {
+    const frame = digits[i];
+    const group = new SpriteGroup(frame ?? TIMER_DIGITS[0], SCORE_POS[i].x, SCORE_POS[i].y, game.root, 101);
+
+    group.show(frame != null);
+    game.scoreDigits[i] = group;
+    game.resultUI.add(group);
+  }
+
+  setOpacity(game.gridContainer, RESULT_OPACITY);
 }
 
-/** @param {GameController} game */
 function initTutorial(game) {
-  game.tutorialRoot = new ClickableElement(94, UI_POS.TUTORIAL_ROOT_POS.x, UI_POS.TUTORIAL_ROOT_POS.y, game.root, 100);
-  for (var key in UI_POS.TUTORIAL_BUTTON_FRAMES) {
-    game.tutorialButtons[key] = new ClickableElement(UI_POS.TUTORIAL_BUTTON_FRAMES[key][0], UI_POS.TUTORIAL_BUTTON_POS[key].x, UI_POS.TUTORIAL_BUTTON_POS[key].y, game.root, 101);
-    game.eventHandler.listen(game.tutorialButtons[key], "click", game.handleClick);
-    game.tutorialRoot.add(game.tutorialButtons[key]);
+  game.tutorialRoot = new ClickableElement(94, TUTORIAL_ROOT_POS.x, TUTORIAL_ROOT_POS.y, game.root, 100);
+
+  for (const key of Object.keys(TUTORIAL_BUTTON_FRAMES)) {
+    const pos = TUTORIAL_BUTTON_POS[key];
+    const button = new ClickableElement(TUTORIAL_BUTTON_FRAMES[key][0], pos.x, pos.y, game.root, 101);
+
+    game.tutorialButtons[key] = button;
+    game.eventHandler.listen(button, 'click', game.handleClick);
+    game.tutorialRoot.add(button);
   }
-  game.state = "tutorial_start";
-  game.eventHandler.listen(game.tutorialRoot, "click", game.handleClick);
-  game.playTutorialSequence()
+
+  game.state = GameState.TUTORIAL_START;
+  game.eventHandler.listen(game.tutorialRoot, 'click', game.handleClick);
+  game.playTutorialSequence();
 }
 
-/** @param {GameController} game */
 function hideTutorialUI(game) {
+  if (!game.tutorialRoot) return;
+
   Sprite.fadeOut(game.tutorialRoot);
-  game.tutorialButtons.forEach((a) => Sprite.fadeOut(a));
-  game.tutorialRoot.show(false)
+  Object.values(game.tutorialButtons).forEach((button) => Sprite.fadeOut(button));
+  game.tutorialRoot.show(false);
 }
 
-/** @param {ScoreDisplay} obj */
-function resetDisplay(obj) {
-  Object.values(obj.digitSprites).forEach(child => child.show(false))
-
-  // Stop active animation
-  if (obj.animation) obj.animation.stop();
-
-  // Hide main and side elements
-  obj.backgroundSprite.show(false);
-  obj.effectSprites[0].show(false);
-  obj.effectSprites[1].show(false);
+function resetDisplay(display) {
+  Object.values(display.digitSprites).forEach((sprite) => sprite.show(false));
+  display.animation?.stop();
+  display.backgroundSprite.show(false);
+  display.effectSprites.forEach((sprite) => sprite.show(false));
 }
 
-// Generate items for a grid based on a pattern
-function fillGridWithItems(obj, patternCount) {
-  var sequence = generatePatternedCellSequence(obj.gridManager, patternCount);
-  initObjCounter(obj.objectPool, patternCount);
-
-  sequence.forEach(function (cell) {
-    const randomItem = generateRandomItem(this.objectPool);
-    spawnItem(this, randomItem, cell);
-  }, obj);
-
-  initObjCounter(obj.objectPool, phase);
-}
-
-/**
- * Spawns an item into the grid at specified positions. (ue)
- * 
- * @param {TileSpawner} tileSpawner - The TileSpawner instance managing the grid.
- * @param {Object} item - The item object to spawn.
- * @param {Point|Point[]} positions - Single position or array of positions to place the item.
- */
 export function spawnItem(tileSpawner, item, positions) {
-  var addItemToGrid = (it, pos) => {
-    tileSpawner.itemMap.set(pos, it); // Map grid position → item
-    tileSpawner.activeItems.add(it); // Track active items
-    tileSpawner.gridManager.markCell(pos); // Mark cell as occupied
+  const cells = Array.isArray(positions) ? positions : [positions];
+
+  for (const cell of cells) {
+    tileSpawner.itemMap.set(cell, item);
+    tileSpawner.activeItems.add(item);
+    tileSpawner.gridManager.markCell(cell);
   }
 
-  if (Array.isArray(positions)) {
-    positions.forEach(pos => addItemToGrid.call(tileSpawner, item, pos));
-    snapPos(item, positions[0]);
-    console.log("Cell" + positions);
-  } else {
-    addItemToGrid.call(tileSpawner, item, positions);
-    snapPos(item, positions);
-    console.log("Cell" + positions);
-  }
-
+  snapPos(item, cells[0]);
   attachSpritesToContainer(item, tileSpawner.rootElement);
-  item.texture *= tileSpawner.spawnRate; // Apply spawn rate multiplier
+  item.texture *= tileSpawner.spawnRate;
 }
 
+function fillGridWithItems(game, patternCount) {
+  const { tileSpawner, objectPool } = game;
+  const cells = generatePatternedCellSequence(tileSpawner.gridManager, patternCount);
+
+  initObjCounter(objectPool, patternCount);
+  cells.forEach((cell) => spawnItem(tileSpawner, generateRandomItem(objectPool), cell));
+  initObjCounter(objectPool, game.phase);
+}
+
+let lastUpdateTime = 0;
 export default class GameController extends Disposable {
-  /**
-   * @param {HTMLElement} rootElement 
-   */
+  #rafId = 0;
+  #flashTimer = null;
+  #tutorialTimer = null;
+
   constructor(rootElement) {
     super();
+
     this.root = rootElement;
-    this.lastUpdateTime = 0;
+    this.isStandalone = Boolean(rootElement?.standalone);
 
-    this.gridContainer = createDiv(); // fa
-    this.gridContainer.className = "grids";
+    this.gridContainer = createDiv();
+    this.gridContainer.className = 'grids';
     this.root.appendChild(this.gridContainer);
-    setPosition(this.gridContainer, UI_POS.START_POS.x, UI_POS.START_POS.y);
+    setPosition(this.gridContainer, START_POS.x, START_POS.y);
 
-    this.minutes = 6E4;
+    this.gameDuration = GAME_DURATION_MS;
+    this.state = GameState.UNSTARTED;
+    this.phase = 0;
+    this.startTime = getTime();
+    this.remainingTime = this.gameDuration;
 
-    this.state = "unstarted"; // i
-    this.startTime = getTime(); // Vd
-    this.remainingTime = this.minutes; // ea
+    this.score = 0;
+    this.comboData = {};
+    this.lanternSequence = [];
+    this.lanternForward = true;
+    this.completedCombos = 0;
 
-    this.score = 0; // score (z)
-    this.comboData = {}; // $b
     this.medalGroup = null;
     this.resultUI = null;
     this.scoreDigits = [];
 
-    this.TileSpawner = TileSpawner.getInstance(); // ka
-    this.TileSpawner.init(this.gridContainer);
-    this.snake = new SnakeController(this.gridContainer); // N
+    this.tileSpawner = TileSpawner.getInstance();
+    this.tileSpawner.init(this.gridContainer);
+    this.snake = new SnakeController(this.gridContainer);
 
-    this.input = new InputController(true); // Zc
-    this.eventHandler = new EventHandler(this); // B
-    this.objectPool = ObjectPoolManager.getInstance(); // bb
+    this.input = new InputController(true);
+    this.eventHandler = new EventHandler(this);
+    this.objectPool = ObjectPoolManager.getInstance();
 
-    this.playButton = new ClickableElement(12, UI_POS.START_BUTTON_POS.x, UI_POS.START_BUTTON_POS.y, this.root, 101); // ca
+    this.playButton = new ClickableElement(12, START_BUTTON_POS.x, START_BUTTON_POS.y, this.root, 101);
     this.playButton.show(false);
 
-    this.soundButton = new ClickableElement(90, UI_POS.SOUND_BUTTON_POS.x, UI_POS.SOUND_BUTTON_POS.y, this.root, 100); // La
+    this.soundButton = new ClickableElement(90, SOUND_BUTTON_POS.x, SOUND_BUTTON_POS.y, this.root, 100);
     this.soundButton.show(false);
 
-    this.muted = false; // Ka
-    this.music = new AudioPlayer(["./assets/snake"]); // la
+    this.muted = false;
+    this.music = new AudioPlayer(['./assets/snake']);
 
-    this.mainSprite = new SpriteGroup(31, UI_POS.MAIN_SPR_POS.x, UI_POS.MAIN_SPR_POS.y, this.root, 100); // cb
+    this.mainSprite = new SpriteGroup(31, MAIN_SPR_POS.x, MAIN_SPR_POS.y, this.root, 100);
     this.mainSprite.show(false);
 
     this.tutorialRoot = null;
-    this.tutorialButtons = [];
+    this.tutorialButtons = {};
 
-    this.introSeq = null; // this.ec
-    this.tutSeq = null; // this.fc
-    this.uiSeq = null; // this.dc
+    this.introSeq = null;
+    this.tutSeq = null;
+    this.uiSeq = null;
 
-    this.visibilityTimer = new VisibilityTimer(3E4, goog.bind(this.onVisibilityLost, this), goog.bind(this.onVisibilityReturn, this));
+    this.visibilityTimer = new VisibilityTimer(30000, () => this.onVisibilityLost(), () => this.onVisibilityReturn());
     AnimationSequence.isAnimationPaused = false;
 
-    new SpriteGroup(19, UI_POS.BG_LEFT_POS.x, UI_POS.BG_LEFT_POS.y, this.root, 100);
-    this.leftFrame = new SpriteGroup(36, UI_POS.FRAME_LEFT_POS.x + 99, UI_POS.FRAME_LEFT_POS.y, this.root, -1); // Cb
-    this.rightFrame = new SpriteGroup(53, UI_POS.FRAME_RIGHT_POS.x - 99, UI_POS.FRAME_RIGHT_POS.y, this.root, -1); // Db
+    new SpriteGroup(19, BG_LEFT_POS.x, BG_LEFT_POS.y, this.root, 100);
+    this.leftFrame = new SpriteGroup(36, FRAME_LEFT_POS.x + 99, FRAME_LEFT_POS.y, this.root, -1);
+    this.rightFrame = new SpriteGroup(53, FRAME_RIGHT_POS.x - 99, FRAME_RIGHT_POS.y, this.root, -1);
     this.leftFrame.show(false);
     this.rightFrame.show(false);
 
-    this.timerDisplay = new TimerDisplay(UI_POS.TIMER_POS.x, UI_POS.TIMER_POS.y, this.root); // za
+    this.timerDisplay = new TimerDisplay(TIMER_POS.x, TIMER_POS.y, this.root);
     this.timerDisplay.show(false);
 
-    this.scoreDisplay = new ScoreDisplay(UI_POS.SCORE_DIGIT_POS, this.root); // ya
+    this.scoreDisplay = new ScoreDisplay(SCORE_DIGIT_POS, this.root);
 
-    this.icons = [];
-    UI_POS.SIDE_ICON_POS.forEach(icon => function () {
+    this.icons = SIDE_ICON_POS.map(({ x, y }) => {
       const sprite = new Sprite(33);
       sprite.show(false);
-      Sprite.setPosition(sprite, icon.x, icon.y);
+      Sprite.setPosition(sprite, x, y);
       this.root.appendChild(sprite.getElement());
-      this.icons.push(sprite);
+      return sprite;
     });
 
-    this.eventHandler.listen(this.input, "input", this.handleInput);
-    this.eventHandler.listen(this.snake, "catch item", this.handleItemCollected);
-    this.eventHandler.listen(this.snake, "match pattern", this.handlePatternMatch);
-    this.eventHandler.listen(this.soundButton, "click", this.toggleMute);
-
-    this.isStandalone = !!(rootElement && rootElement.standalone);
+    this.eventHandler.listen(this.input, 'input', this.handleInput);
+    this.eventHandler.listen(this.snake, 'catch item', this.handleItemCollected);
+    this.eventHandler.listen(this.snake, 'match pattern', this.handlePatternMatch);
+    this.eventHandler.listen(this.soundButton, 'click', this.toggleMute);
 
     this.snake.init();
     this.initialize();
   }
 
   initialize() {
-    this.lastUpdateTime = getTime();
-    requestAnimationFrame(this.gameLoop.bind(this));
+    lastUpdateTime = getTime();
+    this.#rafId = requestAnimationFrame(this.gameLoop);
   }
 
   playIntroUISequence = () => {
     this.music.load(false);
     this.visibilityTimer.resetTimer();
 
-    let seq = new AnimationSequence();
+    const seq = new AnimationSequence();
     this.introSeq = seq;
 
     seq.addStep(() => Sprite.fadeOut(this.mainSprite));
+
     seq.addStep((t) => {
-      Sprite.setPosition(this.playButton, UI_POS.START_BUTTON_POS.x, UI_POS.START_BUTTON_POS.y + 80 * t * t);
+      Sprite.setPosition(this.playButton, START_BUTTON_POS.x, START_BUTTON_POS.y + 80 * t * t);
       setOpacity(this.playButton.getElement(), 1 - t * t);
     }, 700);
+
     seq.addPauseStep(200);
 
     seq.addStep(() => {
@@ -416,8 +434,8 @@ export default class GameController extends Disposable {
     });
 
     seq.addStep((t) => {
-      Sprite.setPosition(this.leftFrame, UI_POS.FRAME_LEFT_POS.x + 99 * (1 - t), UI_POS.FRAME_LEFT_POS.y);
-      Sprite.setPosition(this.rightFrame, UI_POS.FRAME_RIGHT_POS.x - 99 * (1 - t), UI_POS.FRAME_RIGHT_POS.y);
+      Sprite.setPosition(this.leftFrame, FRAME_LEFT_POS.x + 99 * (1 - t), FRAME_LEFT_POS.y);
+      Sprite.setPosition(this.rightFrame, FRAME_RIGHT_POS.x - 99 * (1 - t), FRAME_RIGHT_POS.y);
     }, 1000);
 
     seq.addStep(() => {
@@ -425,173 +443,186 @@ export default class GameController extends Disposable {
       this.soundButton.show(true);
     });
 
-    seq.addStep(() => {
-      initTutorial(this);
-    });
-
+    seq.addStep(() => initTutorial(this));
     seq.play();
-  }
+  };
 
   onVisibilityLost() {
-    if ("running" == this.state) {
-      this.music.pause();
+    if (this.state !== GameState.RUNNING) return;
 
-      var snake = this.snake;
-      snake.currentFrame = LOST_HEAD;
-      Sprite.setFrame(snake.segments[0].getSprite(), snake.currentFrame);
-      initTutorial(this);
-    }
+    const { snake } = this;
+    this.music.pause();
+    snake.currentFrame = LOST_HEAD;
+    Sprite.setFrame(snake.segments[0].getSprite(), snake.currentFrame);
+    initTutorial(this);
   }
-  onVisibilityReturn() {
-    if ("tutorial_start" == this.state || "tutorial_end" == this.state) {
-      this.music.play();
 
-      var snake = this.snake;
-      snake.currentFrame = NORMAL_HEAD;
-      Sprite.setFrame(snake.segments[0].getSprite(), snake.currentFrame);
-      this.state = "running";
-      hideTutorialUI(this);
-      if (this.remainingTime == this.minutes) ResetGame(this);
-    }
+  onVisibilityReturn() {
+    if (this.state !== GameState.TUTORIAL_START && this.state !== GameState.TUTORIAL_END) return;
+
+    const { snake } = this;
+    this.music.play();
+    snake.currentFrame = NORMAL_HEAD;
+    Sprite.setFrame(snake.segments[0].getSprite(), snake.currentFrame);
+    this.state = GameState.RUNNING;
+    hideTutorialUI(this);
+
+    if (this.remainingTime === this.gameDuration) resetGame(this);
   }
 
   flashStartButton() {
-    if ("init" == this.state) {
-      this.playButton.playFrameSequence(UI_POS.playFrameAnim, 80);
-      setTimeout(goog.bind(this.flashStartButton, this), 3E3);
-    }
+    if (this.state !== GameState.INIT) return;
+
+    this.playButton.playFrameSequence(PLAY_FRAME_ANIM, EXPRESSION_DELAY_MS);
+    clearTimeout(this.#flashTimer);
+    this.#flashTimer = setTimeout(() => this.flashStartButton(), BUTTON_FLASH_INTERVAL_MS);
   }
 
   handleItemCollected(evt) {
-    let itemData = this.TileSpawner.getItem(evt.item);
-    if (!itemData) return;
+    const item = this.tileSpawner.getItem(evt.item);
+    if (!item) return;
 
-    if (itemData.i === 1 || itemData.cc < itemData.mainSprite.getHeight()) {
-      let name = itemData.getName();
+    const isCollectable = item.state === 1 || item.baseY < item.mainSprite.getHeight();
 
-      this.comboData[name]++;
-      console.log("Snake eaten " + name);
-
-      this.score = Math.min(this.score + itemData.score, 999);
-
-      switch (name) {
-        case "firecraker":
-          var snake = this.snake;
-          if (snake.Yc == null) {
-            snake.segments[0].playAnimation(SHOCK, 80);
-            snake.segments[0].playAnimation(DIZZY, 100, 500, 100);
-            snake.setSpeedParameters(evt.time, Infinity);
-          }
-          break;
-        case "tea":
-          var snake = this.snake;
-          snake.segments[0].playAnimation(BLINK, 80, 500);
-          snake.setSpeedParameters(evt.time, 0.1);
-          snake.frameId = HAPPY_HEAD;
-          break;
-        case "medicine":
-          var snake = this.snake;
-          snake.segments[0].playAnimation(BLINK, 80, 500);
-          snake.setSpeedParameters(evt.time, 1.5);
-          snake.frameId = BITTER;
-          break;
-        case "mushroom":
-          snake.reverseMove(evt.time);
-          break;
-        case "lantern":
-          let comboStr = this.processLanternCombo(itemData);
-          if (comboStr) {
-            let spawner = this.TileSpawner;
-            for (let i = 0; i < comboStr.length; i++)
-              spawnItem(spawner, createItem("steamer"), find2x2Block(spawner.gridManager));
-
-            if (comboStr.length === 6) fillGridWithItems(spawner, comboStr[randomInt(comboStr.length)]);
-          }
-          updateIcons(this);
-          break;
-      }
-
-      itemData.destroy();
-      this.scoreDisplay.update(this.score);
-    } else {
-      itemData.shadowSprite.show(false);
-      itemData.mainSprite.setZIndex(1);
+    if (!isCollectable) {
+      item.shadowSprite.show(false);
+      item.mainSprite.setZIndex(1);
+      return;
     }
+
+    const name = item.getName();
+    const { snake } = this;
+    const head = snake.segments[0];
+
+    this.comboData[name] = (this.comboData[name] ?? 0) + 1;
+    this.score = Math.min(this.score + item.score, MAX_SCORE);
+
+    switch (name) {
+      case LOOT_TABLE.firecraker:
+        if (snake.Yc == null) {
+          head.playAnimation(SHOCK, EXPRESSION_DELAY_MS);
+          head.playAnimation(DIZZY, 100, 500, 100);
+          snake.setSpeedParameters(evt.time, Infinity);
+        }
+        break;
+
+      case LOOT_TABLE.tea:
+        head.playAnimation(BLINK, EXPRESSION_DELAY_MS, 500);
+        snake.setSpeedParameters(evt.time, 0.1);
+        snake.currentFrame = HAPPY_HEAD;
+        break;
+
+      case LOOT_TABLE.medicine:
+        head.playAnimation(BLINK, EXPRESSION_DELAY_MS, 500);
+        snake.setSpeedParameters(evt.time, 1.5);
+        snake.currentFrame = BITTER;
+        break;
+
+      case LOOT_TABLE.mushroom:
+        snake.reverseMove(evt.time);
+        break;
+
+      case LOOT_TABLE.lantern:
+        this.#handleLantern(item);
+        break;
+    }
+
+    item.disposeInternal();
+    this.scoreDisplay.update(this.score);
   }
 
-  processLanternCombo(itemData) {
-    var completedCombo = "";
-    var sequence = lanternSequence;
-    var value = itemData.variantKey;
+  #handleLantern(item) {
+    const combo = this.processLanternCombo(item);
 
-    const GOOGLE_WORD = "GOOGLE";
+    if (combo) {
+      const { tileSpawner } = this;
+      for (let i = 0; i < combo.length; i++) spawnItem(tileSpawner, createItem(LOOT_TABLE.steamer), find2x2Block(tileSpawner.gridManager));
+      if (combo.length === GOOGLE_WORD.length) fillGridWithItems(this, combo[randomInt(combo.length)]);
+    }
+
+    updateIcons(this);
+  }
+
+  resetLanternSequence() {
+    this.lanternSequence = [];
+    this.lanternForward = true;
+  }
+
+  processLanternCombo(item) {
+    const value = item.variantKey;
+    const sequence = this.lanternSequence;
+    let completed = '';
 
     if (sequence.length === 1) {
       if (value === sequence[0]) {
-        sequenceDirection = true;
+        this.lanternForward = true;
       } else if (sequence[0] === GOOGLE_WORD[0] && value === GOOGLE_WORD[1]) {
-        sequenceDirection = false;
+        this.lanternForward = false;
       } else {
-        lanternSequence = [];
-        sequenceDirection = true;
+        this.resetLanternSequence();
       }
-    } else if (sequence.length) {
-      if ((sequenceDirection && value === sequence[0]) || (!sequenceDirection && value === GOOGLE_WORD[sequence.length])) {
-        if ((sequenceDirection && sequence.length === 2) || (!sequenceDirection && sequence.length === 5)) {
-          sequence.push(value);
-          lanternSequence = [];
-          sequenceDirection = true;
-          completedSequences++;
+    } else if (sequence.length > 1) {
+      const expected = this.lanternForward ? sequence[0] : GOOGLE_WORD[sequence.length];
+      const finalLength = this.lanternForward ? TRIPLE_FINAL_LENGTH : GOOGLE_FINAL_LENGTH;
 
-          completedCombo = sequence.join("");
-        }
-      } else {
-        lanternSequence = [];
-        sequenceDirection = true;
+      if (value !== expected) {
+        this.resetLanternSequence();
+      } else if (sequence.length === finalLength) {
+        completed = [...sequence, value].join('');
+        this.resetLanternSequence();
+        this.completedCombos++;
       }
     }
 
-    if (!completedCombo) lanternSequence.push(value);
-    return completedCombo;
+    if (!completed) this.lanternSequence.push(value);
+    return completed;
   }
 
   handlePatternMatch(evt) {
-    const pattern = evt.pattern;
-    if (pattern !== "") fillGridWithItems(this.TileSpawner, pattern);
+    if (evt.pattern !== '') fillGridWithItems(this, evt.pattern);
   }
 
-  /** @param {DirectionEvent} input */
   handleInput(input) {
     this.visibilityTimer.resetTimer();
-    if ("tutorial_end" == this.state) {
+
+    if (this.state === GameState.TUTORIAL_END) {
       hideTutorialUI(this);
-      ResetGame(this);
-    } else if ("running" == this.state) this.snake.enqueueDirection(input.direction);
+      resetGame(this);
+    } else if (this.state === GameState.RUNNING) {
+      this.snake.enqueueDirection(input.direction);
+    }
   }
 
   handleClick() {
     this.visibilityTimer.resetTimer();
-    if ("tutorial_end" == this.state) {
+
+    if (this.state === GameState.TUTORIAL_END) {
       hideTutorialUI(this);
-      ResetGame(this);
+      resetGame(this);
     }
   }
 
   playTutorialSequence() {
-    if ("tutorial_start" == this.state || "tutorial_end" == this.state) {
-      var seq = new AnimationSequence();
-      this.tutSeq = seq;
-      for (var key in UI_POS.TUTORIAL_BUTTON_FRAMES) {
-        seq.addStep(createFrameAnimation(this.tutorialButtons[key], UI_POS.TUTORIAL_BUTTON_FRAMES[key], UI_POS.TUTORIAL_BUTTON_POS[key], 29));
-        seq.addPauseStep(300);
-      }
-      seq.addStep(goog.bind(function () {
-        if ("tutorial_start" == this.state) this.state = "tutorial_end";
-      }, this));
-      seq.play();
-      setTimeout(this.playTutorialSequence, 3E3);
+    if (this.state !== GameState.TUTORIAL_START && this.state !== GameState.TUTORIAL_END) return;
+
+    const seq = new AnimationSequence();
+    this.tutSeq = seq;
+
+    for (const key of Object.keys(TUTORIAL_BUTTON_FRAMES)) {
+      seq.addStep(createFrameAnimation(this.tutorialButtons[key], TUTORIAL_BUTTON_FRAMES[key], TUTORIAL_BUTTON_POS[key], 29));
+      seq.addPauseStep(TUTORIAL_BUTTON_PAUSE_MS);
     }
+
+    seq.addStep(() => {
+      if (this.state === GameState.TUTORIAL_START) this.state = GameState.TUTORIAL_END;
+    });
+
+    seq.play();
+
+    clearTimeout(this.#tutorialTimer);
+    this.#tutorialTimer = setTimeout(() => this.playTutorialSequence(), TUTORIAL_REPEAT_MS);
   }
+
   toggleMute() {
     this.visibilityTimer.resetTimer();
     this.muted = !this.muted;
@@ -602,56 +633,40 @@ export default class GameController extends Disposable {
   showGameplayUI() {
     setOpacity(this.gridContainer, 1);
     this.resultUI.show(false);
-    ResetGame(this);
+    resetGame(this);
   }
 
-  gameLoop() {
-    var currentTime = getTime();
-    let deltaTime = Math.min(50, currentTime - this.lastUpdateTime);
+  gameLoop = () => {
+    const currentTime = getTime();
+    const deltaTime = Math.min(MAX_FRAME_DELTA_MS, currentTime - lastUpdateTime);
 
-    switch (this.state) {
-      case "running":
-        this.update(deltaTime, currentTime);
-        break;
-      case "unstarted":
-        if (currentTime - this.startTime > 1500) {
-          this.state = "init";
-          playIntroSequence(this);
-        }
-        break;
+    if (this.state === GameState.RUNNING) {
+      this.update(deltaTime, currentTime);
+    } else if (this.state === GameState.UNSTARTED && currentTime - this.startTime > INTRO_DELAY_MS) {
+      this.state = GameState.INIT;
+      playIntroSequence(this);
     }
 
-    requestAnimationFrame(goog.bind(this.gameLoop, this));
-    this.lastUpdateTime = currentTime;
-  }
+    this.#rafId = requestAnimationFrame(this.gameLoop);
+    lastUpdateTime = currentTime;
+  };
 
-  /**
-   * Updates the current game state per frame.
-   * 
-   * @param {GameController} game - The main game controller.
-   * @param {number} deltaTime - Time passed since last frame.
-   * @param {number} currentTime - Current game time.
-   */
   update(deltaTime, currentTime) {
-    // Update managers
-    this.TileSpawner.update(deltaTime);
+    this.tileSpawner.update(deltaTime);
     this.snake.move(currentTime);
     this.scoreDisplay.processPendingEffects(currentTime);
     this.timerDisplay.update(Math.floor(this.remainingTime / 1000));
 
-    // Countdown timer
     this.remainingTime -= deltaTime;
 
-    // Check for phase transitions
-    if (phase === 1 && this.remainingTime < 40000) {
+    if (this.phase === 1 && this.remainingTime < PHASE_TWO_TIME_MS) {
       switchGamePhase(this, 2);
-    } else if (phase === 2 && this.remainingTime < 20000) {
+    } else if (this.phase === 2 && this.remainingTime < PHASE_THREE_TIME_MS) {
       switchGamePhase(this, 3);
     }
 
-    // Time over condition
-    if (this.remainingTime < 0 && this.state === "running") {
-      this.state = "stop";
+    if (this.remainingTime < 0 && this.state === GameState.RUNNING) {
+      this.state = GameState.STOP;
       stopGame(this);
 
       this.timerDisplay.show(false);
@@ -663,20 +678,25 @@ export default class GameController extends Disposable {
   }
 
   disposeInternal() {
-    this.state = "stop";
+    this.state = GameState.STOP;
+
+    cancelAnimationFrame(this.#rafId);
+    clearTimeout(this.#flashTimer);
+    clearTimeout(this.#tutorialTimer);
+
     this.eventHandler.disposeInternal();
-    if (this.introSeq) this.introSeq.stop();
-    if (this.tutSeq) this.tutSeq.stop();
-    if (this.uiSeq) this.uiSeq.stop();
+    [this.introSeq, this.tutSeq, this.uiSeq].forEach((seq) => seq?.stop());
     AnimationSequence.isAnimationPaused = true;
+
     this.comboData = null;
     this.timerDisplay.disposeInternal();
     this.scoreDisplay.disposeInternal();
-    this.TileSpawner.disposeInternal();
+    this.tileSpawner.disposeInternal();
     this.snake.disposeInternal();
     this.input.disposeInternal();
     this.soundButton.disposeInternal();
     this.visibilityTimer.disposeInternal();
+
     super.disposeInternal();
   }
 }

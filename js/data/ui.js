@@ -23,6 +23,6 @@ export const TUTORIAL_BUTTON_FRAMES = [
   [96, 100, 104, 100, 96],
   [97, 101, 105, 101, 97]
 ];
-export const playFrameAnim = [12, 13, 14, 15, 16, 17, 18];
+export const PLAY_FRAME_ANIM = [12, 13, 14, 15, 16, 17, 18];
 export const HOVER_FRAMES = [51, 50];
 export const OUT_FRAMES = [51, 52];
