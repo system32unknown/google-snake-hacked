@@ -2,18 +2,36 @@ import EventTarget from "../../goog/events/EventTarget.js";
 import AnimationSequence from "../backend/AnimationSequence.js";
 import SpriteSheet from "../backend/SpriteSheet.js";
 import { setPosition } from "../utils/utils.js";
+import { NORMAL_BODY, LOWBODY_TURN, tc, otherSet, enabledSet } from "../data/Anim_Data.js";
 
 const SpriteManager = await SpriteSheet.create("spritesheet");
-
-const NORMAL_BODY = [111, 114, 112, 113];
-const pc = [107, 110, 108, 109];
 
 const CELL_SIZE = 20;
 const FADE_DURATION = 300;
 const VENDOR_PREFIXES = ["Moz", "ms", "O", "webkit"];
 
+/**
+ * Creates an opacity animator function.
+ * @param {HTMLElement} element - Target element.
+ * @param {number} start - Starting opacity (0–1).
+ * @param {number} end - Ending opacity (0–1).
+ * @returns {Function} - Function(progress) that updates opacity.
+ */
+function createOpacityAnimator(element, start, end) {
+  const ease = (progress) => progress;
+  element.style.opacity = String(start);
+
+  const shouldRound = Math.abs(end - start) > 1;
+  return function updateOpacity(progress) {
+    let value = start + ease(progress) * (end - start);
+    if (shouldRound) value = Math.ceil(value);
+    element.style.opacity = String(value);
+    return value;
+  }
+}
+
 export default class Sprite extends EventTarget {
-  constructor(frameId, o) {
+  constructor(frameId) {
     super();
 
     this.frameId = frameId;
@@ -87,12 +105,12 @@ export default class Sprite extends EventTarget {
     if (frameId === NORMAL_BODY) {
       if (rotation === 0 || rotation === 180) sprite.pixelX--;
       else sprite.pixelY--;
-    } else if (frameId === pc) {
+    } else if (frameId === LOWBODY_TURN) {
       sprite.pixelX--;
       sprite.pixelY--;
     } else {
-      const flagB = rc.get(frameId);
-      let flagC = sc.get(frameId);
+      const flagB = enabledSet.get(frameId);
+      let flagC = otherSet.get(frameId);
 
       const widthOffset = sprite.width - CELL_SIZE;
       const heightOffset = sprite.height - CELL_SIZE;

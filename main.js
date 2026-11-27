@@ -1,60 +1,38 @@
 import { Coordinate as Point } from './goog/math/Coordinate.js';
-import { forEach, forEachRight } from './goog/array.js';
+import { forEach } from './goog/array.js';
 import { randomInt } from './goog/math/math.js';
 import { getKeys } from './goog/object/object.js';
 import * as goog from './goog/goog.js';
-import { CatchItemEvent, MatchPatternEvent, DirectionEvent } from './js/events.js';
+import { DirectionEvent } from './js/events.js';
 import Disposable from './goog/Disposable.js';
 import GoogSet from './goog/structs/GoogSet.js';
 import GoogMap from './goog/structs/GoogMap.js';
 import EventHandler from './goog/events/EventHandler.js';
-import EventTarget from './goog/events/EventTarget.js';
-import Event from './goog/events/Event.js';
 import { getTime, setPosition, createDiv, defineSingleton } from './js/utils/utils.js';
-import { updateCellUsage, selectRandomAvailableCell, getActiveLinkedCells, generatePatternedCellSequence } from './js/utils/GridUtils.js';
+import { updateCellUsage, selectRandomAvailableCell, generatePatternedCellSequence } from './js/utils/GridUtils.js';
+import { AnimatedFallingEntity, StaticVariantEntity, ShadowedEntity, MovingEntity, RandomMovingEntity, LanternEntity } from './js/entites.js';
 import AudioPlayer from './js/audio/AudioPlayer.js';
 import InputController from './js/controllers/InputController.js';
 import ObjectPoolManager from './js/manager/ObjectPoolManager.js';
-import DirectionManager from './js/manager/DirectionManager.js';
 import GridPatternManager from './js/manager/GridPatternManager.js';
-import ConditionalTrigger from './js/backend/ConditionalTrigger.js';
 import AnimationSequence from './js/backend/AnimationSequence.js';
 import VisibilityTimer from './js/backend/VisibilityTimer.js';
+import GridEntity from './js/objects/GridEntity.js';
 import Sprite from './js/objects/Sprite.js';
+import SpriteGroup from './js/objects/SpriteGroup.js';
+import SnakeController from './js/controllers/SnakeController.js';
+import ClickableElement from './js/objects/ClickableElement.js';
+import { SCORE_DIGITS, TIMER_DIGITS, LOOT_TABLE } from './js/data/data.js';
+import { ScoreDisplay, createDigitSprites } from './js/ui/ScoreDisplay.js';
+import TimerDisplay from './js/ui/TimerDisplay.js';
+import { NORMAL_HEAD } from './js/data/Anim_Data.js';
+import { HAPPY_HEAD, BITTER, LOST_HEAD, EYE_CLOSE } from './js/data/Expressions.js';
+import ObjectRegistry from './js/data/ObjectRegistry.js';
 
 var minutes = 6E4;
 
 var ItemDefinitions = {}; // Registry of base item data
 var ItemClasses = null; // Registry mapping item names to their constructors
-
-/**
- * @param {number} dir 
- * @returns {number}
- */
-function swapDirection(dir) {
-  const map = { 1: 2, 2: 1, 3: 4, 4: 3 };
-  return map[dir] || dir;
-}
-
-/**
- * Creates an opacity animator function.
- * @param {HTMLElement} element - Target element.
- * @param {number} start - Starting opacity (0–1).
- * @param {number} end - Ending opacity (0–1).
- * @returns {Function} - Function(progress) that updates opacity.
- */
-function createOpacityAnimator(element, start, end) {
-  const ease = (progress) => progress;
-  element.style.opacity = String(start);
-
-  const shouldRound = Math.abs(end - start) > 1;
-  return function updateOpacity(progress) {
-    let value = start + ease(progress) * (end - start);
-    if (shouldRound) value = Math.ceil(value);
-    element.style.opacity = String(value);
-    return value;
-  }
-}
 
 function setOpacity(el, value) {
   const s = el.style;
@@ -63,70 +41,7 @@ function setOpacity(el, value) {
   else if ('filter' in s) s.filter = value === "" ? "" : `alpha(opacity=${value * 100})`;
 }
 
-function stopAllAnimations(target) {
-  if (target.animation) {
-    target.animation.stop();
-    target.isLooping = false;
-    target.timeouts.forEach(handle => clearTimeout(handle));
-  }
-
-  if (target.animation) target.animation.stop();
-}
-
-var NORMAL_BODY = [111, 114, 112, 113],
-  Bc = [173, 176, 174, 175],
-  NORMAL_HEAD = [159, 162, 160, 161],
-  Dc = [155, 158, 156, 157],
-  Ec = [163, 166, 164, 165],
-  pc = [107, 110, 108, 109],
-  Fc = [123, 126, 124, 125],
-  Gc = [119, 122, 120, 121],
-  Hc = [115, 118, 116, 117],
-  Ic = [139, 142, 140, 141],
-  Jc = [135, 138, 136, 137],
-  Kc = [131, 134, 132, 133],
-  Lc = [127, 130, 128, 129],
-  Mc = [197, 200, 198, 199],
-  Nc = [193, 196, 194, 195],
-  Oc = [189, 192, 190, 191],
-  Pc = [185, 188, 186, 187],
-  Qc = [181, 184, 182, 183],
-  Rc = [177, 180, 178, 179],
-  Sc = [151, 154, 152, 153],
-  Tc = [147, 150, 148, 149],
-  Uc = [143, 146, 144, 145],
-  Vc = [201, 204, 202, 203],
-  Wc = [209, 212, 210, 211],
-  Xc = [205, 208, 206, 207],
-  Yc = [213, 216, 214, 215],
-  Zc = [261, 264, 262, 263],
-  $c = [269, 272, 270, 271],
-  ad = [277, 280, 278, 279],
-  bd = [285, 288, 286, 287],
-  cd = [293, 296, 294, 295],
-  dd = [257, 260, 258, 259],
-  ed = [265, 268, 266, 267],
-  fd = [273, 276, 274, 275],
-  gd = [281, 284, 282, 283],
-  hd = [289, 292, 290, 291],
-  id = [217, 220, 218, 219],
-  jd = [225, 228, 226, 227],
-  kd = [233, 236, 234, 235],
-  ld = [241, 244, 242, 243],
-  md = [249, 252, 250, 251],
-  nd = [221, 224, 222, 223],
-  od = [229, 232, 230, 231],
-  pd = [237, 240, 238, 239],
-  qd = [245, 248, 246, 247],
-  rd = [253, 256, 254, 255],
-  tc = [
-    [Zc, $c, ad, bd, cd],
-    [dd, ed, fd, gd, hd],
-    [nd, od, pd, qd, rd],
-    [id, jd, kd, ld, md]
-  ]
-
-var ITEM_IDS = {
+const ITEM_IDS = {
   FIRECRACKER: 86,
   DUMPLING1: 65,
   DUMPLING2: 62,
@@ -151,132 +66,6 @@ var LANTERN_ICONS = {
   L: 34,
   E: 32
 }
-var TIMER_DIGITS = [39, 40, 41, 42, 43, 44, 45, 46, 47, 48];
-var SCORE_EFFECT_DIGITS = [20, 21, 22, 23, 24, 25, 26, 27, 28, 29];
-var SCORE_DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-
-var rc = null;
-var sc = null;
-
-class ScoreDisplay extends Disposable {
-  constructor(position, root) {
-    super();
-    this.digitPositions = []; // Nb
-    this.currentScore = 0; // z
-    this.digitSprites = []; // M
-    for (let i = 0; i < 3; i++) {
-      this.digitPositions[i] = position[i];
-      this.digitSprites.push(createBackgroundTile(root, position[i].x, position[i].y));
-    }
-    this.backgroundSprite = createBackgroundTile(root, position[0].x, position[0].y); // A
-    this.effectSprites = []; // P
-    this.animation = null; // Ga
-    this.pendingScoreDiffs = []; // Mb
-    this.lastEffectTime = null; // Ob
-    this.hasTwoDigitEffect = false; // pd
-
-    for (let i = 0; i < 2; i++) {
-      const p = createBackgroundTile(root, position[i + 4].x, position[i + 4].y);
-      p.element.style.opacity = 0;
-      p.show(true);
-      this.effectSprites[i] = p;
-    }
-  }
-
-  reset() {
-    for (let key in this.digitSprites) Sprite.setFrame(this.digitSprites[key], TIMER_DIGITS[0]);
-    this.currentScore = 0;
-    this.digitSprites[0].show(true);
-    this.effectSprites[0].element.style.opacity = 0;
-    this.effectSprites[1].element.style.opacity = 0;
-    this.effectSprites[0].show(true);
-    this.effectSprites[1].show(true);
-    this.pendingScoreDiffs = [];
-  }
-
-  update(newScore) {
-    if (newScore > 999 || newScore === this.currentScore) return;
-
-    const diff = newScore - this.currentScore;
-    this.currentScore = newScore;
-
-    const digits = createDigitSprites(newScore);
-
-    for (let i in digits) {
-      const sprite = this.digitSprites[i];
-      const frame = digits[i];
-      const pos = this.digitPositions[i];
-
-      if (frame != null) {
-        sprite.show(true);
-        if (sprite.getFrameId() !== frame) {
-          playSwapAnimation(this, pos, sprite, frame);
-        }
-      } else sprite.show(false);
-    }
-
-    // queue the numeric difference for the small pop effect
-    this.pendingScoreDiffs.push(diff);
-  }
-
-  /**
-   * Process any queued score-diff popup effects.
-   * Call inside your frame/tick loop with a current timestamp (ms).
-   *
-   * @param {number} timeNow - ms timestamp (getTime()).
-   */
-  processPendingEffects(timeNow) {
-    if (this.pendingScoreDiffs.length) {
-      const diff = this.pendingScoreDiffs.shift();
-      const effectFrames = createDigitSprites(diff, SCORE_EFFECT_DIGITS, 2);
-
-      for (let i in effectFrames) {
-        stopAllAnimations(this.effectSprites[i]);
-        const frame = effectFrames[i];
-        if (frame != null) {
-          Sprite.setFrame(this.effectSprites[i], frame);
-          Sprite.animateOpacity(this.effectSprites[i], 300, 0, 1);
-        } else this.effectSprites[i].element.style.opacity = 0;
-      }
-
-      this.lastEffectTime = timeNow;
-      this.hasTwoDigitEffect = effectFrames[1] != null;
-    }
-
-    if (this.lastEffectTime && timeNow - this.lastEffectTime > 1000) {
-      Sprite.fadeOut(this.effectSprites[0]);
-      if (this.hasTwoDigitEffect) Sprite.fadeOut(this.effectSprites[1]);
-      this.lastEffectTime = null;
-    }
-  }
-
-  disposeInternal() {
-    this.digitSprites.forEach(s => s.disposeInternal());
-    super.disposeInternal();
-  }
-}
-
-/**
- * Creates an array of digit sprites representing a number.
- * 
- * @param {number} number - The number to convert into sprite digits.
- * @param {Array} spriteSet - Optional array of sprites for digits (default = `td`).
- * @param {number} length - Number of digits to generate (default = 3).
- * @returns {Array} Array of sprite references for each digit.
- */
-function createDigitSprites(number, spriteSet = TIMER_DIGITS, length = 3) {
-  const digits = [spriteSet[0]];
-
-  for (let i = 0; i < length; i++) {
-    if (number !== 0) {
-      const digit = number % 10;
-      number = Math.floor(number / 10);
-      digits[i] = spriteSet[digit];
-    } else if (i > 0) digits[i] = null; // Hide leading zeros
-  }
-
-  return digits;
-}
 
 /** @param {ScoreDisplay} obj */
 function resetDisplay(obj) {
@@ -291,493 +80,14 @@ function resetDisplay(obj) {
   obj.effectSprites[1].show(false);
 }
 
-function createBackgroundTile(parent, x, y) {
-  var tile = new Sprite(TIMER_DIGITS[0]);
-  tile.show(false);               // hidden initially
-  tile.setZIndex(-2);             // render behind everything
-  Sprite.setPosition(tile, x, y); // place at coordinates
-  parent.appendChild(tile.getElement());
-  return tile;
-}
-
-/**
- * Plays a swap/transition animation between two sprites.
- * @param {ScoreDisplay} ctx - The context containing sprite `A` and its animation state.
- * @param {goog.math.Coordinate} startPos - Object with `{x, y}` representing the base position.
- * @param {Sprite} targetSprite - The sprite to animate towards.
- * @param {number} frameIndex - Frame index to display during animation.
- */
-function playSwapAnimation(ctx, startPos, targetSprite, frameIndex) {
-  const mainSprite = ctx.backgroundSprite;
-
-  if (ctx.animation) ctx.animation.stop(); // Stop any ongoing animation
-  ctx.animation = new AnimationSequence(); // Create a new animation sequence
-
-  // Setup initial display state
-  mainSprite.show(true);
-  Sprite.setFrame(mainSprite, frameIndex);
-  Sprite.setPosition(mainSprite, startPos.x, startPos.y - 25);
-
-  // Define animation step
-  ctx.animation.addStep(progress => {
-    if (progress === 1) {
-      // End of animation: show final sprite
-      Sprite.setPosition(targetSprite, startPos.x, startPos.y);
-      Sprite.setFrame(targetSprite, frameIndex);
-      mainSprite.show(false);
-    } else {
-      // During animation: move sprites in opposite vertical directions
-      Sprite.setPosition(mainSprite, startPos.x, startPos.y - 25 * (1 - progress));
-      Sprite.setPosition(targetSprite, startPos.x, startPos.y + 25 * progress);
-    }
-  }, 400);
-
-  // Play the sequence
-  ctx.animation.play();
-}
-
-class TimerDisplay extends Disposable {
-  /**
-   * Creates a 4-digit timer (e.g. MM:SS) using sprite digits.
-   * @param {number} x - Starting x-position on the screen.
-   * @param {number} y - Y-position on the screen.
-   * @param {HTMLElement} parent - The DOM or container to attach the digits to.
-   */
-  constructor(x, y, parent) {
-    super();
-
-    this.digits = []; // Array of 4 digit sprites (M1, colon?, S1, S2)
-    this.lastValue = null; // Used to avoid redundant updates
-
-    // Create 4 sprite digits spaced horizontally
-    for (let i = 0; i < 4; i++) {
-      const digitSprite = new Sprite(TIMER_DIGITS[0]);
-      Sprite.setPosition(digitSprite, x + 10 * i, y);
-      parent.appendChild(digitSprite.getElement());
-      this.digits.push(digitSprite);
-    }
-
-    // Optionally set colon or middle separator sprite
-    Sprite.setFrame(this.digits[1], 49);
-  }
-
-  /**
-   * Update the timer display to match the current time (in seconds).
-   * @param {number} time - Time in seconds.
-   */
-  update(time) {
-    if (time === this.lastValue) return;
-
-    const minutes = Math.floor(time / 60) % 10;
-    const seconds = Math.floor(time % 60);
-
-    if (minutes >= 0 && seconds >= 0) {
-      Sprite.setFrame(this.digits[0], TIMER_DIGITS[minutes]);
-      Sprite.setFrame(this.digits[2], TIMER_DIGITS[Math.floor(seconds / 10)]);
-      Sprite.setFrame(this.digits[3], TIMER_DIGITS[seconds % 10]);
-      this.lastValue = time;
-    }
-  }
-
-  /**
-   * Show or hide all timer digits.
-   * @param {boolean} visible - Whether to show the digits.
-   */
-  show(visible) {
-    this.digits.forEach(digit => digit.show(visible));
-  }
-
-  /**
-   * Cleanup sprite resources when disposed.
-   */
-  disposeInternal() {
-    this.digits.forEach(digit => digit.disposeInternal());
-    super.disposeInternal();
-  }
-}
-
-class SpriteGroup extends Sprite {
-  /**
-   * @param {any} frameId - Frame or image identifier (passed to Sprite)
-   * @param {number} x - X position
-   * @param {number} y - Y position
-   * @param {HTMLElement} container - Parent DOM element
-   * @param {number} [zIndex] - Optional z-index
-   */
-  constructor(frameId, x, y, container, zIndex) {
-    super(frameId);                     // Call base sprite constructor
-    Sprite.setPosition(this, x, y);     // Set initial position
-    if (zIndex) this.setZIndex(zIndex);  // Optional z-index
-    container.appendChild(this.getElement());
-    this.container = container;
-
-    // Child sprites attached to this one
-    this.children = [];
-  }
-
-  /** Add a child sprite */
-  add(childSprite) {
-    this.children.push(childSprite);
-  }
-
-  /** Show or hide this sprite and all its children */
-  show(visible) {
-    super.show(visible);
-    this.children.forEach(child => child.show(visible));
-  }
-
-  /** Dispose of this sprite and its children */
-  disposeInternal() {
-    this.children.forEach(child => child.disposeInternal());
-    super.disposeInternal();
-  }
-}
-
-// Clickable UI Element Class
-class ClickableElement extends SpriteGroup {
-  constructor(id, width, height, parent, zIndex) {
-    super(id, width, height, parent, zIndex);
-
-    this.eventHandler = new EventHandler(this);
-
-    // Attach mouse event listeners
-    this.eventHandler.listen(this.element, "click", this.handleClick);
-    this.eventHandler.listen(this.element, "mousedown", this.handleMouseDown);
-    this.eventHandler.listen(this.element, "mouseover", this.handleMouseOver);
-    this.eventHandler.listen(this.element, "mouseout", this.handleMouseOut);
-
-    // Indicate interactivity
-    this.element.style.cursor = "pointer";
-  }
-
-  // Cleanup
-  disposeInternal() {
-    this.eventHandler.disposeInternal();
-    this.eventHandler = null;
-    super.disposeInternal();
-  }
-
-  // Event Handlers
-  handleClick() {
-    this.dispatchEvent("click");
-  }
-
-  handleMouseDown() {
-    this.dispatchEvent("mousedown");
-  }
-
-  handleMouseOver() {
-    this.dispatchEvent("mouseover");
-  }
-
-  handleMouseOut() {
-    this.dispatchEvent("mouseout");
-  }
-}
-
-class SpritePool extends Disposable {
-  constructor() {
-    super()
-    this.pool = []
-  }
-
-  get() {
-    return this.pool.length === 0 ? new Sprite(57) : this.pool.shift()
-  }
-
-  disposeInternal() {
-    this.pool.forEach(function (spr) {
-      spr.disposeInternal();
-    });
-    this.pool = null;
-    super.disposeInternal();
-  }
-}
-defineSingleton(SpritePool);
-
-class GridEntity extends Disposable { // T
-  constructor(config) {
-    super();
-
-    // Grid configuration
-    this.grid = config.grid;
-    this.spritePool = SpritePool.getInstance();
-
-    // --- Main sprite setup ---
-    this.mainSprite = this.spritePool.get();
-    Sprite.setFrame(this.mainSprite, this.grid[0]);
-    this.mainSprite.setZIndex(17);
-    this.mainSprite.show(false);
-
-    // --- Shadow sprite setup ---
-    this.shadowSprite = this.spritePool.get();
-    Sprite.setFrame(this.shadowSprite, 57);
-    Sprite.animateOpacity(this.shadowSprite, 300, 0, 1);
-    this.shadowSprite.setZIndex(0);
-    this.shadowSprite.scale(0.7, 0.7);
-    this.shadowSprite.show(true);
-
-    // --- Core properties ---
-    this.tileIndex = 0;
-    this.lastTime = getTime();
-    this.phase = 0;
-    this.state = 0;
-
-    // Config metadata
-    this.name = config.name;
-    this.texture = config.texture;
-    this.score = config.score;
-    this.data = config.data;
-
-    // Sprite positions
-    this.baseX = this.baseY = 40; // jd, cc
-    this.mainX = this.mainY = 0; // hb, ib
-    this.shadowX = this.shadowY = 0; // nc, qd
-
-    // Motion parameters
-    this.targetY = 1400;
-    this.randomMove = false;
-    this.direction = 1;
-
-    // Behavior triggers
-    this.behaviors = [
-      new ConditionalTrigger(goog.bind(this.isEndingSoon, this), goog.bind(this.fadeOut, this), true),
-      new ConditionalTrigger(goog.bind(this.hasData, this), goog.bind(this.cycleFrame, this), false, 400)
-    ];
-  }
-
-  disposeInternal() {
-    const pool = this.spritePool;
-    [this.mainSprite, this.shadowSprite].forEach(sprite => {
-      sprite.show(false);
-      stopAllAnimations(sprite);
-      sprite.Eb = false;
-      pool.pool.push(sprite);
-    });
-    this.behaviors = null;
-    super.disposeInternal();
-  }
-
-  update(now) {
-    this.stateTime = now - this.lastTime;
-
-    if (this.state === 0) {
-      if (now > this.targetY) {
-        this.shadowSprite.show(false);
-        this.mainSprite.setZIndex(1);
-        this.state = 1;
-        applyMovement(this, 0, 0);
-      } else if (this.randomMove) {
-        handleParallaxScroll(this, now);
-      } else {
-        handleVerticalScroll(this, now);
-      }
-    } else if (this.state === 1 && now > this.texture + this.targetY) {
-      this.state = 3; // finished / expired
-    }
-
-    this.behaviors?.forEach(b => b.update());
-  }
-
-  renderPosition() {
-    var worldX = 20 * (this.getCol() + 0.5);
-    var worldY = 20 * (this.getRow() + 0.5);
-
-    this.mainX = worldX - this.mainSprite.getWidth() / 2;
-    this.mainY = worldY - this.mainSprite.getHeight() / 2;
-    Sprite.setPosition(this.mainSprite, this.mainX, this.mainY);
-
-    this.shadowX = worldX - this.shadowSprite.getWidth() / 2;
-    this.shadowY = worldY + this.mainSprite.getHeight() / 2 - this.shadowSprite.getHeight() + this.tileOffset;
-    Sprite.setPosition(this.shadowSprite, this.shadowX, this.shadowY);
-  }
-
-  getCellIndex() { return this.tileIndex; }
-  getRow() { return Math.floor(this.tileIndex / 23); }
-  getCol() { return Math.floor(this.tileIndex % 23); }
-  getName() {
-    return this.name;
-  }
-
-  cycleFrame() {
-    let index = this.grid.indexOf(this.mainSprite.getFrame());
-    index = (index + 1) % this.grid.length;
-    Sprite.setFrame(this.mainSprite, this.grid[index]);
-  }
-
-  isEndingSoon() {
-    return this.state === 1 && this.stateTime > this.texture + this.targetY - 300;
-  }
-
-  fadeOut() {
-    Sprite.fadeOut(this.mainSprite);
-  }
-
-  hasData() {
-    return this.state === 1 && this.data;
-  }
-}
-
-/**
- * Handles vertical movement and fade-in scaling effect.
- * @param {Object} obj - The scene or sprite object with position and sprite info.
- * @param {number} scrollY - The current scroll position.
- */
-function handleVerticalScroll(obj, scrollY) {
-  let movementY = 40;
-
-  if (scrollY > 800) {
-    // Fade out after 800px, with a parabolic easing curve
-    movementY = 10 * (1 - Math.pow((scrollY - 1100) / 300, 2));
-  } else if (scrollY > 200) {
-    // Fade in between 200–800px
-    if (obj.sprite.style.display === "none") {
-      obj.sprite.show(true);
-      Sprite.animateOpacity(obj.sprite, 300, 0, 1);
-    }
-    movementY = 40 * (1 - Math.pow((scrollY - 200) / 600, 2));
-  }
-
-  applyMovement(obj, 0, Math.floor(movementY));
-}
-
-/**
- * Handles horizontal parallax and scaling.
- * @param {Object} obj - The scene or sprite object with velocity and scaling data.
- * @param {number} scrollY - The current scroll position.
- */
-function handleParallaxScroll(obj, scrollY) {
-  let movementY = 40;
-  let offsetX = 0;
-  const relativeScroll = scrollY - 200;
-
-  const [low, mid, high] = [450, 900, 1350];
-
-  if (scrollY > 200) {
-    if (obj.sprite.style.display === "none") {
-      obj.sprite.show(true);
-      Sprite.animateOpacity(obj.sprite, 300, 0, 1);
-    }
-
-    movementY = 40 * (1 - Math.pow(relativeScroll / 1800, 2));
-    offsetX = 1;
-
-    if (relativeScroll < mid) {
-      // Move left
-      offsetX = Math.floor(1000 * (1 - Math.pow((relativeScroll - low) / low, 2))) / 1000;
-      offsetX *= -15 * obj.direction;
-    } else {
-      // Move right
-      offsetX = Math.floor(1000 * (1 - Math.pow((relativeScroll - high) / low, 2))) / 1000;
-      offsetX *= 15 * obj.direction;
-    }
-  }
-
-  applyMovement(obj, Math.floor(offsetX), Math.floor(movementY));
-}
-
-/**
- * Applies movement and scaling to a sprite.
- * @param {GridEntity} obj - The target object containing sprite and transform data.
- * @param {number} deltaX - X offset.
- * @param {number} deltaY - Y offset.
- */
-function applyMovement(obj, offX, offY) { // Gd
-  if (obj.baseY === offY && obj.baseX === offX) return;
-  if (offX > 15 || offY < -15) return;
-
-  obj.baseX = offX;
-  obj.baseY = offY;
-
-  // Move sprite
-  setPosition(obj.mainSprite, obj.mainX - offX, obj.mainY - offY);
-
-  // Scale smoothly with vertical movement
-  const scale = 1 - (1 - 0.7) * offY / 40;
-  obj.shadowSprite.scale(scale, scale);
-  if (offX) setPosition(obj.shadowSprite, obj.shadowX - offX, obj.shadowY);
-}
-
-function initMotion(a) {
-  a.randomMove = true;
-  a.targetY = a.enabled ? 2000 : 1400;
-  a.direction = Math.random() < .5 ? 1 : -1;
-}
 function attachSpritesToContainer(entity, container) {
   container.appendChild(entity.mainSprite.getElement());
   container.appendChild(entity.shadowSprite.getElement());
 }
+
 function snapPos(entity, idx) {
   entity.tileIndex = idx;
   entity.renderPosition();
-}
-
-class AnimatedFallingEntity extends GridEntity {
-  constructor(config) {
-    super(config);
-    this.mainSprite.playFrameSequence(FIRECRACKER_ANIM, 700, this.targetY);
-    this.mainSprite.playFrameSequence(FIRECRACKER_BREAK, 80, this.targetY + 700 * FIRECRACKER_ANIM.length);
-    this.speed = -5;
-  }
-
-  onImpact() {
-    this.mainSprite.playFrameSequence(FIRECRACKER_BREAK, 400);
-    setTimeout(goog.bind(() => {
-      this.state = 2;
-    }, this), 500);
-  }
-}
-
-var FIRECRACKER_ANIM = [86, 84, 83, 80, 78, 76];
-var FIRECRACKER_BREAK = [74, 70, 68, 66];
-
-class StaticVariantEntity extends GridEntity {
-  constructor(config) {
-    super(config);
-    if (randomInt(2)) Sprite.setFrame(this.mainSprite, this.grid[1]);
-  }
-}
-
-class ShadowedEntity extends GridEntity {
-  constructor(config) {
-    super(config);
-    Sprite.setFrame(this.shadowSprite, 11);
-  }
-
-  updatePosition() {
-    const x = 20 * (this.getCol() + .5);
-    const y = 20 * (this.getRow() + .5);
-
-    this.baseX = x - this.sprite.getWidth() / 4;
-    this.baseY = y - this.sprite.getHeight() / 4;
-    Sprite.setPosition(this.mainSprite, this.baseX, this.baseY);
-    Sprite.setPosition(this.shadowSprite, x - this.shadowSprite.getWidth() / 4, y + 5 - this.shadowSprite.getHeight());
-  }
-}
-
-class MovingEntity extends GridEntity {
-  constructor(config) {
-    super(config);
-    initMotion(this);
-  }
-}
-
-class RandomMovingEntity extends GridEntity {
-  constructor(config) {
-    super(config);
-    if (randomInt(2)) Sprite.setFrame(this.mainSprite, this.grid[1]);
-    initMotion(this);
-  }
-}
-
-class LanternEntity extends GridEntity {
-  constructor(config) {
-    super(config);
-    const variant = randomInt(4);
-    if (variant) Sprite.setFrame(this.mainSprite, this.grid[variant]);
-    this.variantKey = "GOLE"[variant];
-    initMotion(this);
-  }
 }
 
 var lanternSequence = [];
@@ -799,11 +109,11 @@ function generateRandomItem(pool) {
   let cumulative = 0;
   let chosenKey = "coin";
 
-  for (const key in LootTable) {
-    const weight = pool.objects[LootTable[key]] || 0;
+  for (const key in LOOT_TABLE) {
+    const weight = pool.objects[LOOT_TABLE[key]] || 0;
     cumulative += weight;
     if (roll < cumulative) {
-      chosenKey = LootTable[key];
+      chosenKey = LOOT_TABLE[key];
       break;
     }
   }
@@ -813,11 +123,11 @@ function generateRandomItem(pool) {
 
 class Item {
   constructor(grid, name, texture, score = 0, data = null) {
-    this.grid = grid;        // Reference to grid or item container
-    this.name = name;        // Name/type of the item
-    this.texture = texture;  // Resource or sprite handle
-    this.score = score;      // Optional numeric field
-    this.data = data;        // Optional linked object or metadata
+    this.grid = grid; // Reference to grid or item container
+    this.name = name; // Name/type of the item
+    this.texture = texture; // Resource or sprite handle
+    this.score = score; // Optional numeric field
+    this.data = data; // Optional linked object or metadata
   }
 }
 
@@ -829,22 +139,7 @@ function initializeObjectCounter(target, typeId) {
   }, target)
 }
 
-var LootTable = Object.freeze({
-  firecraker: "firecraker",
-  dumpling: "dumpling",
-  steamer: "steamer",
-  coin: "coin",
-  ingot: "ingot",
-  tea: "tea",
-  medicine: "medicine",
-  mushroom: "mushroom",
-  papercut: "papercut",
-  envelope: "envelope",
-  lantern: "lantern"
-});
-
 var phase = 1;
-var ObjectRegistry = {};
 
 /**
  * Finds a 2x2 block of available cells in the grid.
@@ -989,7 +284,7 @@ function fillGridWithItems(obj, patternCount) {
  * 
  * @param {TileSpawner} tileSpawner - The TileSpawner instance managing the grid.
  * @param {Object} item - The item object to spawn.
- * @param {goog.math.Coordinate|goog.math.Coordinate[]} positions - Single position or array of positions to place the item.
+ * @param {Point|Point[]} positions - Single position or array of positions to place the item.
  */
 function spawnItem(tileSpawner, item, positions) {
   var addItemToGrid = (it, pos) => {
@@ -1037,7 +332,7 @@ function runIntroStep(snake) {
     // If reached end of tutorial steps
     if (snakeStepIndex === introSteps.length) {
       snake.setSpeedParameters(getTime(), Infinity);
-      snake.segments[0].playAnimation(Be, 80);
+      snake.segments[0].playAnimation(EYE_CLOSE, 80);
     }
   }
 
@@ -1052,546 +347,6 @@ function runIntroStep(snake) {
     }
   }
   snakeBodyVisible++;
-}
-
-var Ge = [Uc, Tc, Sc, Tc, Uc];
-var Be = [Uc, Tc, Sc],
-  He = [Ic, Jc, Kc, Lc],
-  Ie = [Fc, Gc, Hc],
-  Je = [Mc, Nc, Oc, Pc, Qc, Rc],
-  Ke = [Oc, Pc, Qc, Rc],
-  Le = [Dc],
-  Me = [Ec],
-  Ne = [Dc, Ec, Dc, Ec],
-  Oe = tc[0],
-  Pe = tc[1],
-  Qe = tc[2],
-  Re = tc[3],
-  Ee = NORMAL_HEAD;
-
-function createSprite(spriteType, zIndex, parent) {
-  const sprite = new Sprite(spriteType);
-  sprite.show(false);
-  sprite.setZIndex(zIndex);
-  sprite.isLooping = true; // 'Eb = h' looks like a boolean property
-  parent.appendChild(sprite.getElement()); // 'aa()' returns DOM element
-  return sprite;
-}
-
-/**
- * SnakeController
- * - Manages the chain of segments (this.segments)
- * - Advances the snake forward, handles movement interpolation, catches items, and pattern-matching.
- * - Dispatches events: "catch item" and "match pattern" (use earlier CustomEvent classes).
- */
-class SnakeController extends EventTarget {
-  constructor(containerElement) {
-    super();
-
-    /*** @type {SnakeSegment[]}*/
-    this.segments = []; // segments array (head is segments[0]) (d)
-
-    // visual "head" alternate sprite used when head matches next segment (A)
-    this.headSprite = null;
-
-    // queued direction inputs (ma)
-    this.directionQueue = [];
-
-    // current audio/visual frame (ba)
-    this.currentFrame = Ee; // default frame constant from original
-
-    this.container = containerElement;
-    this.lastUpdateTime = getTime();
-
-    // timing helpers & state
-    this.lastMatchTime = null;       // qc
-    this.lastCatchTime = null;       // oc
-    this.moveProgress = 0;           // Z (0..1)
-    this.moveDuration = ObjectRegistry[1].V; // Ab (base duration from registry)
-    this.baseDuration = ObjectRegistry[1].V; // Fb (base)
-    this.speedMultiplier = 1; // Gb
-    this.stepPixel = 20; // used for pixel computations
-    this.currentStepFrame = 0; // ed cached step frame
-
-    this.Yc = this.Hb = this.Ib = null;
-    this.patternManager = GridPatternManager.getInstance();
-  }
-
-  /**
-   * Initialize the snake segments and head sprite.
-   * Builds 15 segments arranged on the right side as in original.
-   */
-  init() {
-    // starting column index in original code was 22, and they fill 15 segments
-    let col = 22;
-    let previous = null;
-
-    for (let i = 0; i < 15; i++) {
-      // construction: new Te(direction, orientation?, col, row, index, prevSegment, container)
-      // original used (3, 0==c ? 0 : 14==c ? 2 : 1, a, 7, c, b, this.v)
-      const orientation = (i == 0) ? 0 : (i == 14 ? 2 : 1);
-      const seg = new SnakeSegment(3, orientation, col, 7, i, previous, this.container);
-      seg.mainSprite.show(false);                 // mirror: hide initially
-      this.segments.push(seg);
-      this.patternManager.markCell(161 + col, true); // original marking
-      previous = seg;
-
-      // increment column wrapping at 23
-      col++;
-      if (col >= 23) col -= 23;
-    }
-
-    // create the alternate head sprite used for special display
-    this.headSprite = createSprite(NORMAL_BODY, 15, this.container);
-  }
-
-  /**
-   * Advance the snake forward one logical step:
-   * - Move each segment to its predecessor's position (or compute new position for head)
-   * - Mark the newly occupied cell and update cell usage bookkeeping
-   */
-  forward() {
-    // index of last cell before the step (for releasing)
-    const releasingIndex = this.segments[this.segments.length - 1].getCellIndex();
-
-    // move segments backwards
-    forEachRight(this.segments, seg => {
-      if (seg.parent) {
-        // if a link to previous exists, follow it
-        seg.gridX = seg.parent.gridX;
-        seg.gridY = seg.parent.gridY;
-      } else if (seg.entityType === 0) {
-        // default movement by orientation F
-        seg.gridX += (seg.currentDirection === 3 ? -1 : seg.currentDirection === 4 ? 1 : 0);
-        seg.gridY += (seg.currentDirection === 1 ? -1 : seg.currentDirection === 2 ? 1 : 0);
-        seg.gridX = (seg.gridX + 23) % 23;
-        seg.gridY = (seg.gridY + 9) % 9;
-      }
-    });
-
-    // mark the newly occupied cell of head
-    this.patternManager.markCell(this.segments[0].getCellIndex(), true);
-
-    // update cell usage for the releasing cell (original 'oe')
-    updateCellUsage(this.patternManager, releasingIndex, true);
-
-    // pop a queued direction if present and apply to segments
-    let queued = null;
-    if (this.directionQueue.length) queued = this.directionQueue.shift();
-
-    forEachRight(this.segments, seg => {
-      const d = queued;
-      seg.baseDirection = seg.currentDirection; // store old facing
-      // choose new current Direction based on segment type
-      seg.currentDirection = (seg.entityType === 0) ? (d ? d : seg.currentDirection) : (seg.entityType === 2 ? seg.parent.parent.currentDirection : seg.parent.currentDirection);
-    });
-  }
-
-  /**
-   * Top-level move method called every frame/tick.
-   * @param {number} now    - current timestamp in ms
-   */
-  move(now) {
-    // auto-reset speed if idle too long
-    if (this.Ib && (now - this.Ib) > 5000) this.resetSpeed(now);
-
-    // if an input or forced forward occurred, process forward step
-    if (this.moveProgress >= 1) {
-      this.forward();
-
-      // attempt pattern match periodically (every ~5s)
-      if ((this.lastMatchTime ? now - this.lastMatchTime : 5000) >= 5000) {
-        const pattern = this.patternManager.match();
-        if (pattern !== "") {
-          // dispatch match event (Ve)
-          this.dispatchEvent(new MatchPatternEvent(pattern, now));
-          this.lastMatchTime = now;
-          // head K animation (originally Ge)
-          this.segments[0].playAnimation(Ge, 80, 500);
-        }
-      }
-
-      // handle catches and other per-step checks
-      this.handleCatchAndItems(now);
-      this.updateVisualsAfterStep();
-      this.moveProgress = 0;
-    }
-
-    // interpolate rendering and movement between steps
-    this.updateInterpolation(now);
-
-    // remember last timestamp
-    this.lastUpdateTime = now;
-  }
-
-  /**
-   * updateInterpolation — equivalent to original Xe
-   * Interpolates movement progress into a small integer frame (ed),
-   * updates head or trailing segment positions and rotations.
-   */
-  updateInterpolation(now) {
-    // cap delta to 100ms like original
-    const delta = Math.min(now - this.lastUpdateTime, 100);
-    this.moveProgress += delta / this.moveDuration;
-    this.moveProgress = Math.min(this.moveProgress, 1);
-
-    // compute an integer animation frame used to index some sprite map:
-    let frame = Math.floor(this.stepPixel * this.moveProgress); // 20 * Z
-    frame = (frame % 2) ? frame + 1 : frame; // ensure it's odd/even pattern as original
-
-    if (this.currentStepFrame !== frame) {
-      // helper for positioning/rotation used by head and tail rendering
-      const placeSprite = (x, y, angle, frameVal, sprite, flip) => {
-        // Original logic did transform of rotation and setPosition depending on flip
-        // We replicate the same math but express clearly:
-        const d = flip ? frameVal : (20 - frameVal);
-        const rot = flip ? angle : (angle + 180) % 360;
-        // If rotated, adjust anchor offsets differently:
-        if (rot === 180) x += 20 - d;
-        if (rot === 270) y += 20 - d;
-
-        if (flip) sprite.rotate(rot);
-        if (rot === 180 || rot === 0) {
-          sprite.setWidth(d + 1);
-          if (rot === 180) x -= 2;
-        } else {
-          sprite.setHeight(d + 1);
-          if (rot === 270) y -= 2;
-        }
-        Sprite.setPosition(sprite, x, y);
-      }
-
-      // If head and its follower face same direction, use special head sprite
-      if (this.segments[0].currentDirection === this.segments[1].currentDirection) {
-        const headAngle = this.segments[0].getSprite().getRotation();
-        this.headSprite.show(true);
-        const headPixelX = 20 * this.getX();
-        const headPixelY = 20 * this.getY();
-        placeSprite(headPixelX, headPixelY, headAngle, frame, this.headSprite, true);
-        this.segments[0].move(this.moveProgress);
-      } else {
-        // hide alternate head and animate default head
-        this.headSprite.show(false);
-        animateSegmentTurn(this.segments[0], this.moveProgress);
-      }
-
-      // tail handling (depending on Ze checks)
-      const lastIndex = this.segments.length - 1;
-      const lastSeg = this.segments[lastIndex - 1];
-      if (isSpecialFrame(lastSeg)) {
-        // special tail case: hide last sprite, animate previous
-        this.segments[lastIndex].getSprite().show(false);
-        animateSegmentTurn(lastSeg, this.moveProgress);
-      } else {
-        // normal tail interpolation
-        this.segments[lastIndex].move(this.moveProgress);
-        const prevSprite = lastSeg.getSprite();
-        const px = 20 * lastSeg.getX();
-        const py = 20 * lastSeg.getY();
-        placeSprite(px, py, prevSprite.getRotation(), frame, prevSprite, false);
-      }
-
-      this.currentStepFrame = frame;
-    }
-  }
-
-  /**
-   * handleCatchAndItems - equivalent to original We
-   * Checks active linked cells and emits catch events, or triggers head animation if none.
-   * @param {number} now 
-   */
-  handleCatchAndItems(now) {
-    const activeLinked = getActiveLinkedCells(this.patternManager);
-    if (activeLinked.length) {
-      activeLinked.forEach((idx) => {
-        // if head occupies same cell, trigger short animation
-        if (this.segments[0].getCellIndex() === idx) {
-          this.segments[0].playAnimation(Ie, 80);
-        }
-        // dispatch catch event (custom $e)
-        this.dispatchEvent(new CatchItemEvent(idx, now));
-      }, this);
-
-      this.lastCatchTime = now;
-    } else {
-      // if no active linked cells for >5s, nudge head (original He)
-      if ((now - (this.lastCatchTime || 0)) > 5000) {
-        this.lastCatchTime = now;
-        this.segments[0].playAnimation(He, 80);
-      }
-    }
-  }
-
-  /**
-   * resetSpeed — equivalent to original Ue
-   * Resets to default phase, speed and timing.
-   */
-  resetSpeed(now) {
-    this.currentFrame = Ee; // reset frame
-    this.segments[0].playAnimation(Ne, 80, 100);
-    this.moveDuration = this.baseDuration;
-    this.speedMultiplier = 1;
-    this.lastUpdateTime = now;
-    this.Ib = null;
-  }
-
-  /**
-   * setSpeedParameters — equivalent to original Ae
-   * For debugging, sets IB (some timer), speed multiplier Gb and derived duration Ab.
-   */
-  setSpeedParameters(secs, speed) {
-    this.Ib = secs;
-    this.speedMultiplier = speed;
-    this.moveDuration = this.baseDuration * this.speedMultiplier;
-    console.log(`duration: ${this.moveDuration} | speed: ${this.speedMultiplier}`);
-  }
-  /**
-   * enqueueDirection — original ze
-   * Adds a direction into the direction queue if valid and triggers animation on head.
-   * Keeps at most two queued directions.
-   */
-  enqueueDirection(directionInput) {
-    // original called xb(b) in some cases; allow mapping if required
-    if (this.Hb != null) directionInput = swapDirection(directionInput);
-
-    if (this.directionQueue.length < 2) {
-      var currentFacing = this.segments[0].currentDirection;
-      if (this.directionQueue.length) currentFacing = this.directionQueue[this.directionQueue.length - 1];
-
-      // only allow orthogonal turns (1/2 vs 3/4 cross)
-      if (((currentFacing === 1 || currentFacing === 2) && (directionInput === 3 || directionInput === 4)) || ((directionInput === 1 || directionInput === 2) && (currentFacing === 3 || currentFacing === 4))) {
-        this.directionQueue.push(directionInput); // choose a quick animation depending on transform map result
-        const transform = DirectionManager.getInstance().transformMap.get([currentFacing, directionInput]);
-        this.segments[0].playAnimation((transform === 3) ? Le : Me, 80);
-      }
-    }
-  }
-
-  /**
-   * updateVisualsAfterStep — equivalent to original Ce
-   * Reassigns sprite frames down the chain and ensures correct z-index and visuals.
-   */
-  updateVisualsAfterStep() {
-    var lastIndex = this.segments.length - 1;
-
-    // ensure last segment element visible
-    this.segments[lastIndex].getSprite().show(true);
-
-    // Save the sprite from the segment right before the tail
-    var savedSprite = this.segments[lastIndex - 1].getSprite()
-
-    // cascade frame references from head to tail (preserving ordering)
-    for (var i = lastIndex - 1; i > 1; i--) {
-      this.segments[i].mainSprite = this.segments[i - 1].mainSprite;
-      this.segments[i].mainSprite.setZIndex(16 - i);
-    }
-
-    // second element uses previous sprite instance
-    this.segments[1].mainSprite = savedSprite;
-    this.segments[1].mainSprite.setZIndex(15);
-
-    // refresh visuals for head, second, tail
-    updateSegmentSprite(this.segments[0], this.currentFrame);
-    updateSegmentSprite(this.segments[1]);
-    updateSegmentSprite(this.segments[lastIndex]);
-  }
-
-  reverseMove(b) {
-    if (this.Yc != null) return;
-    this.currentFrame = Xc;
-    this.Hb = b;
-    setTimeout(goog.bind(function () {
-      if (this.Hb == b) {
-        this.currentFrame = Ee;
-        this.Hb = null;
-      }
-    }, this), 5000)
-  }
-
-  // shorthand helpers to expose head coordinates like Sa / Ta
-  getX() {
-    return this.segments[0].getX();
-  }
-  getY() {
-    return this.segments[0].getY();
-  }
-
-  // cleanup
-  disposeInternal() {
-    this.segments.forEach((seg) => seg.disposeInternal());
-    this.directionQueue = null;
-    this.headSprite.disposeInternal();
-    super.disposeInternal();
-  }
-}
-
-// Sprite frame sets for each segment type
-const SegmentFrames = {
-  0: NORMAL_HEAD,  // Head
-  1: NORMAL_BODY,  // Body
-  2: Bc   // Tail
-}
-
-/**
- * SnakeSegment class
- * Represents a single segment of the snake.
- */
-class SnakeSegment extends Event {
-  /**
-   * @param {number} direction - Current facing direction (1–4).
-   * @param {number} type - Segment type (0=head, 1=body, 2=tail).
-   * @param {number} x - X position on grid.
-   * @param {number} y - Y position on grid.
-   * @param {number} index - Segment index (used for frame offset).
-   * @param {SnakeSegment|null} parentSegment - Previous segment in chain.
-   * @param {HTMLElement} container - The sprite layer/container.
-   */
-  constructor(direction, type, x, y, index, parentSegment, container) {
-    super();
-
-    // Movement and direction
-    this.baseDirection = this.currentDirection = direction; // current + previous direction (oa, F)
-    this.entityType = type;                                 // 0=head, 1=body, 2=tail (W)
-    this.gridX = x;                                     // grid X (k)
-    this.gridY = y;                                     // grid Y (o)
-    this.parent = parentSegment;                            // previous segment (Pa)
-
-    // Sprite for this segment
-    this.mainSprite = createSprite(NORMAL_BODY, 16 - index, container); // base sprite (a)
-    this.mainSprite.show(true);
-
-    // Secondary sprite (for head/tail overlays)
-    this.shadowSprite = null; // A
-    if (this.entityType === 0 || this.entityType === 2) {
-      this.shadowSprite = createSprite(SegmentFrames[this.entityType], 16 - index, container);
-    }
-
-    // Initial frame setup
-    updateSegmentSprite(this);
-  }
-
-  /**
-   * Move this segment by interpolating along its direction.
-   * @param {number} step - 0 to 1 progress within the current move step.
-   */
-  move(step) {
-    let nextX = this.gridX + (this.baseDirection === 3 ? -1 : this.baseDirection === 4 ? 1 : 0) * step;
-    let nextY = this.gridY + (this.baseDirection === 1 ? -1 : this.baseDirection === 2 ? 1 : 0) * step;
-
-    // Handle wrap-around on grid edges
-    if ((nextX > 22 || nextX < 0 || nextY > 8 || nextY < 0) && this.shadowSprite) {
-      const wrappedX = nextX > 22 ? nextX - 23 : nextX < 0 ? nextX + 23 : nextX;
-      const wrappedY = nextY > 8 ? nextY - 9 : nextY < 0 ? nextY + 9 : nextY;
-
-      const rotation = this.mainSprite.getRotation();
-      if (rotation === 180) this.shadowSprite.flip();
-      else this.shadowSprite.rotate(rotation);
-
-      Sprite.moveToGrid(this.shadowSprite, wrappedX, wrappedY);
-      this.shadowSprite.show(true);
-    }
-
-    Sprite.moveToGrid(this.mainSprite, nextX, nextY);
-  }
-
-  /**
-   * Play an animation on the segment.
-   */
-  playAnimation(frame, delay, repeatdelay, count, loop) { // K
-    if (isSpecialFrame(this) && frame !== Ke) return;
-
-    delay = Math.min(delay, 500);
-    this.mainSprite.playFrameSequence(frame, delay, repeatdelay, count, loop);
-    if (this.shadowSprite) this.shadowSprite.playFrameSequence(frame, delay, repeatdelay, count, loop);
-  }
-
-  /**
-   * Cleanup sprite resources.
-   */
-  disposeInternal() { // h
-    this.mainSprite.disposeInternal();
-    if (this.shadowSprite) this.shadowSprite.disposeInternal();
-    super.disposeInternal();
-  }
-
-  /** @returns {Sprite} The main sprite object. (qa) */
-  getSprite() {
-    return this.mainSprite;
-  }
-
-  /** @returns {number} Grid X coordinate. (Sa) */
-  getX() { return this.gridX; }
-
-  /** @returns {number} Grid Y coordinate. (Ta) */
-  getY() { return this.gridY; }
-
-  /** @returns {number} Flattened cell index (Y * 23 + X). (Jb) */
-  getCellIndex() { return 23 * this.gridY + this.gridX; }
-}
-
-/**
- * Determines if a segment’s current frame is special (turn/corner).
- * @param {SnakeSegment} segment
- */
-function isSpecialFrame(segment) {
-  const frameId = segment.mainSprite.getFrameId();
-  const isTurnA = Oe.includes(frameId) || Pe.includes(frameId);
-  const isTurnB = Qe.includes(frameId) || Re.includes(frameId);
-  return frameId === pc || isTurnA || isTurnB;
-}
-
-/**
- * Sets the correct frame, rotation, and position for a segment.
- * @param {SnakeSegment} segment
- */
-function updateSegmentSprite(segment, overrideFrame) {
-  let frameSet = SegmentFrames[segment.entityType];
-  if (segment.entityType === 0) frameSet = overrideFrame || frameSet;
-
-  const directionMgr = DirectionManager.getInstance();
-  let angle = directionMgr.getBaseAngle(segment.baseDirection);
-
-  if (segment.entityType === 1 && segment.baseDirection && segment.currentDirection !== segment.baseDirection) {
-    frameSet = pc;
-    angle = directionMgr.rotationMap.get([segment.currentDirection, segment.baseDirection]);
-  }
-
-  if (!segment.mainSprite.animation || !segment.mainSprite.animation.isPlaying()) {
-    Sprite.setFrame(segment.mainSprite, frameSet);
-    if (segment.shadowSprite) Sprite.setFrame(segment.shadowSprite, frameSet);
-  }
-
-  if (segment.entityType === 0 && angle === 180) segment.mainSprite.flip();
-  else segment.mainSprite.rotate(angle);
-
-  if (segment.shadowSprite) segment.shadowSprite.show(false);
-  Sprite.moveToGrid(segment.mainSprite, segment.gridX, segment.gridY);
-}
-
-/**
- * Updates transition frames for turning animation.
- * @param {SnakeSegment} segment
- * @param {number} progress 
- */
-function animateSegmentTurn(segment, progress) {
-  const frameId = segment.mainSprite.getFrameId();
-  if (Je.includes(frameId) || Ke.includes(frameId)) return;
-
-  const frameIndex = Math.min(Math.floor(5 * progress), 4);
-  const directionMgr = DirectionManager.getInstance();
-  let frameSet;
-
-  if (segment.entityType === 0) {
-    const mapType = directionMgr.alternateTransform.get([segment.baseDirection, segment.currentDirection]);
-    frameSet = mapType === 3 ? Oe : Pe;
-  } else {
-    const mapType = directionMgr.transformMap.get([segment.baseDirection, segment.currentDirection]);
-    frameSet = mapType === 3 ? Qe : Re;
-    segment.mainSprite.rotate(directionMgr.getBaseAngle(segment.baseDirection));
-  }
-
-  stopAllAnimations(segment.mainSprite);
-  Sprite.setFrame(segment.mainSprite, frameSet[frameIndex]);
 }
 
 class GameController extends Disposable {
@@ -1732,7 +487,7 @@ class GameController extends Disposable {
       this.music.pause();
 
       var snake = this.snake;
-      snake.currentFrame = Yc;
+      snake.currentFrame = LOST_HEAD;
       Sprite.setFrame(snake.segments[0].getSprite(), snake.currentFrame);
       initTutorial(this);
     }
@@ -1742,7 +497,7 @@ class GameController extends Disposable {
       this.music.play();
 
       var snake = this.snake;
-      snake.currentFrame = Ee;
+      snake.currentFrame = NORMAL_HEAD;
       Sprite.setFrame(snake.segments[0].getSprite(), snake.currentFrame);
       this.state = "running";
       hideTutorialUI(this);
@@ -1773,22 +528,22 @@ class GameController extends Disposable {
         case "firecraker":
           var snake = this.snake;
           if (snake.Yc == null) {
-            snake.segments[0].playAnimation(Je, 80);
-            snake.segments[0].playAnimation(Ke, 100, 500, 100);
+            snake.segments[0].playAnimation(SHOCK, 80);
+            snake.segments[0].playAnimation(DIZZY, 100, 500, 100);
             snake.setSpeedParameters(evt.time, Infinity);
           }
           break;
         case "tea":
           var snake = this.snake;
-          snake.segments[0].playAnimation(Ge, 80, 500);
+          snake.segments[0].playAnimation(BLINK, 80, 500);
           snake.setSpeedParameters(evt.time, 0.1);
-          snake.frameId = Vc;
+          snake.frameId = HAPPY_HEAD;
           break;
         case "medicine":
           var snake = this.snake;
-          snake.segments[0].playAnimation(Ge, 80, 500);
+          snake.segments[0].playAnimation(BLINK, 80, 500);
           snake.setSpeedParameters(evt.time, 1.5);
-          snake.frameId = Wc;
+          snake.frameId = BITTER;
           break;
         case "mushroom":
           snake.reverseMove(evt.time);
@@ -2072,7 +827,7 @@ function playIntroSequence(game) {
 /**
  * @param {Sprite} sprite 
  * @param {number[]|number} frames 
- * @param {goog.math.Coordinate[]|goog.math.Coordinate} position 
+ * @param {Point[]|Point} position 
  * @param {number} offsetY 
  */
 function createFrameAnimation(sprite, frames, position, offsetY) {
@@ -2192,7 +947,7 @@ function hideTutorialUI(game) {
   game.tutorialRoot.show(false)
 }
 
-var Logo = null;
+let Logo = null;
 var gameController = null;
 
 /**
@@ -2200,96 +955,11 @@ var gameController = null;
  */
 function init() {
   if (Logo = document.getElementById("hplogo")) {
-
-    // Build a configuration set (rc) with many keys enabled
-    var enabledSet = new GoogMap();
-    enabledSet.set(Bc, true);
-    enabledSet.set(pc, true);
-    enabledSet.set(id, true);
-    enabledSet.set(jd, true);
-    enabledSet.set(kd, true);
-    enabledSet.set(ld, true);
-    enabledSet.set(md, true);
-    enabledSet.set(nd, true);
-    enabledSet.set(od, true);
-    enabledSet.set(pd, true);
-    enabledSet.set(qd, true);
-    enabledSet.set(rd, true);
-    rc = enabledSet;
-
-    // Another configuration set (sc) with a different set of keys
-    var otherSet = new GoogMap();
-    otherSet.set(Zc, true);
-    otherSet.set($c, true);
-    otherSet.set(ad, true);
-    otherSet.set(bd, true);
-    otherSet.set(cd, true);
-    otherSet.set(id, true);
-    otherSet.set(jd, true);
-    otherSet.set(kd, true);
-    otherSet.set(ld, true);
-    otherSet.set(md, true);
-    sc = otherSet;
-
     // Build level / wave presets (W)
-    var keyEnum = LootTable;
-
-    var configObj = {};
-    configObj[keyEnum.firecraker] = 10;
-    configObj[keyEnum.dumpling] = 20;
-    configObj[keyEnum.tea] = 20;
-    configObj[keyEnum.envelope] = 20;
-    configObj[keyEnum.medicine] = 10;
-    configObj[keyEnum.coin] = 40;
-    configObj[keyEnum.ingot] = 20;
-    ObjectRegistry[1] = { data: configObj, V: 200, U: 1 };
-
-    configObj = {};
-    configObj[keyEnum.firecraker] = 10;
-    configObj[keyEnum.medicine] = 10;
-    configObj[keyEnum.tea] = 10;
-    configObj[keyEnum.papercut] = 10;
-    configObj[keyEnum.lantern] = 50;
-    ObjectRegistry[2] = { data: configObj, V: 180, U: 0.85 };
-
-    configObj = {};
-    configObj[keyEnum.papercut] = 30;
-    configObj[keyEnum.medicine] = 20;
-    configObj[keyEnum.mushroom] = 20;
-    configObj[keyEnum.firecraker] = 30;
-    configObj[keyEnum.lantern] = 30;
-    ObjectRegistry[3] = { data: configObj, V: 160, U: 0.6 };
-
-    // Some named presets
-    configObj = {};
-    configObj[keyEnum.firecraker] = 20;
-    configObj[keyEnum.dumpling] = 30;
-    configObj[keyEnum.coin] = 50;
-    ObjectRegistry.O = { data: configObj, V: 200, U: 1 };
-
-    configObj = {};
-    configObj[keyEnum.firecraker] = 40;
-    configObj[keyEnum.dumpling] = 10;
-    configObj[keyEnum.coin] = 50;
-    ObjectRegistry.O2 = { data: configObj, V: 200, U: 1 };
-
-    configObj = {};
-    configObj[keyEnum.dumpling] = 30;
-    configObj[keyEnum.coin] = 40;
-    configObj[keyEnum.ingot] = 30;
-    ObjectRegistry.G1 = { data: configObj, V: 200, U: 1 };
-    ObjectRegistry.E = { data: configObj, V: 200, U: 1 };
-    ObjectRegistry.L = { data: configObj, V: 200, U: 1 };
-
-    configObj = {};
-    configObj[keyEnum.coin] = 50;
-    configObj[keyEnum.ingot] = 50;
-    ObjectRegistry.G = { data: configObj, V: 200, U: 1 };
-
     GridPatternManager.getInstance().init();
 
     // Build reverse mapping Xd from keys in Zd to some default T, then override some
-    var enumObj = LootTable;
+    var enumObj = LOOT_TABLE;
     var reverseMap = {};
     for (var enumKey in enumObj) reverseMap[enumObj[enumKey]] = GridEntity;
     reverseMap[enumObj.firecraker] = AnimatedFallingEntity;

@@ -1,7 +1,7 @@
 export default class StringBuffer {
   constructor(a, b) {
     this.buffer_ = "";
-    null != a && this.append.apply(this, arguments);
+    if (a != null) this.append.apply(this, arguments);
   }
 
   set(a) {
@@ -11,7 +11,7 @@ export default class StringBuffer {
 
   append(a, b, c) {
     this.buffer_ += a;
-    if (null != b) for (var d = 1; d < arguments.length; d++) this.buffer_ += arguments[d];
+    if (b != null) for (var d = 1; d < arguments.length; d++) this.buffer_ += arguments[d];
     return this;
   }
 

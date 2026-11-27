@@ -1,6 +1,6 @@
 import { Coordinate as Point } from '../../goog/math/Coordinate.js';
 
-export const LetterShapes = {
+export const LetterShapes = Object.freeze({
   G: [
     new Point(2, 3),
     new Point(3, 3),
@@ -98,4 +98,4 @@ export const LetterShapes = {
     new Point(2, 3),
     new Point(3, 3)
   ]
-};
+});

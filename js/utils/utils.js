@@ -1,88 +1,63 @@
 import { GECKO, MAC, LINUX, isVersion } from '../../goog/userAgent/userAgent.js';
 import { Coordinate as Point } from '../../goog/math/Coordinate.js';
+import Sprite from '../objects/Sprite.js';
+
+const VENDOR_PREFIXES = ['', 'moz', 'ms', 'o', 'webkit'];
+const NEEDS_ROUNDING_FIX = Boolean(GECKO && (MAC || LINUX) && isVersion('1.9'));
 
 export function defineSingleton(cls) {
   cls.getInstance = () => {
-    return cls._instance ? cls._instance : (cls._instance = new cls);
+    if (!Object.hasOwn(cls, '_instance')) cls._instance = new cls();
+    return cls._instance;
   };
 }
 
 export function getTime() {
-  return new Date().getTime();
+  return Date.now();
 }
 
+export function createSprite(spriteType, zIndex, parent) {
+  const sprite = new Sprite(spriteType);
+  sprite.show(false);
+  sprite.setZIndex(zIndex);
+  sprite.isLooping = true;
+  parent.appendChild(sprite.getElement());
+  return sprite;
+}
 
-// Vendor prefixes commonly used by browsers
-const vendorPrefixesLower = ["", "moz", "ms", "o", "webkit"];
-
-/**
- * Finds the correct vendor-prefixed property name supported by the browser.
- * Example: Ab("hidden") → "hidden" or "webkitHidden"
- * @param {string} property
- * @returns {?string}
- */
 export function getVendorPropertyName(property) {
-  const doc = document;
-  if (!doc) return null;
+  if (typeof document === 'undefined') return null;
 
-  for (let i = 0; i < vendorPrefixesLower.length; i++) {
-    let prefix = vendorPrefixesLower[i];
-    let candidate = property;
+  const capitalized = property.charAt(0).toUpperCase() + property.slice(1);
 
-    if (prefix.length > 0) candidate = prefix + property.charAt(0).toUpperCase() + property.slice(1); // Capitalize first letter for camelCase vendor properties
-    if (typeof doc[candidate] !== undefined) return candidate; // Return the first supported property name
+  for (const prefix of VENDOR_PREFIXES) {
+    const candidate = prefix ? prefix + capitalized : property;
+    if (candidate in document) return candidate;
   }
 
   return null;
 }
 
-/**
- * Sets the position (left, top) of a DOM element.
- *
- * @param {HTMLElement} element
- * @param {K|number} x      // Either a K object with .x/.y or a number
- * @param {number} [y]      // Only used if x is a number
- */
-export function setPosition(element, x, y) {
-  let posX, posY;
-
-  var needsRoundingFix = GECKO && (MAC || LINUX) && isVersion("1.9");
-  if (x instanceof Point) {
-    posX = x.x;
-    posY = x.y;
-  } else {
-    posX = x;
-    posY = y;
-  }
-
-  element.style.left = formatPixelValue(posX, needsRoundingFix);
-  element.style.top = formatPixelValue(posY, needsRoundingFix);
+function formatPixelValue(value, shouldRound) {
+  if (typeof value !== 'number') return value;
+  return `${shouldRound ? Math.round(value) : value}px`;
 }
 
-/**
- * Converts a numeric position value into a CSS pixel string.
- *
- * @param {number|string} value     // A number or an already-formatted CSS value
- * @param {boolean} shouldRound     // Whether to round the value (browser-quirk flag)
- * @return {string}                 // Returns a pixel string like "20px" or original string
- */
-function formatPixelValue(value, shouldRound) {
-  if (typeof value == "number") {
-    value = (shouldRound ? Math.round(value) : value) + "px";
-  }
-  return value;
+export function setPosition(element, x, y) {
+  const [left, top] = x instanceof Point ? [x.x, x.y] : [x, y];
+
+  element.style.left = formatPixelValue(left, NEEDS_ROUNDING_FIX);
+  element.style.top = formatPixelValue(top, NEEDS_ROUNDING_FIX);
 }
 
 export function createDiv() {
-  var div = document.createElement("div");
-  div.style.position = "absolute";
-  div.style.userSelect = "none";
-  div.style.webkitTapHighlightColor = "rgba(0,0,0,0)";
-  div.unselectable = "on";
-  return div
+  const div = document.createElement('div');
+  div.style.position = 'absolute';
+  div.style.userSelect = 'none';
+  div.style.webkitTapHighlightColor = 'rgba(0,0,0,0)';
+  div.unselectable = 'on';
+  return div;
 }
-
-const FRAME_ATTRIBUTES = ["x", "y", "width", "height"];
 
 export function parseSpriteSheetXML(xmlText) {
   const xml = new DOMParser().parseFromString(xmlText, "application/xml");
@@ -93,7 +68,7 @@ export function parseSpriteSheetXML(xmlText) {
 
   return Array.from(atlas.querySelectorAll("SubTexture"), (node) => {
     const frame = {};
-    for (const attribute of FRAME_ATTRIBUTES) frame[attribute] = parseInt(node.getAttribute(attribute), 10);
+    for (const attribute of ["x", "y", "width", "height"]) frame[attribute] = parseInt(node.getAttribute(attribute), 10);
     return frame;
   });
 }
